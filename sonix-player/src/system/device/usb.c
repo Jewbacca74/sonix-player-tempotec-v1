@@ -21,6 +21,8 @@
 #include "src/system/device/sysserver.h"
 #include "src/system/audio/usbaudio.h"
 #include "src/system/core/utils.h"
+#include "src/system/streaming/radio.h"
+#include "src/gui/nowplaying/cover.h"
 
 #include "lvgl/lvgl.h"
 
@@ -710,6 +712,18 @@ static void storage_export(void) {
 	logging_suspend_for_usb();
 	btlog_card_release();
 
+	// Two more open files live on the card, and missing them is what made the
+	// export fail to unmount it: the thumbnail cache (cover.c) and the radio
+	// database (radio.c) are SQLite handles the player keeps open for the whole
+	// session. A file left open by this process is enough to make the umount
+	// fail with EBUSY, and the export then falls back to a lazy one and hands a
+	// still-mounted card to the PC -- which a FAT card survives but an NTFS one
+	// does not (see the unmount loop below: ntfs-3g is a FUSE daemon, and it
+	// keeps the block device claimed). Shutdown closes exactly these two for the
+	// same reason. They go back on the card in storage_restore().
+	cover_set_cache_dir(NULL); // the thumbnail cache moves to /tmp
+	radio_store_close();
+
 	if (sysserver_available()) {
 		sysserver_umount(sd_mount);
 	} else {
@@ -851,6 +865,12 @@ static void storage_restore(void) {
 	audiobookdb_open(db_path);
 	logging_resume_after_usb();
 	btlog_card_attach(sd_mount);
+
+	// The two the export released, put back where they belong. Both fall back
+	// to /tmp on their own if the remount did not take, so a failed remount
+	// leaves the player usable rather than stuck on a handle to nowhere.
+	cover_set_cache_dir(sd_mount);
+	radio_store_open(sd_mount);
 
 	storage_active = false;
 
