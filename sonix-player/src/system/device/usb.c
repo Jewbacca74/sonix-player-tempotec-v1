@@ -846,11 +846,15 @@ static void storage_restore(void) {
 		// last, and ntfs-3g before the kernel's ntfs module, which mounts
 		// read-only and would leave the card browsable and nothing else after
 		// every USB session. The types are named rather than guessed: busybox
-		// guessing tries ntfs like any other type.
+		// guessing tries ntfs like any other type. `force,remove_hiberfile` is
+		// what lets ntfs-3g mount a card the PC was unplugged from without an
+		// eject, or that Windows fast startup left hibernated -- see the
+		// matching options in mount_ntfs_rw().
 		char remount[1600];
 		snprintf(remount, sizeof(remount),
 				 "mount -t exfat,vfat,ext4,ext3,ext2,ntfs3 %s %s 2>/dev/null || "
-				 "ntfs-3g %s %s -o big_writes,noatime 2>/dev/null || mount -t ntfs %s %s",
+				 "ntfs-3g %s %s -o force,remove_hiberfile,big_writes,noatime 2>/dev/null || "
+				 "mount -t ntfs %s %s",
 				 sd_device, sd_mount, sd_device, sd_mount, sd_device, sd_mount);
 		int mrc = system(remount);
 		(void)mrc;
