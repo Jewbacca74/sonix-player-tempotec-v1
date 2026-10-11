@@ -198,6 +198,13 @@
     .transport-button.primary { width: 38px; height: 38px; color: #11131b; background: var(--accent); }
     .transport-button .glyph { width: 18px; height: 18px; }
     .transport-button.primary .glyph { color: #11131b; }
+    body[data-theme="tokyo"] .cover-art { border: 0; background: var(--surface); box-shadow: none; }
+    body[data-theme="tokyo"] .cover-art .glyph { color: var(--accent-purple); }
+    body[data-theme="tokyo"] .transport-button:not(.primary) { background: var(--surface); }
+    body[data-theme="tokyo"] .transport-button:not(.primary):hover { background: var(--surface-pressed); }
+    body[data-theme="tokyo"] .transport-button.primary { color: var(--screen-bg); }
+    body[data-theme="tokyo"] .transport-button.primary .glyph { color: var(--screen-bg); }
+    body[data-theme="tokyo"] .seek-range { accent-color: var(--accent); }
     .player-actions { display: flex; width: 100%; margin-top: 4px; border: 0; border-radius: 7px; background: var(--surface); }
     .player-actions .simple-row { flex: 1 1 0; min-width: 0; width: auto; min-height: 34px; border: 0; padding: 4px 7px; }
     .player-actions .simple-row .row-copy strong { font-size: 8px; }
@@ -335,7 +342,7 @@
         folder: 'folder.svg', file: 'file.svg', headphones: 'headphones.svg', dac: 'usb-audio-out.svg',
         airplay: 'airplay-status.svg', transfer: 'wifi-transfer-quick.svg', sonixlink: 'sonixlink-status.svg',
         dlna: 'dlna-quick.svg', game: 'files-gamepad.svg', ebook: 'files-book.svg', finished: 'book-finished.svg',
-        bookmark: 'bookmark.svg', sun: 'sun.svg', theme: 'book-theme.svg', power: 'power-off.svg', clock: 'history.svg',
+        sun: 'sun.svg', theme: 'book-theme.svg', power: 'power-off.svg', clock: 'history.svg',
         battery: 'battery.svg', zap: 'zap.svg', chevron: 'chevron-right.svg', shuffle: 'shuffle.svg',
         eq: 'equalizer.svg', radio: 'radio-player.svg', podcast: 'podcast-list.svg', check: 'check.svg'
       };
@@ -347,7 +354,7 @@
       };
       const escapeHtml = value => String(value || '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
       const safeTrack = track => ({title: escapeHtml(track.title), artist: escapeHtml(track.artist), album: escapeHtml(track.album), genre: escapeHtml(track.genre), albumArtist: escapeHtml(track.albumArtist)});
-      const currentTab = view => ({'home':'home','music':'music','sd-browser':'music','player':'player','library':'music','artists':'music','albums':'music','album-artists':'music','genres':'music','playlists':'music','favourites':'music','search':'music','files':'more','appearance':'appearance','wireless':'wireless','wireless-wifi-options':'wireless','wireless-bluetooth-options':'wireless','wireless-airplay':'wireless','wireless-transfer':'wireless','wireless-sonixlink':'wireless','wireless-dlna':'wireless','books':'books','book-library':'books','book-series':'books','book-authors':'books','book-continue':'books','book-finished':'books','bookmarks':'books','settings':'settings','settings-music':'music','settings-screen':'settings','settings-time':'settings','settings-power':'settings','settings-language':'settings','settings-more':'settings','settings-system':'settings','dac':'more','gearboy':'more','ebook':'more','bird-game':'more','streaming':'streaming','streaming-tidal':'streaming','streaming-qobuz':'streaming','streaming-radio':'streaming','streaming-podcasts':'streaming'}[view] || 'home');
+      const currentTab = view => ({'home':'home','music':'music','sd-browser':'music','player':'player','library':'music','artists':'music','albums':'music','album-artists':'music','genres':'music','playlists':'music','favourites':'music','search':'music','files':'more','appearance':'appearance','wireless':'wireless','wireless-wifi-options':'wireless','wireless-bluetooth-options':'wireless','wireless-airplay':'wireless','wireless-transfer':'wireless','wireless-sonixlink':'wireless','wireless-dlna':'wireless','books':'books','book-library':'books','book-series':'books','book-authors':'books','book-continue':'books','book-finished':'books','settings':'settings','settings-music':'music','settings-screen':'settings','settings-time':'settings','settings-power':'settings','settings-language':'settings','settings-more':'settings','settings-system':'settings','dac':'more','gearboy':'more','ebook':'more','bird-game':'more','streaming':'streaming','streaming-tidal':'streaming','streaming-qobuz':'streaming','streaming-radio':'streaming','streaming-podcasts':'streaming'}[view] || 'home');
       const go = (view, push = true) => {
         if (!view) return;
         if (push && state.view !== view) state.history.push(state.view);
@@ -411,7 +418,7 @@
         const actions = actionTile('airplay','AirPlay','wireless-airplay','accent-cyan') + actionTile('transfer','Transfer','wireless-transfer','accent-green') + actionTile('sonixlink','SonixLink','wireless-sonixlink','accent-amber') + actionTile('dlna','DLNA','wireless-dlna','accent-blue');
         return `${pageHeader('Wireless')}<main class="page-body"><div class="stack"><section class="screen-card wireless-card">${toggleRow('wifi','Wi-Fi',state.wifi,'accent-cyan','Available networks','wifiSearch','wireless-wifi-options','accent-cyan')}${toggleRow('bluetooth','Bluetooth',state.bluetooth,'accent-purple','Paired devices','bluetoothSearch','wireless-bluetooth-options','accent-purple')}</section><section class="screen-card settings-card wireless-actions"><div class="wireless-tile-grid">${actions}</div></section></div></main>`;
       };
-      const renderBooks = () => `${pageHeader('Audiobooks')}<main class="page-body"><div class="stack"><section><div class="card-head"><span>Continue listening</span><small>ON THIS DEVICE</small></div><section class="screen-card track-list"><div class="empty-state">Books with a saved position appear here. No sample books are included in this preview.</div><button class="simple-row" type="button" data-action="navigate" data-view="book-continue">${glyph('play','accent-amber',17)}<span class="row-copy"><strong>Open Continue list</strong><small>Resume a saved book position</small></span>${glyph('chevron','muted-icon',14,'chevron-right')}</button></section></section><section class="screen-card settings-card">${row('books','Library','All audiobooks','book-library','accent-amber')}${row('artist','Authors','Browse by author','book-authors','accent-blue')}${row('bookmark','Bookmarks','Saved reading positions','bookmarks','accent-cyan')}</section></div></main>`;
+      const renderBooks = () => `${pageHeader('Audiobooks')}<main class="page-body"><div class="stack"><section><div class="card-head"><span>Continue listening</span><small>ON THIS DEVICE</small></div><section class="screen-card track-list"><div class="empty-state">Books with a saved position appear here. No sample books are included in this preview.</div><button class="simple-row" type="button" data-action="navigate" data-view="book-continue">${glyph('play','accent-amber',17)}<span class="row-copy"><strong>Open Continue list</strong><small>Resume a saved book position</small></span>${glyph('chevron','muted-icon',14,'chevron-right')}</button></section></section><section class="screen-card settings-card">${row('books','Library','All audiobooks','book-library','accent-amber')}${row('artist','Authors','Browse by author','book-authors','accent-blue')}</section></div></main>`;
       const renderMore = () => {
         return `${pageHeader('More')}<main class="page-body"><section class="screen-card settings-card">${row('dac','DAC','Headphone and USB DAC options','dac','accent-cyan')}${row('folder','File Manager','Manage files on the SD card','files','accent-blue')}${row('game','Gearboy','Game Boy emulator','gearboy','accent-green')}${row('ebook','Books','E-book shelf and bookmarks','ebook','accent-amber')}${row('bird','Flappy Bird','Mini game','bird-game','accent-purple')}</section></main>`;
       };
@@ -462,7 +469,6 @@
           'book-authors':['Authors','Browse audiobooks by author','artist','accent-blue'],
           'book-continue':['Continue listening','Resume a saved listening position','play','accent-green'],
           'book-finished':['Finished','Completed audiobooks','finished','accent-green'],
-          'bookmarks':['Bookmarks','Saved audiobook positions','bookmark','accent-cyan'],
           'settings-screen':['Screen','Brightness · timeout · rotation','sun','accent-cyan'],
           'settings-time':['Date and time','Clock · time zone','clock','accent-blue'],
           'settings-power':['Power','Sleep · charge limit','power','accent-red'],

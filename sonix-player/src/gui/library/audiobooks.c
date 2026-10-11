@@ -9,7 +9,6 @@
 
 #include "src/gui/board_profile.h"
 #include "src/gui/fonts/fonts.h"
-#include "src/gui/library/audiobookextras.h"
 #include "src/gui/nowplaying/coverloader.h"
 #include "src/gui/nowplaying/player.h"
 #include "src/gui/shell/confirm.h"
@@ -32,7 +31,7 @@ lv_obj_t *audiobooksettings_screen;
 lv_obj_t *audiobookscan_screen;
 lv_obj_t *audiobookcontrols_screen;
 
-// The two list pages the tiles lead to: books, and authors or series.
+// The two list pages the tiles lead to: books and authors.
 static lv_obj_t *books_screen;
 static lv_obj_t *names_screen;
 static lv_obj_t *section_grid;
@@ -47,7 +46,6 @@ static char tokyo_continue_path[512];
 
 static void start_scan(void *user);
 static void section_scan_cb(lv_event_t *e);
-static void bookmarks_cb(lv_event_t *e);
 static void section_refresh_theme(void);
 
 // ---------------------------------------------------------------------------
@@ -1029,7 +1027,7 @@ static void build_names_page(gui_config_t *cfg) {
 }
 
 // ---------------------------------------------------------------------------
-// the section page: its browse destinations, Continue, bookmarks and options
+// the section page: its browse destinations, Continue and options
 // ---------------------------------------------------------------------------
 
 static void open_library(void) { books_open(LIST_LIBRARY, NULL, tr("audiobook_library")); }
@@ -1235,7 +1233,6 @@ static void tokyo_continue_panel_build(gui_config_t *cfg) {
 	} category_rows[] = {
 		{"audiobook_library", &icon_book_headphones_row, THEME_SEMANTIC_AMBER, tokyo_open_library_cb},
 		{"audiobook_authors", &icon_artist, THEME_SEMANTIC_BLUE, tokyo_open_authors_cb},
-		{"bookmarks", &icon_bookmark, THEME_SEMANTIC_CYAN, bookmarks_cb},
 	};
 	for (size_t i = 0; i < sizeof(category_rows) / sizeof(category_rows[0]); i++) {
 		lv_obj_t *button = lv_btn_create(categories);
@@ -1332,11 +1329,6 @@ static void section_refresh_theme(void) {
 	}
 }
 
-static void bookmarks_cb(lv_event_t *e) {
-	(void)e;
-	audiobookextras_open_bookmarks();
-}
-
 // An index written by an older scan has no authors, series or folder books.
 // It is read again once, the first time the section is opened, through the
 // usual scan page.
@@ -1371,11 +1363,10 @@ static void build_section_page(gui_config_t *cfg) {
 		gridpage_empty_panel(audiobooks_screen, cfg, &icon_book_headphones, "audiobook_no_database", section_scan_cb);
 	tokyo_continue_panel_build(cfg);
 
-	// Keep the settings and bookmarks actions within the compact V1 header.
-	settingsrow_title_corner_slots(settingsrow_title(audiobooks_screen, cfg, "audiobooks"), cfg, 2);
+	// Keep the settings action within the compact V1 header.
+	settingsrow_title_corner_slots(settingsrow_title(audiobooks_screen, cfg, "audiobooks"), cfg, 1);
 	lv_obj_t *options_btn = corner_button(audiobooks_screen, cfg, 0, &icon_music_settings, NULL);
 	lv_obj_add_event_cb(options_btn, switch_screen_cb, LV_EVENT_CLICKED, audiobooksettings_screen);
-	corner_button(audiobooks_screen, cfg, 1, &icon_bookmark, bookmarks_cb);
 
 	lv_obj_add_event_cb(audiobooks_screen, section_loaded_cb, LV_EVENT_SCREEN_LOADED, NULL);
 }
