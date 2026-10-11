@@ -86,7 +86,7 @@ static void text_size_cb(lv_event_t *e) {
 // The families in the firmware plus the ones on the card, as fonts_choices()
 // reports them. The row wraps onto as many lines as it needs -- the page
 // scrolls, the row does not.
-#define FONT_CHOICES_MAX 32 // 10 bundled faces plus up to 16 card fonts
+#define FONT_CHOICES_MAX 24 // 8 bundled faces plus up to 16 card fonts
 #define FONT_ID_MAX 160
 
 static lv_obj_t *font_pills;

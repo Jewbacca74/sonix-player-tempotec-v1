@@ -86,7 +86,7 @@ The project includes a local music library and file browser, album artwork, play
 
 Local audio decoder inputs include WAV, FLAC, MP3, Ogg Vorbis, Opus, M4A/M4B/MP4, AAC, ALAC, WavPack, APE, AIFF/AIFC, CAF and DSD (DSF/DFF) files. DSP features include a 10-band graphic equalizer, parametric EQ, MSEB, crossfeed, channel balance and ReplayGain.
 
-The interface font is configurable in **Settings → Appearance → Font**. Choices include MiSans, Neon 80s, Roboto, Noto Sans, IBM Plex Sans, Fira Code, Source Sans 3, Atkinson Hyperlegible, Roboto Condensed and Inter; **Roboto Mono and Barlow Semi Condensed are no longer offered as built-in choices**. User-provided `.ttf`/`.otf` fonts in the card's `Fonts` folder also appear in the picker. Missing glyphs — such as Cyrillic, Greek, Hangul, kanji or Arabic — fall back to MiSans. The six newly bundled families are licensed under the SIL Open Font License; see [`sonix-player/assets/fonts/FONT-LICENSES.txt`](sonix-player/assets/fonts/FONT-LICENSES.txt) for notices and source files.
+The interface font is configurable in **Settings → Appearance → Font**. Choices include MiSans, Neon 80s, Roboto, Noto Sans, Fira Code, Source Sans 3, Roboto Condensed and Inter; **Roboto Mono, Barlow Semi Condensed, IBM Plex Sans and Atkinson Hyperlegible are no longer offered as built-in choices**. User-provided `.ttf`/`.otf` fonts in the card's `Fonts` folder also appear in the picker. Missing glyphs — such as Cyrillic, Greek, Hangul, kanji or Arabic — fall back to MiSans. The four newly bundled families are licensed under the SIL Open Font License; see [`sonix-player/assets/fonts/FONT-LICENSES.txt`](sonix-player/assets/fonts/FONT-LICENSES.txt) for notices and source files.
 
 #### Third-party font sources and licensing
 
