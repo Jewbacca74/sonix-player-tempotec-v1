@@ -180,6 +180,9 @@
     .theme-choices { display: grid; grid-template-columns: 1fr 1fr 1.3fr; gap: 4px; }
     .theme-choice { min-height: 31px; padding: 4px; border: 1px solid color-mix(in srgb,var(--screen-muted) 16%,transparent); border-radius: 6px; color: var(--screen-muted); background: var(--surface-pressed); cursor: pointer; font-size: 8px; font-weight: 600; white-space: nowrap; }
     .theme-choice[aria-checked="true"] { border-color: var(--accent); color: var(--screen-text); background: color-mix(in srgb,var(--accent) 17%,var(--surface)); box-shadow: inset 0 -2px var(--accent); }
+    .font-choice-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 4px; }
+    .font-choice { min-width: 0; min-height: 25px; padding: 4px; border: 0; border-radius: 6px; color: var(--screen-muted); background: var(--surface-pressed); cursor: pointer; font-size: 8px; font-weight: 600; text-align: center; }
+    .font-choice[aria-checked="true"] { color: var(--screen-text); background: color-mix(in srgb,var(--accent) 20%,var(--surface)); }
     .palette-row { display: flex; gap: 3px; height: 12px; margin-top: 6px; overflow: hidden; border-radius: 4px; }
     .palette-row span { flex: 1; border-radius: 2px; }
     .accent-row { display: flex; gap: 6px; padding: 3px 0; }
@@ -304,7 +307,7 @@
       <div aria-hidden="true"></div>
       <section class="note-panel">
         <h2>On-device scope</h2>
-        <p>Music opens with Browse and keeps Recently played at the bottom; Browse lists playable music from the SD card, while File Manager appears once under More. Wireless keeps Wi-Fi and Bluetooth as full-width switches; turning either on reveals its network or device options. AirPlay, Transfer, SonixLink, and DLNA stay in a two-column tile grid; there is no separate audio-output row. More and Streaming use lists; More keeps DAC, optional Gearboy, Books, File Manager, and Flappy Bird. Appearance retains Dark, Light, and Tokyo Night themes.</p>
+        <p>Music opens with Browse and keeps Recently played at the bottom; Browse lists playable music from the SD card, while File Manager appears once under More. Wireless keeps Wi-Fi and Bluetooth as full-width switches; turning either on reveals its network or device options. AirPlay, Transfer, SonixLink, and DLNA stay in a two-column tile grid; there is no separate audio-output row. More and Streaming use lists; More keeps DAC, optional Gearboy, Books, File Manager, and Flappy Bird. Appearance retains Dark, Light, and Tokyo Night themes, with MiSans, Neon 80s, Fira Code, Noto Sans, Roboto Condensed, and Inter in the font picker; card fonts appear by file name.</p>
       </section>
     </div>
   </div>
@@ -324,7 +327,7 @@
       })();
       const state = {
         theme: 'tokyo', view: 'home', history: [], tint: false, wifi: false, bluetooth: false,
-        battery: true, accent: 'blue', queue: Array.isArray(initialQueue) ? initialQueue : [], current: -1,
+        battery: true, accent: 'blue', font: 'MiSans', queue: Array.isArray(initialQueue) ? initialQueue : [], current: -1,
         playing: false, progress: 0, favorites: new Set(), search: '', selectedGroup: '', birdScore: 0
       };
       if (state.queue.length) state.current = state.queue.length - 1;
@@ -405,9 +408,10 @@
       };
       const renderAppearance = () => {
         const choices = [['dark','Dark'],['light','Light'],['tokyo','Tokyo Night']].map(([id,label]) => `<button class="theme-choice" type="button" role="radio" aria-checked="${state.theme === id}" data-action="theme" data-theme-choice="${id}">${label}</button>`).join('');
+        const fonts = [['MiSans','MiSans'],['Neon','Neon 80s'],['FiraCode','Fira Code'],['NotoSans','Noto Sans'],['RobotoCondensed','Roboto Condensed'],['Inter','Inter']].map(([id,label]) => `<button class="font-choice" type="button" role="radio" aria-checked="${state.font === id}" data-action="font" data-font-choice="${id}">${label}</button>`).join('');
         const swatches = ['#1a1b26','#24283b','#c0caf5','#7aa2f7','#7dcfff','#bb9af7','#9ece6a','#f7768e'].map(color => `<span style="background:${color}"></span>`).join('');
         const accents = [['blue','#7aa2f7'],['cyan','#7dcfff'],['purple','#bb9af7'],['green','#9ece6a'],['amber','#e0af68'],['red','#f7768e']].map(([id,color]) => `<button class="accent-dot" type="button" aria-label="${id} accent" aria-pressed="${state.accent === id}" data-action="accent" data-accent="${id}" style="background:${color}"></button>`).join('');
-        return `${pageHeader('Appearance')}<main class="page-body"><div class="stack"><section class="screen-card card-pad"><div class="card-head"><span>Theme</span><small>DISPLAY</small></div><div class="theme-choices" role="radiogroup" aria-label="Theme">${choices}</div><p class="subtle-copy">Applies now · saved on this device</p></section><section class="screen-card card-pad"><div class="card-head"><span>Tokyo Night colors</span><small>PALETTE</small></div><div class="palette-row">${swatches}</div><p class="subtle-copy">Blue · cyan · violet · green · amber · red</p></section><section class="screen-card card-pad"><div class="card-head"><span>Accent colour</span><small>PREVIEW</small></div><div class="accent-row">${accents}</div></section><section class="screen-card card-pad"><div class="switch-row"><span>Dynamic tint</span><button type="button" role="switch" aria-checked="${state.tint}" data-action="toggle-tint">${state.tint ? 'On' : 'Off'}</button></div><div class="switch-row"><span>Battery percentage</span><button type="button" role="switch" aria-checked="${state.battery}" data-action="toggle-battery">${state.battery ? 'On' : 'Off'}</button></div></section><section class="screen-card settings-card">${row('sun','Boot screen','Choose the next power-on image','settings-screen','accent-amber')}${row('clock','Clock position','Status bar alignment','settings-time','accent-cyan')}${row('settings','Text size and font','Interface typography','settings-more','accent-purple')}</section></div></main>`;
+        return `${pageHeader('Appearance')}<main class="page-body"><div class="stack"><section class="screen-card card-pad"><div class="card-head"><span>Theme</span><small>DISPLAY</small></div><div class="theme-choices" role="radiogroup" aria-label="Theme">${choices}</div><p class="subtle-copy">Applies now · saved on this device</p></section><section class="screen-card card-pad"><div class="card-head"><span>Font</span><small>TYPE</small></div><div class="font-choice-grid" role="radiogroup" aria-label="Interface font">${fonts}</div><p class="subtle-copy">Fonts in the card's Fonts folder appear by file name.</p></section><section class="screen-card card-pad"><div class="card-head"><span>Tokyo Night colors</span><small>PALETTE</small></div><div class="palette-row">${swatches}</div><p class="subtle-copy">Blue · cyan · violet · green · amber · red</p></section><section class="screen-card card-pad"><div class="card-head"><span>Accent colour</span><small>PREVIEW</small></div><div class="accent-row">${accents}</div></section><section class="screen-card card-pad"><div class="switch-row"><span>Dynamic tint</span><button type="button" role="switch" aria-checked="${state.tint}" data-action="toggle-tint">${state.tint ? 'On' : 'Off'}</button></div><div class="switch-row"><span>Battery percentage</span><button type="button" role="switch" aria-checked="${state.battery}" data-action="toggle-battery">${state.battery ? 'On' : 'Off'}</button></div></section><section class="screen-card settings-card">${row('sun','Boot screen','Choose the next power-on image','settings-screen','accent-amber')}${row('clock','Clock position','Status bar alignment','settings-time','accent-cyan')}</section></div></main>`;
       };
       const renderSettings = () => `${pageHeader('Settings')}<main class="page-body"><p class="home-title-note">Choose an option to continue.</p><section class="screen-card settings-card">${row('theme','Appearance','Theme · accent · display','appearance','accent-purple')}${row('sun','Screen','Brightness · timeout','settings-screen','accent-cyan')}${row('clock','Date and time','Clock · time zone','settings-time','accent-blue')}${row('power','Power','Sleep · charge limit','settings-power','accent-red')}${row('list','Language','Interface language','settings-language','accent-amber')}${row('eq','More','Remote · controls','settings-more','accent-green')}${row('settings','System','Firmware · device information','settings-system','muted-icon')}</section></main>`;
       const renderWireless = () => {
@@ -551,6 +555,7 @@
           return;
         }
         if (action === 'theme') { state.theme = button.dataset.themeChoice; render(); showToast(`${state.theme === 'tokyo' ? 'Tokyo Night' : state.theme === 'dark' ? 'Dark' : 'Light'} theme preview`); return; }
+        if (action === 'font') { state.font = button.dataset.fontChoice; render(); showToast(`${state.font} font selected in preview`); return; }
         if (action === 'accent') { state.accent = button.dataset.accent; showToast(`${state.accent} accent selected in preview`); render(); return; }
         if (action === 'toggle-tint') { state.tint = !state.tint; render(); return; }
         if (action === 'toggle-battery') { state.battery = !state.battery; render(); return; }

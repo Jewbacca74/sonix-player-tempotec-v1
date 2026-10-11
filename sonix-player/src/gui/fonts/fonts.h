@@ -24,10 +24,10 @@
 //
 // MiSans is the face the interface was designed with, and the one it falls
 // back to. Settable families are the others in the directory: Neon 80s on the
-// V1, and Roboto Mono, Roboto Condensed, Inter and Barlow Semi Condensed
-// (their files are optional -- a family the firmware does not carry is simply
-// not offered). MiSans stays at the end of every chain, so a face with no
-// Cyrillic, no kanji or no Hangul still draws the whole interface.
+// V1, plus Fira Code, Noto Sans, Roboto Condensed and Inter (their files are
+// optional -- a family the firmware does not carry is simply not offered).
+// MiSans stays at the end of every chain, so a face with no Cyrillic, no kanji
+// or no Hangul still draws the whole interface.
 //
 // The script faces each have an optional -bold file, like bold.otf.
 // fonts_init() opens them once and builds one fallback chain per size.

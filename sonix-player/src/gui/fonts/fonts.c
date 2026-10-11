@@ -53,10 +53,10 @@
 static const char *const FONT_DEFAULT_FILES[] = FACE_FILES("default");
 static const char *const FONT_BOLD_FILES[] = FACE_FILES("bold");
 static const char *const FONT_NEON_FILES[] = FACE_FILES("Neon");
-static const char *const FONT_ROBOTO_MONO_FILES[] = FACE_FILES("RobotoMono");
+static const char *const FONT_FIRA_CODE_FILES[] = FACE_FILES("FiraCode");
+static const char *const FONT_NOTO_SANS_FILES[] = FACE_FILES("NotoSans");
 static const char *const FONT_ROBOTO_CONDENSED_FILES[] = FACE_FILES("RobotoCondensed");
 static const char *const FONT_INTER_FILES[] = FACE_FILES("Inter");
-static const char *const FONT_BARLOW_FILES[] = FACE_FILES("BarlowSemiCondensed");
 
 // ---------------------------------------------------------------------------
 // Settings -> Appearance -> UI font
@@ -83,10 +83,10 @@ typedef struct {
 static const ui_face_t faces[] = {
 	{FACE_DEFAULT_ID, "MiSans", FONT_DEFAULT_FILES, FONT_BOLD_FILES},
 	{"neon", "Neon 80s", FONT_NEON_FILES, NULL},
-	{"roboto_mono", "Roboto Mono", FONT_ROBOTO_MONO_FILES, NULL},
+	{"fira_code", "Fira Code", FONT_FIRA_CODE_FILES, NULL},
+	{"noto_sans", "Noto Sans", FONT_NOTO_SANS_FILES, NULL},
 	{"roboto_condensed", "Roboto Condensed", FONT_ROBOTO_CONDENSED_FILES, NULL},
 	{"inter", "Inter", FONT_INTER_FILES, NULL},
-	{"barlow_semi_condensed", "Barlow Semi Condensed", FONT_BARLOW_FILES, NULL},
 };
 
 #define FACE_COUNT (sizeof(faces) / sizeof(faces[0]))
