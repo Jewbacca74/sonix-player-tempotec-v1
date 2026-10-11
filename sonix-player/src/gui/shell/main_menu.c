@@ -242,11 +242,16 @@ static void main_menu_refresh_theme(void) {
 		lv_obj_set_hidden(home_note, false);
 		lv_obj_set_hidden(mini_player, false);
 
-		// Status bar: y=0..24. The 36 px title row and single-line note lead
+		// Status bar: y=0..24. The 34 px title card and single-line note lead
 		// into six horizontal icon-and-label cards; the mini-player sits below.
 		// The six existing tile objects are simply reflowed, not duplicated.
-		// No divider beneath the compact header; the note and menu flow directly below it.
+		// The brand title sits on a Tokyo Night surface card; the tagline stays
+		// below it with a clear gap, and there is no divider.
+		lv_obj_set_style_bg_color(home_header, theme()->surface, 0);
+		lv_obj_set_style_bg_opa(home_header, LV_OPA_COVER, 0);
+		lv_obj_set_style_radius(home_header, 8, 0);
 		lv_obj_set_style_border_width(home_header, 0, 0);
+		lv_obj_set_style_text_font(home_title, &font_ui_20_bold, 0);
 
 		lv_color_t strip_fill = theme_now_playing_fill();
 		lv_obj_set_style_bg_color(mini_player, strip_fill, 0);
@@ -262,6 +267,9 @@ static void main_menu_refresh_theme(void) {
 		for (int i = 0; i < 6; i++) {
 			gridpage_set_tile_orientation(menu_grid, i, false);
 		}
+		lv_obj_set_style_bg_opa(home_header, LV_OPA_TRANSP, 0);
+		lv_obj_set_style_radius(home_header, 0, 0);
+		lv_obj_set_style_text_font(home_title, &font_ui_16, 0);
 		lv_obj_set_style_border_width(home_header, 0, 0);
 		lv_obj_set_style_border_width(mini_player, 0, 0);
 		lv_obj_remove_local_style_prop(mini_player, LV_STYLE_OUTLINE_WIDTH, 0);
@@ -293,12 +301,12 @@ void main_menu_init(gui_config_t *cfg) {
 	// home menu.
 	home_header = lv_obj_create(main_menu_screen);
 	lv_obj_remove_style_all(home_header);
-	lv_obj_set_size(home_header, cfg->screen_width, 36);
-	lv_obj_set_pos(home_header, 0, cfg->top_bar_height);
+	lv_obj_set_size(home_header, cfg->screen_width - 2 * cfg->padding, 34);
+	lv_obj_set_pos(home_header, cfg->padding, cfg->top_bar_height);
 	lv_obj_set_style_bg_opa(home_header, LV_OPA_TRANSP, 0);
 	lv_obj_set_style_pad_all(home_header, 0, 0);
-	lv_obj_set_style_pad_left(home_header, 6, 0);
-	lv_obj_set_style_pad_right(home_header, 6, 0);
+	lv_obj_set_style_pad_left(home_header, 8, 0);
+	lv_obj_set_style_pad_right(home_header, 8, 0);
 	lv_obj_set_style_border_width(home_header, 0, 0);
 	lv_obj_set_scrollable(home_header, false);
 	lv_obj_set_flex_flow(home_header, LV_FLEX_FLOW_ROW);
