@@ -76,8 +76,6 @@ static void update_repeat_button(void);
 // the shape of the track -- and a blue play button in the middle of it was the
 // one thing that still belonged to some other page.
 static lv_color_t chrome_accent(void);
-static lv_color_t play_icon_tint(void);
-static lv_color_t cover_placeholder_tint(void);
 static lv_obj_t *progress_slider;
 // The compact slider leaves room for its oversized endpoint knob and shadow.
 // Zero means use the original percentage width on the HiBy panels.
@@ -712,9 +710,10 @@ static sleeptimer_kind_t sleeptimer_kind_playing(void) {
 static void apply_playback_status(audio_status_t status) {
 	bool playing = (status == AUDIO_STATUS_PLAYING);
 
-	// The play and pause glyph normally wears the accent. Tokyo Night puts
-	// that accent on a filled disc, so its glyph uses the dark page ink for
-	// contrast; the other themes keep their existing treatment.
+	// The glyph is the accent colour, always: play and pause are the same
+	// control in two states. Only the disc under it changes (see
+	// set_over_cover): white over artwork and in the dark theme, dark in the
+	// light theme when there is no cover to stand out against.
 	//
 	// On a live stream there is no pause -- stopping and starting again does
 	// not resume, it reconnects -- so the button says stop while it is on.
@@ -722,7 +721,7 @@ static void apply_playback_status(audio_status_t status) {
 	// it opens a fresh connection to the same one.
 	lv_image_set_src(play_btn_icon,
 					 live_mode ? (playing ? &icon_stop : &icon_play) : (playing ? &icon_pause : &icon_play));
-	lv_obj_set_style_image_recolor(play_btn_icon, play_icon_tint(), 0);
+	lv_obj_set_style_image_recolor(play_btn_icon, chrome_accent(), 0);
 	lv_obj_set_style_image_recolor_opa(play_btn_icon, LV_OPA_COVER, 0);
 
 	// Keep polling either way, just less often when nothing is playing. The
@@ -1002,7 +1001,7 @@ static void set_over_cover(bool on) {
 	}
 
 	if (play_btn_icon) {
-		lv_obj_set_style_image_recolor(play_btn_icon, play_icon_tint(), 0);
+		lv_obj_set_style_image_recolor(play_btn_icon, chrome_accent(), 0);
 		lv_obj_set_style_image_recolor_opa(play_btn_icon, LV_OPA_COVER, 0);
 	}
 
@@ -1073,14 +1072,6 @@ static lv_color_t alt_mark(void) { return tone_shaped(ALT_MARK_SAT, ALT_MARK_LUM
 
 static lv_color_t chrome_accent(void) { return layout_wave_now ? alt_mark() : theme()->accent; }
 
-static lv_color_t play_icon_tint(void) {
-	return theme_is_tokyo_night() ? theme()->screen_bg : chrome_accent();
-}
-
-static lv_color_t cover_placeholder_tint(void) {
-	return theme_is_tokyo_night() ? theme_semantic_color(THEME_SEMANTIC_PURPLE) : theme()->text_secondary;
-}
-
 // The type on that surface. Worked out rather than fixed so that a change to
 // ALT_SURFACE_LUMA cannot quietly leave the title unreadable.
 static lv_color_t alt_ink(void) {
@@ -1094,7 +1085,7 @@ static void lyrics_repaint_lit(void);
 // moment can have moved: the play/pause glyph and the repeat/shuffle mode.
 static void paint_transport_tint(void) {
 	if (play_btn_icon) {
-		lv_obj_set_style_image_recolor(play_btn_icon, play_icon_tint(), 0);
+		lv_obj_set_style_image_recolor(play_btn_icon, chrome_accent(), 0);
 		lv_obj_set_style_image_recolor_opa(play_btn_icon, LV_OPA_COVER, 0);
 	}
 	if (repeat_btn_icon) {
@@ -1243,13 +1234,8 @@ static void slider_over_waveform(bool over) {
 	}
 	lv_obj_set_size(progress_slider, compact_progress_width > 0 ? compact_progress_width : lv_pct(100),
 				 PROGRESS_TRACK_HEIGHT);
-	if (theme_is_tokyo_night()) {
-		lv_obj_set_style_bg_color(progress_slider, theme()->surface_pressed, LV_PART_MAIN);
-		lv_obj_set_style_bg_opa(progress_slider, LV_OPA_COVER, LV_PART_MAIN);
-	} else {
-		lv_obj_remove_local_style_prop(progress_slider, LV_STYLE_BG_OPA, LV_PART_MAIN);
-		lv_obj_set_style_bg_opa(progress_slider, LV_OPA_30, LV_PART_MAIN);
-	}
+	lv_obj_remove_local_style_prop(progress_slider, LV_STYLE_BG_OPA, LV_PART_MAIN);
+	lv_obj_set_style_bg_opa(progress_slider, LV_OPA_30, LV_PART_MAIN);
 	lv_obj_remove_local_style_prop(progress_slider, LV_STYLE_BG_OPA, LV_PART_INDICATOR);
 	lv_obj_remove_local_style_prop(progress_slider, LV_STYLE_OPA, LV_PART_KNOB);
 }
@@ -2369,7 +2355,7 @@ static void studio_refresh_cover(void) {
 		// The same mark the full-width cover panel stands in with: the note, the
 		// headphones for a book, the aerial for a station.
 		lv_image_set_src(studio_empty_icon, lv_image_get_src(cover_placeholder_icon));
-		lv_obj_set_style_image_recolor(studio_empty_icon, cover_placeholder_tint(), 0);
+		lv_obj_set_style_image_recolor(studio_empty_icon, theme()->text_secondary, 0);
 		studio_empty_rescale(); // the mark's native size is read off its source
 	}
 
@@ -3132,81 +3118,6 @@ const lv_image_dsc_t *player_backdrop_image(void) {
 
 static void update_repeat_button(void);
 
-// The Tokyo Night deck gives the transport and the primary action their own
-// solid surfaces. Remove every local override when leaving Tokyo Night so the
-// original Dark and Light buttons keep precisely the same appearance.
-static void player_theme_button(lv_obj_t *button, bool tokyo, lv_color_t fill, lv_color_t pressed) {
-	if (!button) {
-		return;
-	}
-	if (tokyo) {
-		lv_obj_set_style_bg_color(button, fill, 0);
-		lv_obj_set_style_bg_opa(button, LV_OPA_COVER, 0);
-		lv_obj_set_style_radius(button, LV_RADIUS_CIRCLE, 0);
-		lv_obj_set_style_border_width(button, 0, 0);
-		lv_obj_set_style_border_width(button, 0, LV_STATE_PRESSED);
-		lv_obj_set_style_outline_width(button, 0, 0);
-		lv_obj_set_style_outline_width(button, 0, LV_STATE_PRESSED);
-		lv_obj_set_style_bg_color(button, pressed, LV_STATE_PRESSED);
-		lv_obj_set_style_bg_opa(button, LV_OPA_COVER, LV_STATE_PRESSED);
-		return;
-	}
-
-	lv_obj_remove_local_style_prop(button, LV_STYLE_BG_COLOR, 0);
-	lv_obj_set_style_bg_opa(button, LV_OPA_TRANSP, 0);
-	lv_obj_remove_local_style_prop(button, LV_STYLE_RADIUS, 0);
-	lv_obj_remove_local_style_prop(button, LV_STYLE_BORDER_WIDTH, 0);
-	lv_obj_remove_local_style_prop(button, LV_STYLE_BORDER_WIDTH, LV_STATE_PRESSED);
-	lv_obj_remove_local_style_prop(button, LV_STYLE_OUTLINE_WIDTH, 0);
-	lv_obj_remove_local_style_prop(button, LV_STYLE_OUTLINE_WIDTH, LV_STATE_PRESSED);
-	lv_obj_remove_local_style_prop(button, LV_STYLE_BG_COLOR, LV_STATE_PRESSED);
-	lv_obj_remove_local_style_prop(button, LV_STYLE_BG_OPA, LV_STATE_PRESSED);
-}
-
-static void player_apply_theme_controls(void) {
-	bool tokyo = theme_is_tokyo_night();
-	lv_color_t surface = theme()->surface;
-	lv_color_t pressed_surface = theme()->surface_pressed;
-	lv_obj_t *const surface_buttons[] = {prev_btn_obj, next_btn_obj, repeat_btn_obj, speed_btn_obj, more_btn_obj};
-	for (size_t i = 0; i < sizeof(surface_buttons) / sizeof(surface_buttons[0]); i++) {
-		player_theme_button(surface_buttons[i], tokyo, surface, pressed_surface);
-	}
-	player_theme_button(play_btn, tokyo, theme()->accent, theme_semantic_color(THEME_SEMANTIC_CYAN));
-
-	if (more_btn_icon) {
-		lv_obj_set_style_image_recolor(more_btn_icon,
-					tokyo ? theme()->text_secondary : lv_color_make(150, 150, 150), 0);
-	}
-	if (cover_placeholder_icon) {
-		lv_obj_set_style_image_recolor(cover_placeholder_icon, cover_placeholder_tint(), 0);
-	}
-	if (cover_art_group && backdrop_full) {
-		lv_obj_set_style_bg_color(cover_art_group, tokyo ? theme()->surface : theme()->cover_bg, 0);
-	}
-	if (studio_empty) {
-		if (tokyo) {
-			lv_obj_set_style_bg_color(studio_empty, theme()->surface, 0);
-		} else {
-			lv_obj_remove_local_style_prop(studio_empty, LV_STYLE_BG_COLOR, 0);
-		}
-	}
-	if (studio_empty_icon) {
-		lv_obj_set_style_image_recolor(studio_empty_icon, cover_placeholder_tint(), 0);
-	}
-
-	if (progress_slider) {
-		bool slider_on_waveform = wave_box && lv_obj_get_parent(progress_slider) == wave_box;
-		lv_obj_set_style_bg_color(progress_slider,
-					tokyo ? theme()->surface_pressed : lv_color_make(255, 255, 255), LV_PART_MAIN);
-		if (!slider_on_waveform) {
-			lv_obj_set_style_bg_opa(progress_slider, tokyo ? LV_OPA_COVER : LV_OPA_30, LV_PART_MAIN);
-		}
-		lv_obj_set_style_border_color(progress_slider, tokyo ? theme()->screen_bg : lv_color_white(), LV_PART_KNOB);
-		lv_obj_set_style_border_width(progress_slider,
-					tokyo ? 0 : (bp_is_tempotec_v1() ? 2 : PROGRESS_KNOB_RING), LV_PART_KNOB);
-	}
-}
-
 // Repaints the bits that are coloured by hand, and rebuilds the blurred
 // artwork behind the controls -- it is dimmed towards the page background, so
 // it has to be regenerated when that background changes.
@@ -3222,7 +3133,7 @@ static void player_refresh_theme(void) {
 	if (cover_art_group && backdrop_full) {
 		lv_obj_set_style_bg_color(cover_art_group, theme()->cover_bg, 0);
 	}
-	player_apply_theme_controls();
+	lv_obj_set_style_image_recolor(cover_placeholder_icon, theme()->text_secondary, 0);
 	// The backdrop over a loaded cover is always the dark treatment -- same
 	// look in both themes; only the no-cover panel follows the theme.
 	cover_set_backdrop_light(false);
@@ -3721,10 +3632,7 @@ static void update_speed_button(void) {
 		return;
 	}
 	bool normal = speed_current_permille() == AUDIOBOOK_SPEED_NORMAL;
-	lv_obj_set_style_image_recolor(speed_btn_icon,
-				normal ? (theme_is_tokyo_night() ? theme()->text_secondary : lv_color_make(100, 100, 100))
-				       : theme()->accent,
-				0);
+	lv_obj_set_style_image_recolor(speed_btn_icon, normal ? lv_color_make(100, 100, 100) : theme()->accent, 0);
 	lv_obj_set_style_image_recolor_opa(speed_btn_icon, LV_OPA_COVER, 0);
 }
 
@@ -3774,7 +3682,7 @@ static void update_repeat_button(void) {
 	// The active mode wears the accent colour of the moment, read each time
 	// rather than frozen, so it follows a change of accent.
 	lv_color_t active = chrome_accent();
-	lv_color_t inactive = theme_is_tokyo_night() ? theme()->text_secondary : lv_color_make(100, 100, 100);
+	lv_color_t inactive = lv_color_make(100, 100, 100);
 
 	const lv_image_dsc_t *icon;
 	lv_color_t color;
@@ -5268,8 +5176,8 @@ void player_init(gui_config_t *cfg) {
 	lv_obj_set_style_image_recolor_opa(more_icon, LV_OPA_COVER, 0);
 	lv_obj_center(more_icon);
 
-	// Dark and Light leave prev/next as plain glyphs over the blurred artwork;
-	// Tokyo Night adds quiet circular surfaces to the transport controls.
+	// No button chrome on prev/next: they sit on top of the blurred artwork,
+	// and plain glyphs read better there than filled boxes.
 	lv_obj_t *prev_btn = lv_btn_create(player_controls_buttons);
 	prev_btn_obj = prev_btn;
 	lv_obj_set_size(prev_btn, compact ? COMPACT_SKIP_BTN : 76, compact ? COMPACT_SKIP_BTN : 76);
@@ -5283,8 +5191,7 @@ void player_init(gui_config_t *cfg) {
 	lv_obj_add_event_cb(prev_btn, prev_btn_event_cb, LV_EVENT_CLICKED, NULL);
 	lv_obj_set_style_opa(prev_btn, LV_OPA_40, LV_STATE_DISABLED); // see apply_connecting()
 
-	// Play/pause keeps the same hit target in every theme; Tokyo Night adds
-	// its blue disc in player_apply_theme_controls() after the layout is built.
+	// Play/pause: a plain glyph like prev/next, with the same generous hit target.
 	play_btn = lv_btn_create(player_controls_buttons);
 	lv_obj_set_size(play_btn, compact ? COMPACT_PLAY_BTN : 84, compact ? COMPACT_PLAY_BTN : 84);
 	lv_obj_set_style_bg_opa(play_btn, LV_OPA_TRANSP, 0);
@@ -5354,10 +5261,8 @@ void player_init(gui_config_t *cfg) {
 	lv_obj_set_clickable(cover_art_group, false);
 	if (compact) {
 		// The empty sleeve's colour, switched on by cover_show() while there
-		// is no picture to cover it. Tokyo Night uses the card surface behind
-		// its violet placeholder mark.
-		lv_obj_set_style_bg_color(cover_art_group,
-					theme_is_tokyo_night() ? theme()->surface : theme()->cover_bg, 0);
+		// is no picture to cover it.
+		lv_obj_set_style_bg_color(cover_art_group, theme()->cover_bg, 0);
 		lv_obj_set_style_bg_opa(cover_art_group, LV_OPA_COVER, 0);
 	}
 
@@ -5604,7 +5509,6 @@ void player_init(gui_config_t *cfg) {
 	layout_alt_now = false; // apply_layout() below puts the standard one up first
 	layout_studio_now = false;
 	apply_layout();
-	player_apply_theme_controls();
 
 	theme_register_refresh(player_refresh_theme);
 }
