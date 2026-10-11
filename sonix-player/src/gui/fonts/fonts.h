@@ -23,11 +23,12 @@
 //                 interface is in Japanese
 //
 // MiSans is the face the interface was designed with, and the one it falls
-// back to. Settable families are the others in the directory: Neon 80s on the
-// V1, and Roboto Mono, Roboto Condensed, Inter and Barlow Semi Condensed
-// (their files are optional -- a family the firmware does not carry is simply
-// not offered). MiSans stays at the end of every chain, so a face with no
-// Cyrillic, no kanji or no Hangul still draws the whole interface.
+// back to. Alongside Neon 80s, the picker can offer Roboto, Noto Sans, IBM
+// Plex Sans, Fira Code, Source Sans 3, Atkinson Hyperlegible, Roboto Condensed,
+// Inter and Barlow Semi Condensed when their bundled files are present. Apple
+// San Francisco and Ndot57 are offered only when the user supplies them in the
+// card's Fonts folder. MiSans stays at the end of every chain, so a face with
+// no Cyrillic, no kanji or no Hangul still draws the whole interface.
 //
 // The script faces each have an optional -bold file, like bold.otf.
 // fonts_init() opens them once and builds one fallback chain per size.

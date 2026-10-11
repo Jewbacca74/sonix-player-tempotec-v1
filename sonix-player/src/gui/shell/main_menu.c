@@ -245,8 +245,14 @@ static void main_menu_refresh_theme(void) {
 		// Status bar: y=0..24. The 36 px title row and single-line note lead
 		// into six horizontal icon-and-label cards; the mini-player sits below.
 		// The six existing tile objects are simply reflowed, not duplicated.
-		// No divider beneath the compact header; the note and menu flow directly below it.
+		// The filled brand header is its own Tokyo Night card, set apart from
+		// the tagline below without a divider or outline.
+		lv_obj_set_style_bg_color(home_header, theme()->surface, 0);
+		lv_obj_set_style_bg_opa(home_header, LV_OPA_COVER, 0);
+		lv_obj_set_style_radius(home_header, bp_tile_radius(), 0);
 		lv_obj_set_style_border_width(home_header, 0, 0);
+		lv_obj_set_style_outline_width(home_header, 0, 0);
+		lv_obj_set_style_shadow_width(home_header, 0, 0);
 
 		lv_color_t strip_fill = theme_now_playing_fill();
 		lv_obj_set_style_bg_color(mini_player, strip_fill, 0);
@@ -293,13 +299,16 @@ void main_menu_init(gui_config_t *cfg) {
 	// home menu.
 	home_header = lv_obj_create(main_menu_screen);
 	lv_obj_remove_style_all(home_header);
-	lv_obj_set_size(home_header, cfg->screen_width, 36);
-	lv_obj_set_pos(home_header, 0, cfg->top_bar_height);
+	lv_obj_set_size(home_header, cfg->screen_width - 2 * cfg->padding, 36);
+	lv_obj_set_pos(home_header, cfg->padding, cfg->top_bar_height);
 	lv_obj_set_style_bg_opa(home_header, LV_OPA_TRANSP, 0);
+	lv_obj_set_style_radius(home_header, 0, 0);
 	lv_obj_set_style_pad_all(home_header, 0, 0);
 	lv_obj_set_style_pad_left(home_header, 6, 0);
 	lv_obj_set_style_pad_right(home_header, 6, 0);
 	lv_obj_set_style_border_width(home_header, 0, 0);
+	lv_obj_set_style_outline_width(home_header, 0, 0);
+	lv_obj_set_style_shadow_width(home_header, 0, 0);
 	lv_obj_set_scrollable(home_header, false);
 	lv_obj_set_flex_flow(home_header, LV_FLEX_FLOW_ROW);
 	lv_obj_set_flex_align(home_header, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
@@ -307,7 +316,7 @@ void main_menu_init(gui_config_t *cfg) {
 	home_title = lv_label_create(home_header);
 	lv_label_set_text(home_title, "Sonix Player");
 	lv_obj_add_style(home_title, &theme_style_text, 0);
-	lv_obj_set_style_text_font(home_title, &font_ui_16, 0);
+	lv_obj_set_style_text_font(home_title, &font_ui_20_bold, 0);
 	lv_obj_set_flex_grow(home_title, 1);
 
 	home_note = lv_label_create(main_menu_screen);

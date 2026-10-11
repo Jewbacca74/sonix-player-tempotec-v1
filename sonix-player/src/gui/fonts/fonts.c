@@ -2,12 +2,13 @@
 
 #include "src/system/core/respath.h"
 
+#include <ctype.h>
 #include <dirent.h>
-#include <sys/stat.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "lvgl/lvgl.h"
@@ -53,7 +54,21 @@
 static const char *const FONT_DEFAULT_FILES[] = FACE_FILES("default");
 static const char *const FONT_BOLD_FILES[] = FACE_FILES("bold");
 static const char *const FONT_NEON_FILES[] = FACE_FILES("Neon");
-static const char *const FONT_ROBOTO_MONO_FILES[] = FACE_FILES("RobotoMono");
+static const char *const FONT_ROBOTO_FILES[] = FACE_FILES("Roboto");
+static const char *const FONT_NOTO_SANS_FILES[] = FACE_FILES("NotoSans");
+static const char *const FONT_IBM_PLEX_SANS_FILES[] = FACE_FILES("IBMPlexSans");
+static const char *const FONT_FIRA_CODE_FILES[] = FACE_FILES("FiraCode");
+static const char *const FONT_SOURCE_SANS_3_FILES[] = FACE_FILES("SourceSans3");
+static const char *const FONT_ATKINSON_FILES[] = {
+	FONT_DIR "/AtkinsonHyperlegible-Regular.ttf",
+	FONT_DIR_FALLBACK "/AtkinsonHyperlegible-Regular.ttf",
+	NULL,
+};
+static const char *const FONT_ATKINSON_BOLD_FILES[] = {
+	FONT_DIR "/AtkinsonHyperlegible-Bold.ttf",
+	FONT_DIR_FALLBACK "/AtkinsonHyperlegible-Bold.ttf",
+	NULL,
+};
 static const char *const FONT_ROBOTO_CONDENSED_FILES[] = FACE_FILES("RobotoCondensed");
 static const char *const FONT_INTER_FILES[] = FACE_FILES("Inter");
 static const char *const FONT_BARLOW_FILES[] = FACE_FILES("BarlowSemiCondensed");
@@ -61,15 +76,14 @@ static const char *const FONT_BARLOW_FILES[] = FACE_FILES("BarlowSemiCondensed")
 // ---------------------------------------------------------------------------
 // Settings -> Appearance -> UI font
 //
-// One entry per family the picker can offer, in the order it shows them.
-// `label` is the family's own name: the same in every language, so it is not
-// put through tr(). A family with a bold companion names it; without one the
-// regular file answers the bold sizes as well, which is how the V1 has always
-// drawn Neon 80s.
+// One entry per bundled family the picker can offer, in the order it shows
+// them. `label` is the family's own name: the same in every language, so it is
+// not put through tr(). A separate bold file is preferred; a variable face
+// without one gets its bold weight from FreeType's `wght` axis.
 //
-// A family whose files are not in this firmware is not offered at all -- the
-// picker only lists what first_present() can find -- so the list never holds a
-// face that cannot be opened.
+// A bundled family whose files are absent is not offered: the picker only
+// lists what first_present() can find. Card fonts are scanned separately and
+// are only offered while a usable file is present in <card>/Fonts.
 // ---------------------------------------------------------------------------
 typedef struct {
 	const char *id; // what [ui] font stores, and what fonts_set_face() takes
@@ -83,7 +97,12 @@ typedef struct {
 static const ui_face_t faces[] = {
 	{FACE_DEFAULT_ID, "MiSans", FONT_DEFAULT_FILES, FONT_BOLD_FILES},
 	{"neon", "Neon 80s", FONT_NEON_FILES, NULL},
-	{"roboto_mono", "Roboto Mono", FONT_ROBOTO_MONO_FILES, NULL},
+	{"roboto", "Roboto", FONT_ROBOTO_FILES, NULL},
+	{"noto_sans", "Noto Sans", FONT_NOTO_SANS_FILES, NULL},
+	{"ibm_plex_sans", "IBM Plex Sans", FONT_IBM_PLEX_SANS_FILES, NULL},
+	{"fira_code", "Fira Code", FONT_FIRA_CODE_FILES, NULL},
+	{"source_sans_3", "Source Sans 3", FONT_SOURCE_SANS_3_FILES, NULL},
+	{"atkinson_hyperlegible", "Atkinson Hyperlegible", FONT_ATKINSON_FILES, FONT_ATKINSON_BOLD_FILES},
 	{"roboto_condensed", "Roboto Condensed", FONT_ROBOTO_CONDENSED_FILES, NULL},
 	{"inter", "Inter", FONT_INTER_FILES, NULL},
 	{"barlow_semi_condensed", "Barlow Semi Condensed", FONT_BARLOW_FILES, NULL},
@@ -333,6 +352,47 @@ static bool card_name_ok(const char *name) {
 	return face_extension(name) != 0;
 }
 
+static bool name_contains_case_insensitive(const char *name, const char *fragment) {
+	if (!name || !fragment || !fragment[0]) {
+		return false;
+	}
+	size_t fragment_len = strlen(fragment);
+	for (const char *start = name; *start; start++) {
+		size_t i = 0;
+		while (i < fragment_len && start[i] &&
+			   tolower((unsigned char)start[i]) == tolower((unsigned char)fragment[i])) {
+			i++;
+		}
+		if (i == fragment_len) {
+			return true;
+		}
+	}
+	return false;
+}
+
+// The picker offers these two card-provided families by their usual names.
+// Files stay user-supplied: neither family is redistributed in the firmware.
+static const char *card_family_alias(const char *filename) {
+	if (name_contains_case_insensitive(filename, "ndot57") ||
+			name_contains_case_insensitive(filename, "ndot-57") ||
+			name_contains_case_insensitive(filename, "ndot_57") ||
+			name_contains_case_insensitive(filename, "ndot 57")) {
+		return "Ndot57";
+	}
+	if (name_contains_case_insensitive(filename, "sanfrancisco") ||
+			name_contains_case_insensitive(filename, "san francisco") ||
+			name_contains_case_insensitive(filename, "san-francisco") ||
+			name_contains_case_insensitive(filename, "sf-pro") ||
+			name_contains_case_insensitive(filename, "sfpro") ||
+			name_contains_case_insensitive(filename, "sf pro") ||
+			name_contains_case_insensitive(filename, "sf-compact") ||
+			name_contains_case_insensitive(filename, "sfcompact") ||
+			name_contains_case_insensitive(filename, "sf compact")) {
+		return "Apple San Francisco";
+	}
+	return NULL;
+}
+
 // Reads <card>/Fonts/<name> into the tmpfs and reports where it landed.
 // False when there is no card, no such file, or one too large to hold in RAM.
 static bool card_font_stage(const char *name, char *out, size_t out_size) {
@@ -495,16 +555,20 @@ static void card_scan(void) {
 		if (!join_path(card_ids[card_count], sizeof(card_ids[0]), CARD_ID_PREFIX, entry->d_name)) {
 			continue;
 		}
-		// The pill says the file's name without its extension, cut short if
-		// the name is a sentence: a label on a 240-pixel panel has no room
-		// for one, and the pill would hang out of its card.
-		size_t extension = face_extension(entry->d_name);
-		size_t name_len = strlen(entry->d_name) - extension;
-		if (name_len <= CARD_LABEL_MAX) {
-			snprintf(card_labels[card_count], sizeof(card_labels[0]), "%.*s", (int)name_len, entry->d_name);
+		// Recognize the two requested names for matching user-provided fonts;
+		// all other card fonts keep the file-name label, shortened to fit a pill.
+		const char *alias = card_family_alias(entry->d_name);
+		if (alias) {
+			snprintf(card_labels[card_count], sizeof(card_labels[0]), "%s", alias);
 		} else {
-			snprintf(card_labels[card_count], sizeof(card_labels[0]), "%.*s…", (int)(CARD_LABEL_MAX - 1),
-					 entry->d_name);
+			size_t extension = face_extension(entry->d_name);
+			size_t name_len = strlen(entry->d_name) - extension;
+			if (name_len <= CARD_LABEL_MAX) {
+				snprintf(card_labels[card_count], sizeof(card_labels[0]), "%.*s", (int)name_len, entry->d_name);
+			} else {
+				snprintf(card_labels[card_count], sizeof(card_labels[0]), "%.*s…", (int)(CARD_LABEL_MAX - 1),
+						 entry->d_name);
+			}
 		}
 		card_count++;
 	}
@@ -564,12 +628,12 @@ static font_set_t staged_set;
 // and the scripts chained behind them.
 static void build_summary(void);
 
-static lv_font_t *open_face(const char *path, int size) {
+static lv_font_t *open_face(const char *path, int size, bool bold) {
 	if (!path || access(path, R_OK) != 0) {
 		return NULL;
 	}
-	return lv_freetype_font_create(path, LV_FREETYPE_FONT_RENDER_MODE_BITMAP, (uint32_t)size,
-								   LV_FREETYPE_FONT_STYLE_NORMAL);
+	lv_freetype_font_style_t style = bold ? LV_FREETYPE_FONT_STYLE_BOLD : LV_FREETYPE_FONT_STYLE_NORMAL;
+	return lv_freetype_font_create(path, LV_FREETYPE_FONT_RENDER_MODE_BITMAP, (uint32_t)size, style);
 }
 
 // LVGL's FreeType lookup, which every face starts with. A raised face goes
@@ -629,8 +693,8 @@ static void raise_face(lv_font_t *face, int size, int per_mille) {
 // One face opened for one size, and remembered: what FreeType creates for a
 // set is what that set has to give back, and nothing else knows the whole
 // chain.
-static lv_font_t *chain_open(font_set_t *set, size_t index, const char *path, int size) {
-	lv_font_t *font = open_face(path, size);
+static lv_font_t *chain_open(font_set_t *set, size_t index, const char *path, int size, bool bold) {
+	lv_font_t *font = open_face(path, size, bold);
 	if (!font) {
 		return NULL;
 	}
@@ -649,15 +713,15 @@ static lv_font_t *chain_open(font_set_t *set, size_t index, const char *path, in
 // One size as the interface draws it: the main face with the other scripts
 // chained behind. False when the main face cannot be opened.
 static bool open_chain(const ui_font_t *ui, int size, font_set_t *set, size_t index) {
-	// The face this size draws from. The bold heading font uses the bold
-	// file when the firmware has one; the regular stands in otherwise,
-	// which reads fine at heading sizes even if it is not actually heavier.
+	// The face this size draws from. Prefer a shipped bold companion; where
+	// there is none, ask FreeType for the bold variable-font weight. Static
+	// regular faces simply ignore that weight request.
 	lv_font_t *head = NULL;
 	if (ui->bold && building->bold_file) {
-		head = chain_open(set, index, building->bold_file, size);
+		head = chain_open(set, index, building->bold_file, size, false);
 	}
 	if (!head) {
-		head = chain_open(set, index, building->regular_file, size);
+		head = chain_open(set, index, building->regular_file, size, ui->bold);
 	}
 	if (!head) {
 		fprintf(stderr, "fonts: cannot open %s at %dpx\n", building->regular_file, size);
@@ -669,10 +733,10 @@ static bool open_chain(const ui_font_t *ui, int size, font_set_t *set, size_t in
 
 	lv_font_t *rodin = NULL;
 	if (ui->bold && japanese.bold) {
-		rodin = chain_open(set, index, japanese.bold, size);
+		rodin = chain_open(set, index, japanese.bold, size, false);
 	}
 	if (!rodin && japanese.regular) {
-		rodin = chain_open(set, index, japanese.regular, size);
+		rodin = chain_open(set, index, japanese.regular, size, ui->bold);
 	}
 	if (rodin) {
 		head->get_glyph_dsc = main_glyph_dsc;
@@ -686,10 +750,10 @@ static bool open_chain(const ui_font_t *ui, int size, font_set_t *set, size_t in
 		script_face_t *script = &scripts[i];
 		lv_font_t *face = NULL;
 		if (ui->bold && script->bold) {
-			face = chain_open(set, index, script->bold, size);
+			face = chain_open(set, index, script->bold, size, false);
 		}
 		if (!face && script->regular) {
-			face = chain_open(set, index, script->regular, size);
+			face = chain_open(set, index, script->regular, size, ui->bold);
 		}
 		if (face) {
 			if (script->raise_per_mille) {
@@ -707,15 +771,15 @@ static bool open_chain(const ui_font_t *ui, int size, font_set_t *set, size_t in
 	// Bold labels try MiSans Bold first, then regular MiSans as a final
 	// safety net for any remaining glyphs.
 	if (building->fallback_regular) {
-		const char *fallback_path =
-			(ui->bold && building->fallback_bold) ? building->fallback_bold : building->fallback_regular;
-		lv_font_t *fallback = chain_open(set, index, fallback_path, size);
+		bool use_bold_fallback = ui->bold && building->fallback_bold;
+		const char *fallback_path = use_bold_fallback ? building->fallback_bold : building->fallback_regular;
+		lv_font_t *fallback = chain_open(set, index, fallback_path, size, false);
 		if (fallback) {
 			tail->fallback = fallback;
 			tail = fallback;
 		}
-		if (ui->bold && building->fallback_bold && building->fallback_regular) {
-			fallback = chain_open(set, index, building->fallback_regular, size);
+		if (use_bold_fallback && building->fallback_regular) {
+			fallback = chain_open(set, index, building->fallback_regular, size, false);
 			if (fallback) {
 				tail->fallback = fallback;
 				tail = fallback;
@@ -729,10 +793,10 @@ static bool open_chain(const ui_font_t *ui, int size, font_set_t *set, size_t in
 	if (rodin && !building->misans_tail) {
 		lv_font_t *again = NULL;
 		if (ui->bold && building->bold_file) {
-			again = chain_open(set, index, building->bold_file, size);
+			again = chain_open(set, index, building->bold_file, size, false);
 		}
 		if (!again) {
-			again = chain_open(set, index, building->regular_file, size);
+			again = chain_open(set, index, building->regular_file, size, ui->bold);
 		}
 		if (again) {
 			tail->fallback = again;

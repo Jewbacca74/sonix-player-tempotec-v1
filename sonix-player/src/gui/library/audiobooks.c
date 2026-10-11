@@ -1129,11 +1129,6 @@ static void tokyo_continue_panel_build(gui_config_t *cfg) {
 	lv_obj_set_scrollbar_mode(tokyo_books_panel, LV_SCROLLBAR_MODE_AUTO);
 	lv_obj_set_hidden(tokyo_books_panel, true);
 
-	lv_obj_t *continue_heading = lv_label_create(tokyo_books_panel);
-	lv_label_set_text(continue_heading, tr("audiobook_continue_listening"));
-	lv_obj_add_style(continue_heading, &theme_style_text, 0);
-	lv_obj_set_style_text_font(continue_heading, &font_ui_14, 0);
-
 	lv_obj_t *continue_card = tokyo_section_card(tokyo_books_panel);
 	tokyo_continue_empty = lv_label_create(continue_card);
 	lv_label_set_text(tokyo_continue_empty, tr("audiobook_continue_empty"));
