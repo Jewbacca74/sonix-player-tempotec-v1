@@ -50,11 +50,49 @@ Interface previews, rendered at the V1's native 240 × 320 resolution. Click any
   </tr>
 </table>
 
+### Tokyo Night theme
+
+The same screens in the added **Tokyo Night** appearance: a blue-black palette with function-matched icons, chosen in Settings → Appearance → Theme. It is available on the V1 alongside Dark and Light.
+
+<table>
+  <tr>
+    <td align="center">
+      <a href="screenshots/tokyonight/main-menu.png"><img src="screenshots/tokyonight/main-menu.png" width="180" alt="Tokyo Night main menu"></a>
+      <br><sub><b>Main menu</b></sub>
+    </td>
+    <td align="center">
+      <a href="screenshots/tokyonight/music.png"><img src="screenshots/tokyonight/music.png" width="180" alt="Tokyo Night music"></a>
+      <br><sub><b>Music</b></sub>
+    </td>
+    <td align="center">
+      <a href="screenshots/tokyonight/more.png"><img src="screenshots/tokyonight/more.png" width="180" alt="Tokyo Night more"></a>
+      <br><sub><b>More</b></sub>
+    </td>
+    <td align="center">
+      <a href="screenshots/tokyonight/wireless.png"><img src="screenshots/tokyonight/wireless.png" width="180" alt="Tokyo Night wireless"></a>
+      <br><sub><b>Wireless</b></sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <a href="screenshots/tokyonight/settings.png"><img src="screenshots/tokyonight/settings.png" width="180" alt="Tokyo Night settings"></a>
+      <br><sub><b>Settings</b></sub>
+    </td>
+    <td align="center">
+      <a href="screenshots/tokyonight/streaming.png"><img src="screenshots/tokyonight/streaming.png" width="180" alt="Tokyo Night streaming"></a>
+      <br><sub><b>Streaming</b></sub>
+    </td>
+    <td></td>
+    <td></td>
+  </tr>
+</table>
+
 ## Contents
 
 - [Target device](#target-device)
 - [Features](#features)
 - [Screenshots](#screenshots)
+  - [Tokyo Night theme](#tokyo-night-theme)
 - [Build a firmware image](#build-a-firmware-image)
 - [Install or restore firmware](#install-or-restore-firmware)
 - [Streaming credentials](#streaming-credentials)
