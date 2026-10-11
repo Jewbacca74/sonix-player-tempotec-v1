@@ -262,7 +262,6 @@ static void fit_row_label(lv_obj_t *label, int32_t width) {
 // Space left between the row name and whatever sits to its right.
 #define ROW_LABEL_GAP 12
 #define SETTINGSROW_MAX_LEADING_ICONS 24
-#define SETTINGSROW_MAX_TOKYO_TILES 32
 
 typedef struct {
 	lv_obj_t *row;
@@ -272,23 +271,16 @@ typedef struct {
 
 typedef struct {
 	lv_obj_t *row;
-} settingsrow_tokyo_tile_t;
-
-typedef struct {
-	lv_obj_t *row;
 	lv_obj_t *label;
 } settingsrow_caption_t;
 
 static settingsrow_leading_icon_t leading_icons[SETTINGSROW_MAX_LEADING_ICONS];
 static settingsrow_caption_t captions[24];
-static settingsrow_tokyo_tile_t tokyo_tiles[SETTINGSROW_MAX_TOKYO_TILES];
 static int leading_icon_count;
 static int caption_count;
-static int tokyo_tile_count;
 static bool settingsrow_refresh_registered;
 static void fit_row(lv_obj_t *row);
 static void settingsrow_refresh_theme(void);
-static void settingsrow_apply_tokyo_tile(lv_obj_t *row, bool active);
 
 static lv_obj_t *settingsrow_leading_icon(lv_obj_t *row) {
 	for (int i = 0; i < leading_icon_count; i++) {
@@ -477,57 +469,6 @@ static void settingsrow_update_edges(lv_obj_t *row, bool flat) {
 	}
 }
 
-static void settingsrow_apply_tokyo_tile(lv_obj_t *row, bool active) {
-	if (!row) {
-		return;
-	}
-
-	bool colored = active && compact_rows();
-	settingsrow_update_edges(row, colored);
-	if (colored) {
-		lv_color_t fill = theme_semantic_color(THEME_SEMANTIC_PURPLE);
-		lv_color_t foreground = theme()->screen_bg;
-		lv_obj_set_style_bg_color(row, fill, 0);
-		lv_obj_set_style_bg_opa(row, LV_OPA_COVER, 0);
-		lv_obj_set_style_bg_color(row, fill, LV_STATE_PRESSED);
-		lv_obj_set_style_bg_opa(row, LV_OPA_COVER, LV_STATE_PRESSED);
-		uint32_t child_count = lv_obj_get_child_count(row);
-		for (uint32_t child_index = 0; child_index < child_count; child_index++) {
-			lv_obj_t *child = lv_obj_get_child(row, (int32_t)child_index);
-			if (lv_obj_check_type(child, &lv_label_class)) {
-				lv_obj_set_style_text_color(child, foreground, 0);
-			} else if (lv_obj_check_type(child, &lv_image_class)) {
-				lv_obj_set_style_image_recolor(child, foreground, 0);
-				lv_obj_set_style_image_recolor_opa(child, LV_OPA_COVER, 0);
-			}
-		}
-	} else {
-		lv_obj_remove_local_style_prop(row, LV_STYLE_BG_COLOR, 0);
-		lv_obj_remove_local_style_prop(row, LV_STYLE_BG_OPA, 0);
-		lv_obj_remove_local_style_prop(row, LV_STYLE_BG_COLOR, LV_STATE_PRESSED);
-		lv_obj_remove_local_style_prop(row, LV_STYLE_BG_OPA, LV_STATE_PRESSED);
-		uint32_t child_count = lv_obj_get_child_count(row);
-		for (uint32_t child_index = 0; child_index < child_count; child_index++) {
-			lv_obj_t *child = lv_obj_get_child(row, (int32_t)child_index);
-			if (lv_obj_check_type(child, &lv_label_class)) {
-				lv_obj_remove_local_style_prop(child, LV_STYLE_TEXT_COLOR, 0);
-			} else if (lv_obj_check_type(child, &lv_image_class)) {
-				lv_obj_remove_local_style_prop(child, LV_STYLE_IMAGE_RECOLOR, 0);
-				lv_obj_remove_local_style_prop(child, LV_STYLE_IMAGE_RECOLOR_OPA, 0);
-			}
-		}
-	}
-
-	lv_obj_t *caption = settingsrow_caption(row);
-	if (caption) {
-		if (colored) {
-			lv_obj_set_style_text_color(caption, theme()->screen_bg, 0);
-		} else {
-			lv_obj_remove_local_style_prop(caption, LV_STYLE_TEXT_COLOR, 0);
-		}
-	}
-}
-
 static void settingsrow_refresh_theme(void) {
 	for (int i = 0; i < built_slider_count; i++) {
 		theme_apply_slider_knob(built_sliders[i]);
@@ -560,9 +501,6 @@ static void settingsrow_refresh_theme(void) {
 		if (captions[i].row && captions[i].label) {
 			fit_row(captions[i].row);
 		}
-	}
-	for (int i = 0; i < tokyo_tile_count; i++) {
-		settingsrow_apply_tokyo_tile(tokyo_tiles[i].row, tokyo);
 	}
 }
 
@@ -992,35 +930,6 @@ void settingsrow_add_icon(lv_obj_t *row, const lv_image_dsc_t *source, theme_sem
 	lv_obj_add_event_cb(row, settingsrow_icon_row_deleted_cb, LV_EVENT_DELETE, NULL);
 	settingsrow_register_refresh();
 	settingsrow_refresh_theme();
-}
-
-static void settingsrow_tokyo_tile_row_deleted_cb(lv_event_t *e) {
-	lv_obj_t *row = lv_event_get_target(e);
-	for (int i = 0; i < tokyo_tile_count; i++) {
-		if (tokyo_tiles[i].row == row) {
-			tokyo_tiles[i] = tokyo_tiles[--tokyo_tile_count];
-			return;
-		}
-	}
-}
-
-void settingsrow_style_tokyo_tile(lv_obj_t *row) {
-	if (!row) {
-		return;
-	}
-	for (int i = 0; i < tokyo_tile_count; i++) {
-		if (tokyo_tiles[i].row == row) {
-			settingsrow_apply_tokyo_tile(row, theme_is_tokyo_night());
-			return;
-		}
-	}
-	if (tokyo_tile_count >= SETTINGSROW_MAX_TOKYO_TILES) {
-		return;
-	}
-	tokyo_tiles[tokyo_tile_count++].row = row;
-	lv_obj_add_event_cb(row, settingsrow_tokyo_tile_row_deleted_cb, LV_EVENT_DELETE, NULL);
-	settingsrow_register_refresh();
-	settingsrow_apply_tokyo_tile(row, theme_is_tokyo_night());
 }
 
 static void settingsrow_caption_row_deleted_cb(lv_event_t *e) {

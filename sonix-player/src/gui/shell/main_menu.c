@@ -219,9 +219,8 @@ static void main_menu_refresh_theme(void) {
 
 	for (int i = 0; i < 6; i++) {
 		if (tokyo) {
-			lv_color_t icon_color = prototype_layout ? theme()->screen_bg : theme_semantic_color(TOKYO_MENU_TONES[i]);
 			gridpage_set_tile_icon_style(menu_grid, i, TOKYO_MENU_ICONS[i], compact ? 22 : 46, true,
-										 icon_color, prototype_layout && i < 5 && i != 1 && i != 3);
+										 theme_semantic_color(TOKYO_MENU_TONES[i]), prototype_layout && i < 5 && i != 1 && i != 3);
 		} else {
 			// The original Dark and Light menu art and its full V1 icon size are
 			// retained exactly; the glyph-only treatment is scoped to Tokyo Night.
@@ -230,37 +229,11 @@ static void main_menu_refresh_theme(void) {
 		}
 
 		lv_obj_t *tile = lv_obj_get_child(menu_grid, i);
-		if (!tile) {
-			continue;
-		}
 		lv_obj_set_style_border_width(tile, 0, 0);
 		if (tokyo) {
 			lv_obj_set_style_outline_width(tile, 0, 0);
 		} else {
 			lv_obj_remove_local_style_prop(tile, LV_STYLE_OUTLINE_WIDTH, 0);
-		}
-
-		lv_obj_t *label = lv_obj_get_child(tile, (int32_t)lv_obj_get_child_count(tile) - 1);
-		if (prototype_layout) {
-			// The V1's Tokyo Night home is built from vivid lilac tiles with dark,
-			// high-contrast glyphs and labels. Keep the pressed state on that fill
-			// too, rather than flashing back to a dark card.
-			lv_color_t fill = theme_semantic_color(THEME_SEMANTIC_PURPLE);
-			lv_obj_set_style_bg_color(tile, fill, 0);
-			lv_obj_set_style_bg_opa(tile, LV_OPA_COVER, 0);
-			lv_obj_set_style_bg_color(tile, fill, LV_STATE_PRESSED);
-			lv_obj_set_style_bg_opa(tile, LV_OPA_COVER, LV_STATE_PRESSED);
-			if (label && lv_obj_check_type(label, &lv_label_class)) {
-				lv_obj_set_style_text_color(label, theme()->screen_bg, 0);
-			}
-		} else {
-			lv_obj_remove_local_style_prop(tile, LV_STYLE_BG_COLOR, 0);
-			lv_obj_remove_local_style_prop(tile, LV_STYLE_BG_OPA, 0);
-			lv_obj_remove_local_style_prop(tile, LV_STYLE_BG_COLOR, LV_STATE_PRESSED);
-			lv_obj_remove_local_style_prop(tile, LV_STYLE_BG_OPA, LV_STATE_PRESSED);
-			if (label && lv_obj_check_type(label, &lv_label_class)) {
-				lv_obj_remove_local_style_prop(label, LV_STYLE_TEXT_COLOR, 0);
-			}
 		}
 	}
 

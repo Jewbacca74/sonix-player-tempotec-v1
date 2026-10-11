@@ -55,9 +55,6 @@ lv_obj_t *settingsrow_add(lv_obj_t *parent, const char *name, lv_obj_t **value_o
 // Adds a leading, function-matched glyph that appears only in Tokyo Night.
 // Dark and Light keep the original text-and-chevron row layout.
 void settingsrow_add_icon(lv_obj_t *row, const lv_image_dsc_t *source, theme_semantic_t tone);
-// Marks a row as a lilac Tokyo Night V1 tile. Other themes keep the shared
-// card surface and their original foreground colors.
-void settingsrow_style_tokyo_tile(lv_obj_t *row);
 
 // Optional description for a section row. Tokyo Night on the compact V1 wraps
 // it across multiple lines rather than ellipsizing; Dark/Light and larger

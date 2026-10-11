@@ -63,7 +63,6 @@ static void more_list_add_entry(const grid_entry_t *entry) {
 	if (more_tokyo_icon(entry->label, &icon, &tone)) {
 		settingsrow_add_icon(row, icon, tone);
 	}
-	settingsrow_style_tokyo_tile(row);
 }
 
 static void more_list_build(gui_config_t *cfg, const grid_entry_t *entries, int count) {

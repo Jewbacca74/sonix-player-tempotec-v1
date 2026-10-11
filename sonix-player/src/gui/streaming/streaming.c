@@ -41,7 +41,6 @@ static void streaming_list_build(gui_config_t *cfg) {
 		const streaming_item_t *item = &tokyo_items[i];
 		lv_obj_t *row = settingsrow_add(streaming_list, item->label, NULL, switch_screen_cb, *item->target);
 		settingsrow_add_icon(row, item->icon, item->tone);
-		settingsrow_style_tokyo_tile(row);
 	}
 }
 

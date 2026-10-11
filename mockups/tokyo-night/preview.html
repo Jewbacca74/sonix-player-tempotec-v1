@@ -234,61 +234,6 @@
       .stage { --scale: 1.08; }
     }
     @media (max-width: 370px) { .stage { --scale: .96; } }
-
-    /* Tokyo Night V1 lilac surfaces. The selector intentionally leaves Dark and Light untouched. */
-    body[data-theme="tokyo"] .purple-tile {
-      color: #1a1b26;
-      background: #bb9af7;
-    }
-    body[data-theme="tokyo"] .purple-tile:hover { background: #bb9af7; }
-    body[data-theme="tokyo"] .purple-tile .card-head,
-    body[data-theme="tokyo"] .purple-tile .row-copy strong,
-    body[data-theme="tokyo"] .purple-tile .row-copy small,
-    body[data-theme="tokyo"] .purple-tile .subtle-copy,
-    body[data-theme="tokyo"] .purple-tile .empty-state,
-    body[data-theme="tokyo"] .purple-tile .wireless-option,
-    body[data-theme="tokyo"] .purple-tile .track-row { color: #1a1b26; }
-    body[data-theme="tokyo"] .purple-tile .card-head small,
-    body[data-theme="tokyo"] .purple-tile .row-copy small,
-    body[data-theme="tokyo"] .purple-tile .subtle-copy { color: rgba(26,27,38,.72); }
-    body[data-theme="tokyo"] .purple-tile .glyph,
-    body[data-theme="tokyo"] .purple-tile .bird-glyph,
-    body[data-theme="tokyo"] .purple-tile .chevron-right,
-    body[data-theme="tokyo"] .purple-tile .track-art,
-    body[data-theme="tokyo"] .purple-tile .playmark { color: #1a1b26 !important; }
-    body[data-theme="tokyo"] .purple-tile .wireless-option:hover,
-    body[data-theme="tokyo"] .purple-tile .track-row:hover,
-    body[data-theme="tokyo"] .purple-tile .track-row[aria-current="true"] { background: rgba(26,27,38,.09); }
-    body[data-theme="tokyo"] .purple-tile .track-row[aria-current="true"] .row-copy strong { color: #1a1b26; }
-    body[data-theme="tokyo"] .purple-tile .track-art { background: rgba(26,27,38,.10); }
-    body[data-theme="tokyo"] .purple-row-list {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      overflow: visible;
-      padding: 4px;
-      background: transparent;
-      box-shadow: none;
-    }
-    body[data-theme="tokyo"] .purple-row-list.wireless-card { padding: 0; }
-    body[data-theme="tokyo"] .purple-row-list.wireless-card .wireless-group { overflow: hidden; border-radius: 8px; }
-    body[data-theme="tokyo"] .purple-row-list .simple-row {
-      min-height: 40px;
-      border: 0;
-      border-radius: 7px;
-      color: #1a1b26;
-      background: #bb9af7;
-    }
-    body[data-theme="tokyo"] .purple-row-list .simple-row:hover { background: #bb9af7; }
-    body[data-theme="tokyo"] .purple-row-list .simple-row .row-copy strong { color: #1a1b26; }
-    body[data-theme="tokyo"] .purple-row-list .simple-row .row-copy small { color: rgba(26,27,38,.72); }
-    body[data-theme="tokyo"] .purple-row-list .simple-row>.glyph,
-    body[data-theme="tokyo"] .purple-row-list .simple-row .chevron-right { color: #1a1b26 !important; }
-    body[data-theme="tokyo"] .purple-row-list .service-mark {
-      border-color: rgba(26,27,38,.55);
-      color: #1a1b26;
-      background: rgba(26,27,38,.08);
-    }
   </style>
 </head>
 <body data-theme="tokyo" data-tint="off">
@@ -437,16 +382,16 @@
           ['Music','music','accent-cyan','music'], ['Streaming','stream','accent-purple','streaming'],
           ['Wireless','wifi','accent-blue','wireless'], ['Audiobooks','books','accent-amber','books'],
           ['More','more','accent-green','more'], ['Settings','settings','muted-icon','settings']
-        ].map(([title,icon,tone,view]) => `<button class="menu-tile purple-tile" type="button" data-action="navigate" data-view="${view}">${glyph(icon,tone,20)}<span class="tile-text">${title}</span></button>`).join('');
+        ].map(([title,icon,tone,view]) => `<button class="menu-tile" type="button" data-action="navigate" data-view="${view}">${glyph(icon,tone,20)}<span class="tile-text">${title}</span></button>`).join('');
         const current = state.queue[state.current];
         const title = current ? escapeHtml(current.title) : 'No track loaded';
         const artist = current ? escapeHtml(current.artist) : '';
         return `<header class="page-header"><span style="width:5px"></span><h2 class="page-title">Sonix Player</h2></header><main class="page-body"><p class="home-title-note">Ta musique, prête quand tu l'es.</p><div class="menu-grid">${tiles}</div><button class="now-playing-strip" type="button" data-action="navigate" data-view="player">${glyph(state.playing ? 'pause' : 'play','accent-cyan',15)}<span class="row-copy"><strong>${title}</strong><small>${artist}</small></span></button></main>`;
       };
       const renderMusic = () => {
-        const browse = [['artist','Artists','accent-cyan','artists'],['album','Albums','accent-purple','albums'],['folder','Browse','accent-green','sd-browser'],['search','Search','accent-amber','search']].map(([icon,title,tone,view]) => `<button class="glyph-demo purple-tile" type="button" data-action="navigate" data-view="${view}">${glyph(icon,tone,17)}<span>${title}</span></button>`).join('');
+        const browse = [['artist','Artists','accent-cyan','artists'],['album','Albums','accent-purple','albums'],['folder','Browse','accent-green','sd-browser'],['search','Search','accent-amber','search']].map(([icon,title,tone,view]) => `<button class="glyph-demo" type="button" data-action="navigate" data-view="${view}">${glyph(icon,tone,17)}<span>${title}</span></button>`).join('');
         const more = `<button class="header-action" type="button" data-action="navigate" data-view="library" aria-label="More music lists">${glyph('list','muted-icon',16)}</button>`;
-        return `${pageHeader('Music',`<button class="header-action" type="button" data-action="navigate" data-view="settings-music" aria-label="Music settings">${glyph('settings','muted-icon',16)}</button>${more}`)}<main class="page-body"><div class="stack"><section class="screen-card card-pad purple-tile"><div class="card-head"><span>Browse music</span><small>LIBRARY</small></div><div class="browse-grid">${browse}</div></section><section class="screen-card settings-card purple-row-list">${row('list','All tracks','Indexed music library','library','accent-cyan')}${row('albumArtist','Album artist','Browse credited artists','album-artists','accent-blue')}${row('genre','Genres','Browse by genre','genres','accent-amber')}${row('heart','Favourites','Saved tracks','favourites','accent-red')}</section><section><div class="card-head"><span>Recently played</span><small>ACTIVE QUEUE</small></div><section class="screen-card track-list purple-tile">${trackRows(recentItems(),true)}</section><p class="subtle-copy">Queue-derived · not persistent listening history</p></section></div></main>`;
+        return `${pageHeader('Music',`<button class="header-action" type="button" data-action="navigate" data-view="settings-music" aria-label="Music settings">${glyph('settings','muted-icon',16)}</button>${more}`)}<main class="page-body"><div class="stack"><section class="screen-card card-pad"><div class="card-head"><span>Browse music</span><small>LIBRARY</small></div><div class="browse-grid">${browse}</div></section><section class="screen-card settings-card">${row('list','All tracks','Indexed music library','library','accent-cyan')}${row('albumArtist','Album artist','Browse credited artists','album-artists','accent-blue')}${row('genre','Genres','Browse by genre','genres','accent-amber')}${row('heart','Favourites','Saved tracks','favourites','accent-red')}</section><section><div class="card-head"><span>Recently played</span><small>ACTIVE QUEUE</small></div><section class="screen-card track-list">${trackRows(recentItems(),true)}</section><p class="subtle-copy">Queue-derived · not persistent listening history</p></section></div></main>`;
       };
       const renderSdBrowser = () => {
         const rows = state.queue.map((track,index) => ({track,index}));
@@ -459,16 +404,16 @@
         const accents = [['blue','#7aa2f7'],['cyan','#7dcfff'],['purple','#bb9af7'],['green','#9ece6a'],['amber','#e0af68'],['red','#f7768e']].map(([id,color]) => `<button class="accent-dot" type="button" aria-label="${id} accent" aria-pressed="${state.accent === id}" data-action="accent" data-accent="${id}" style="background:${color}"></button>`).join('');
         return `${pageHeader('Appearance')}<main class="page-body"><div class="stack"><section class="screen-card card-pad"><div class="card-head"><span>Theme</span><small>DISPLAY</small></div><div class="theme-choices" role="radiogroup" aria-label="Theme">${choices}</div><p class="subtle-copy">Applies now · saved on this device</p></section><section class="screen-card card-pad"><div class="card-head"><span>Tokyo Night colors</span><small>PALETTE</small></div><div class="palette-row">${swatches}</div><p class="subtle-copy">Blue · cyan · violet · green · amber · red</p></section><section class="screen-card card-pad"><div class="card-head"><span>Accent colour</span><small>PREVIEW</small></div><div class="accent-row">${accents}</div></section><section class="screen-card card-pad"><div class="switch-row"><span>Dynamic tint</span><button type="button" role="switch" aria-checked="${state.tint}" data-action="toggle-tint">${state.tint ? 'On' : 'Off'}</button></div><div class="switch-row"><span>Battery percentage</span><button type="button" role="switch" aria-checked="${state.battery}" data-action="toggle-battery">${state.battery ? 'On' : 'Off'}</button></div></section><section class="screen-card settings-card">${row('sun','Boot screen','Choose the next power-on image','settings-screen','accent-amber')}${row('clock','Clock position','Status bar alignment','settings-time','accent-cyan')}${row('settings','Text size and font','Interface typography','settings-more','accent-purple')}</section></div></main>`;
       };
-      const renderSettings = () => `${pageHeader('Settings')}<main class="page-body"><p class="home-title-note">Choose an option to continue.</p><section class="screen-card settings-card purple-row-list">${row('theme','Appearance','Theme · accent · display','appearance','accent-purple')}${row('sun','Screen','Brightness · timeout','settings-screen','accent-cyan')}${row('clock','Date and time','Clock · time zone','settings-time','accent-blue')}${row('power','Power','Sleep · charge limit','settings-power','accent-red')}${row('list','Language','Interface language','settings-language','accent-amber')}${row('eq','More','Remote · controls','settings-more','accent-green')}${row('settings','System','Firmware · device information','settings-system','muted-icon')}</section></main>`;
+      const renderSettings = () => `${pageHeader('Settings')}<main class="page-body"><p class="home-title-note">Choose an option to continue.</p><section class="screen-card settings-card">${row('theme','Appearance','Theme · accent · display','appearance','accent-purple')}${row('sun','Screen','Brightness · timeout','settings-screen','accent-cyan')}${row('clock','Date and time','Clock · time zone','settings-time','accent-blue')}${row('power','Power','Sleep · charge limit','settings-power','accent-red')}${row('list','Language','Interface language','settings-language','accent-amber')}${row('eq','More','Remote · controls','settings-more','accent-green')}${row('settings','System','Firmware · device information','settings-system','muted-icon')}</section></main>`;
       const renderWireless = () => {
-        const toggleRow = (kind,title,on,tone,optionTitle,optionIcon,optionView,optionTone) => `<div class="wireless-group purple-tile"><div class="wireless-row">${glyph(kind,tone,20)}<span class="row-copy"><strong>${title}</strong><small>${on ? 'On' : 'Off'}</small></span><button class="mini-toggle" type="button" role="switch" aria-checked="${on}" data-action="toggle-${kind}" aria-label="Toggle ${title}"></button></div>${on ? `<button class="wireless-option" type="button" data-action="navigate" data-view="${optionView}">${glyph(optionIcon,optionTone,15)}<span>${optionTitle}</span>${glyph('chevron','muted-icon',14,'chevron-right')}</button>` : ''}</div>`;
+        const toggleRow = (kind,title,on,tone,optionTitle,optionIcon,optionView,optionTone) => `<div class="wireless-group"><div class="wireless-row">${glyph(kind,tone,20)}<span class="row-copy"><strong>${title}</strong><small>${on ? 'On' : 'Off'}</small></span><button class="mini-toggle" type="button" role="switch" aria-checked="${on}" data-action="toggle-${kind}" aria-label="Toggle ${title}"></button></div>${on ? `<button class="wireless-option" type="button" data-action="navigate" data-view="${optionView}">${glyph(optionIcon,optionTone,15)}<span>${optionTitle}</span>${glyph('chevron','muted-icon',14,'chevron-right')}</button>` : ''}</div>`;
         const actionTile = (icon,title,view,tone) => `<button class="wireless-tile" type="button" data-action="navigate" data-view="${view}">${glyph(icon,tone,18)}<span>${title}</span></button>`;
         const actions = actionTile('airplay','AirPlay','wireless-airplay','accent-cyan') + actionTile('transfer','Transfer','wireless-transfer','accent-green') + actionTile('sonixlink','SonixLink','wireless-sonixlink','accent-amber') + actionTile('dlna','DLNA','wireless-dlna','accent-blue');
-        return `${pageHeader('Wireless')}<main class="page-body"><div class="stack"><section class="screen-card wireless-card purple-row-list">${toggleRow('wifi','Wi-Fi',state.wifi,'accent-cyan','Available networks','wifiSearch','wireless-wifi-options','accent-cyan')}${toggleRow('bluetooth','Bluetooth',state.bluetooth,'accent-purple','Paired devices','bluetoothSearch','wireless-bluetooth-options','accent-purple')}</section><section class="screen-card settings-card wireless-actions"><div class="wireless-tile-grid">${actions}</div></section></div></main>`;
+        return `${pageHeader('Wireless')}<main class="page-body"><div class="stack"><section class="screen-card wireless-card">${toggleRow('wifi','Wi-Fi',state.wifi,'accent-cyan','Available networks','wifiSearch','wireless-wifi-options','accent-cyan')}${toggleRow('bluetooth','Bluetooth',state.bluetooth,'accent-purple','Paired devices','bluetoothSearch','wireless-bluetooth-options','accent-purple')}</section><section class="screen-card settings-card wireless-actions"><div class="wireless-tile-grid">${actions}</div></section></div></main>`;
       };
-      const renderBooks = () => `${pageHeader('Audiobooks')}<main class="page-body"><div class="stack"><section class="screen-card card-pad purple-tile"><div class="card-head"><span>Continue listening</span><small>ON THIS DEVICE</small></div><div class="track-list"><div class="empty-state">Books with a saved position appear here. No sample books are included in this preview.</div><button class="simple-row" type="button" data-action="navigate" data-view="book-continue">${glyph('play','accent-amber',17)}<span class="row-copy"><strong>Open Continue list</strong><small>Resume a saved book position</small></span>${glyph('chevron','muted-icon',14,'chevron-right')}</button></div></section><section class="screen-card settings-card purple-row-list">${row('books','Library','All audiobooks','book-library','accent-amber')}${row('list','Series','Browse book series','book-series','accent-purple')}${row('artist','Authors','Browse by author','book-authors','accent-blue')}${row('finished','Finished','Completed audiobooks','book-finished','accent-green')}${row('bookmark','Bookmarks','Saved reading positions','bookmarks','accent-cyan')}</section></div></main>`;
+      const renderBooks = () => `${pageHeader('Audiobooks')}<main class="page-body"><div class="stack"><section><div class="card-head"><span>Continue listening</span><small>ON THIS DEVICE</small></div><section class="screen-card track-list"><div class="empty-state">Books with a saved position appear here. No sample books are included in this preview.</div><button class="simple-row" type="button" data-action="navigate" data-view="book-continue">${glyph('play','accent-amber',17)}<span class="row-copy"><strong>Open Continue list</strong><small>Resume a saved book position</small></span>${glyph('chevron','muted-icon',14,'chevron-right')}</button></section></section><section class="screen-card settings-card">${row('books','Library','All audiobooks','book-library','accent-amber')}${row('list','Series','Browse book series','book-series','accent-purple')}${row('artist','Authors','Browse by author','book-authors','accent-blue')}${row('finished','Finished','Completed audiobooks','book-finished','accent-green')}${row('bookmark','Bookmarks','Saved reading positions','bookmarks','accent-cyan')}</section></div></main>`;
       const renderMore = () => {
-        return `${pageHeader('More')}<main class="page-body"><section class="screen-card settings-card purple-row-list">${row('dac','DAC','Headphone and USB DAC options','dac','accent-cyan')}${row('folder','File Manager','Manage files on the SD card','files','accent-blue')}${row('game','Gearboy','Game Boy emulator','gearboy','accent-green')}${row('ebook','Books','E-book shelf and bookmarks','ebook','accent-amber')}${row('bird','Flappy Bird','Mini game','bird-game','accent-purple')}</section></main>`;
+        return `${pageHeader('More')}<main class="page-body"><section class="screen-card settings-card">${row('dac','DAC','Headphone and USB DAC options','dac','accent-cyan')}${row('folder','File Manager','Manage files on the SD card','files','accent-blue')}${row('game','Gearboy','Game Boy emulator','gearboy','accent-green')}${row('ebook','Books','E-book shelf and bookmarks','ebook','accent-amber')}${row('bird','Flappy Bird','Mini game','bird-game','accent-purple')}</section></main>`;
       };
       const itemView = (key, label, detail, icon, tone = 'accent-blue') => `${pageHeader(label)}<main class="page-body"><section class="screen-card card-pad"><div style="display:flex;align-items:center;gap:8px">${glyph(icon,tone,23)}<span class="row-copy"><strong>${label}</strong><small>${detail}</small></span></div><p class="subtle-copy">This route represents the existing on-device feature. Navigation is active in this prototype.</p></section></main>`;
       const uniqueValues = key => [...new Set(state.queue.map(track => (track[key] || '').trim()).filter(Boolean))].sort((a,b) => a.localeCompare(b));
@@ -536,7 +481,7 @@
       const renderBirdGame = () => `${pageHeader('Flappy Bird')}<main class="page-body"><button class="bird-game" type="button" data-action="bird-jump" aria-label="Tap to flap">${bird('accent-amber',36,'Centered bird glyph')}</button><p class="game-score">SCORE ${state.birdScore} · TAP THE BIRD TO FLAP</p></main>`;
       const renderStreaming = () => {
         const serviceRow = (letter,kind,title,detail,view) => `<button class="simple-row" type="button" data-action="navigate" data-view="${view}"><span class="service-mark ${kind}" role="img" aria-label="${title} mark">${letter}</span><span class="row-copy"><strong>${title}</strong><small>${detail}</small></span>${glyph('chevron','muted-icon',14,'chevron-right')}</button>`;
-        return `${pageHeader('Streaming')}<main class="page-body"><section class="screen-card settings-card purple-row-list">${row('radio','Radio','Stations · recent','streaming-radio','accent-purple')}${row('podcast','Podcasts','Episodes · downloads','streaming-podcasts','accent-cyan')}${serviceRow('T','tidal','Tidal','Open the existing Tidal section','streaming-tidal')}${serviceRow('Q','qobuz','Qobuz','Open the existing Qobuz section','streaming-qobuz')}</section></main>`;
+        return `${pageHeader('Streaming')}<main class="page-body"><section class="screen-card settings-card">${row('radio','Radio','Stations · recent','streaming-radio','accent-purple')}${row('podcast','Podcasts','Episodes · downloads','streaming-podcasts','accent-cyan')}${serviceRow('T','tidal','Tidal','Open the existing Tidal section','streaming-tidal')}${serviceRow('Q','qobuz','Qobuz','Open the existing Qobuz section','streaming-qobuz')}</section></main>`;
       };
       const renderStreamingService = () => {
         const tidal = state.view === 'streaming-tidal';
