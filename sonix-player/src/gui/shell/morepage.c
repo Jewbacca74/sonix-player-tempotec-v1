@@ -60,12 +60,6 @@ static void more_list_build(gui_config_t *cfg, const grid_entry_t *entries, int 
 
 	for (int i = 0; i < count; i++) {
 		const grid_entry_t *entry = &entries[i];
-		// Tokyo Night puts File Manager in Music > Browse. Keep the existing
-		// destination in the Dark/Light grid, but do not show it twice in Tokyo.
-		if (strcmp(entry->label, "file_explorer") == 0) {
-			continue;
-		}
-
 		lv_event_cb_t callback = entry->target ? switch_screen_cb : more_action_cb;
 		void *user_data = entry->target ? (void *)*entry->target : (void *)entry->action;
 		lv_obj_t *row = settingsrow_add(more_list, entry->label, NULL, callback, user_data);

@@ -9,7 +9,6 @@
 #include "src/gui/board_profile.h"
 #include "src/gui/fonts/fonts.h"
 #include "src/gui/library/browser.h"
-#include "src/gui/library/filespage.h"
 #include "src/gui/library/libraryscan.h"
 #include "src/gui/library/medialist.h"
 #include "src/gui/library/playlistpage.h"
@@ -224,7 +223,7 @@ static lv_obj_t *make_browse_button(lv_obj_t *parent, const char *label_key, con
 static void browse_artists_cb(lv_event_t *e) { (void)e; open_artists(); }
 static void browse_albums_cb(lv_event_t *e) { (void)e; open_albums(); }
 static void browse_album_artists_cb(lv_event_t *e) { (void)e; open_album_artists(); }
-static void browse_files_cb(lv_event_t *e) { (void)e; filespage_open(); }
+static void browse_music_cb(lv_event_t *e) { (void)e; switch_screen(browser_screen); }
 static void browse_search_cb(lv_event_t *e) { (void)e; search_cb(NULL); }
 static void shortcut_all_tracks_cb(lv_event_t *e) { (void)e; open_all_tracks(); }
 static void shortcut_genres_cb(lv_event_t *e) { (void)e; open_genres(); }
@@ -456,7 +455,7 @@ static void tokyo_music_build(gui_config_t *cfg) {
 	lv_obj_set_flex_align(browse_grid, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
 	make_browse_button(browse_grid, "artists", &icon_artist, THEME_SEMANTIC_CYAN, false, browse_artists_cb, 0);
 	make_browse_button(browse_grid, "albums", &icon_album, THEME_SEMANTIC_PURPLE, false, browse_albums_cb, 1);
-	make_browse_button(browse_grid, "file_explorer", &icon_folder, THEME_SEMANTIC_GREEN, true, browse_files_cb, 2);
+	make_browse_button(browse_grid, "music_browse", &icon_folder, THEME_SEMANTIC_GREEN, false, browse_music_cb, 2);
 	make_browse_button(browse_grid, "search", &icon_search, THEME_SEMANTIC_AMBER, false, browse_search_cb, 3);
 
 	lv_obj_t *shortcut_card = music_shortcut_card(tokyo_music_panel);
