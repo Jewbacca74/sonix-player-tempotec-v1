@@ -159,8 +159,13 @@
     .empty-state { display: flex; min-height: 42px; flex-direction: column; align-items: center; justify-content: center; gap: 7px; padding: 8px; color: var(--screen-muted); text-align: center; font-size: 8px; line-height: 1.4; }
     .inline-action { display: inline-flex; align-items: center; gap: 5px; border: 0; padding: 5px 3px; color: var(--accent-cyan); background: transparent; cursor: pointer; font-size: 8px; }
     .inline-action .glyph { width: 13px; height: 13px; }
+    .wireless-group { display: flex; flex-direction: column; }
     .wireless-row { display: flex; align-items: center; gap: 8px; min-height: 46px; padding: 5px 8px; border: 0; }
     .wireless-row>.glyph { width: 20px; height: 20px; flex: 0 0 20px; }
+    .wireless-option { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 30px; padding: 3px 8px 3px 28px; border: 0; border-radius: 6px; color: var(--screen-muted); background: transparent; cursor: pointer; font-size: 8px; text-align: left; }
+    .wireless-option:hover { background: var(--surface-pressed); }
+    .wireless-option>.glyph { width: 15px; height: 15px; flex: 0 0 15px; }
+    .wireless-option .chevron-right { margin-left: auto; }
     .wireless-actions { padding: 4px; }
     .wireless-tile-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 4px; }
     .wireless-tile { display: flex; min-width: 0; min-height: 48px; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border: 0; border-radius: 7px; padding: 4px; color: var(--screen-text); background: color-mix(in srgb,var(--surface-pressed) 58%,var(--surface)); cursor: pointer; font-size: 8px; font-weight: 600; }
@@ -296,7 +301,7 @@
       <div aria-hidden="true"></div>
       <section class="note-panel">
         <h2>On-device scope</h2>
-        <p>Music opens with Browse and keeps Recently played at the bottom; Browse lists playable music from the SD card, while File Manager appears once under More. Wireless keeps Wi-Fi and Bluetooth as full-width switches, with AirPlay, Transfer, SonixLink, and DLNA in a two-column tile grid; there is no separate audio-output row. More and Streaming use lists; More keeps DAC, optional Gearboy, Books, File Manager, and Flappy Bird. Appearance retains Dark, Light, and Tokyo Night themes.</p>
+        <p>Music opens with Browse and keeps Recently played at the bottom; Browse lists playable music from the SD card, while File Manager appears once under More. Wireless keeps Wi-Fi and Bluetooth as full-width switches; turning either on reveals its network or device options. AirPlay, Transfer, SonixLink, and DLNA stay in a two-column tile grid; there is no separate audio-output row. More and Streaming use lists; More keeps DAC, optional Gearboy, Books, File Manager, and Flappy Bird. Appearance retains Dark, Light, and Tokyo Night themes.</p>
       </section>
     </div>
   </div>
@@ -323,7 +328,7 @@
 
       const iconFiles = {
         back: 'chevron-left.svg', next: 'chevron-right.svg', music: 'music-2.svg', stream: 'play-status.svg',
-        wifi: 'wifi-high.svg', bluetooth: 'bluetooth.svg', books: 'files-book.svg', more: 'ellipsis-vertical.svg',
+        wifi: 'wifi-high.svg', bluetooth: 'bluetooth.svg', wifiSearch: 'wifi-search.svg', bluetoothSearch: 'bluetooth-search.svg', books: 'files-book.svg', more: 'ellipsis-vertical.svg',
         settings: 'music-settings.svg', search: 'search.svg', play: 'play.svg', pause: 'pause.svg',
         prev: 'skip-back.svg', skip: 'skip-forward.svg', album: 'album.svg', artist: 'artist.svg',
         albumArtist: 'artist-album.svg', genre: 'genre.svg', list: 'list-music.svg', heart: 'heart.svg',
@@ -342,7 +347,7 @@
       };
       const escapeHtml = value => String(value || '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
       const safeTrack = track => ({title: escapeHtml(track.title), artist: escapeHtml(track.artist), album: escapeHtml(track.album), genre: escapeHtml(track.genre), albumArtist: escapeHtml(track.albumArtist)});
-      const currentTab = view => ({'home':'home','music':'music','sd-browser':'music','player':'player','library':'music','artists':'music','albums':'music','album-artists':'music','genres':'music','playlists':'music','favourites':'music','search':'music','files':'more','appearance':'appearance','wireless':'wireless','wireless-airplay':'wireless','wireless-transfer':'wireless','wireless-sonixlink':'wireless','wireless-dlna':'wireless','books':'books','book-library':'books','book-series':'books','book-authors':'books','book-continue':'books','book-finished':'books','bookmarks':'books','settings':'settings','settings-music':'music','settings-screen':'settings','settings-time':'settings','settings-power':'settings','settings-language':'settings','settings-more':'settings','settings-system':'settings','dac':'more','gearboy':'more','ebook':'more','bird-game':'more','streaming':'streaming','streaming-tidal':'streaming','streaming-qobuz':'streaming','streaming-radio':'streaming','streaming-podcasts':'streaming'}[view] || 'home');
+      const currentTab = view => ({'home':'home','music':'music','sd-browser':'music','player':'player','library':'music','artists':'music','albums':'music','album-artists':'music','genres':'music','playlists':'music','favourites':'music','search':'music','files':'more','appearance':'appearance','wireless':'wireless','wireless-wifi-options':'wireless','wireless-bluetooth-options':'wireless','wireless-airplay':'wireless','wireless-transfer':'wireless','wireless-sonixlink':'wireless','wireless-dlna':'wireless','books':'books','book-library':'books','book-series':'books','book-authors':'books','book-continue':'books','book-finished':'books','bookmarks':'books','settings':'settings','settings-music':'music','settings-screen':'settings','settings-time':'settings','settings-power':'settings','settings-language':'settings','settings-more':'settings','settings-system':'settings','dac':'more','gearboy':'more','ebook':'more','bird-game':'more','streaming':'streaming','streaming-tidal':'streaming','streaming-qobuz':'streaming','streaming-radio':'streaming','streaming-podcasts':'streaming'}[view] || 'home');
       const go = (view, push = true) => {
         if (!view) return;
         if (push && state.view !== view) state.history.push(state.view);
@@ -401,10 +406,10 @@
       };
       const renderSettings = () => `${pageHeader('Settings')}<main class="page-body"><p class="home-title-note">Choose an option to continue.</p><section class="screen-card settings-card">${row('theme','Appearance','Theme · accent · display','appearance','accent-purple')}${row('sun','Screen','Brightness · timeout','settings-screen','accent-cyan')}${row('clock','Date and time','Clock · time zone','settings-time','accent-blue')}${row('power','Power','Sleep · charge limit','settings-power','accent-red')}${row('list','Language','Interface language','settings-language','accent-amber')}${row('eq','More','Remote · controls','settings-more','accent-green')}${row('settings','System','Firmware · device information','settings-system','muted-icon')}</section></main>`;
       const renderWireless = () => {
-        const toggleRow = (kind,title,detail,on,tone) => `<div class="wireless-row">${glyph(kind,tone,20)}<span class="row-copy"><strong>${title}</strong><small>${detail}</small></span><button class="mini-toggle" type="button" role="switch" aria-checked="${on}" data-action="toggle-${kind}" aria-label="Toggle ${title}"></button></div>`;
+        const toggleRow = (kind,title,on,tone,optionTitle,optionIcon,optionView,optionTone) => `<div class="wireless-group"><div class="wireless-row">${glyph(kind,tone,20)}<span class="row-copy"><strong>${title}</strong><small>${on ? 'On' : 'Off'}</small></span><button class="mini-toggle" type="button" role="switch" aria-checked="${on}" data-action="toggle-${kind}" aria-label="Toggle ${title}"></button></div>${on ? `<button class="wireless-option" type="button" data-action="navigate" data-view="${optionView}">${glyph(optionIcon,optionTone,15)}<span>${optionTitle}</span>${glyph('chevron','muted-icon',14,'chevron-right')}</button>` : ''}</div>`;
         const actionTile = (icon,title,view,tone) => `<button class="wireless-tile" type="button" data-action="navigate" data-view="${view}">${glyph(icon,tone,18)}<span>${title}</span></button>`;
         const actions = actionTile('airplay','AirPlay','wireless-airplay','accent-cyan') + actionTile('transfer','Transfer','wireless-transfer','accent-green') + actionTile('sonixlink','SonixLink','wireless-sonixlink','accent-amber') + actionTile('dlna','DLNA','wireless-dlna','accent-blue');
-        return `${pageHeader('Wireless')}<main class="page-body"><div class="stack"><section class="screen-card wireless-card">${toggleRow('wifi','Wi-Fi',state.wifi ? 'On · manage networks' : 'Off',state.wifi,'accent-cyan')}${toggleRow('bluetooth','Bluetooth',state.bluetooth ? 'On · manage devices' : 'Off',state.bluetooth,'accent-purple')}</section><section class="screen-card settings-card wireless-actions"><div class="wireless-tile-grid">${actions}</div></section></div></main>`;
+        return `${pageHeader('Wireless')}<main class="page-body"><div class="stack"><section class="screen-card wireless-card">${toggleRow('wifi','Wi-Fi',state.wifi,'accent-cyan','Available networks','wifiSearch','wireless-wifi-options','accent-cyan')}${toggleRow('bluetooth','Bluetooth',state.bluetooth,'accent-purple','Paired devices','bluetoothSearch','wireless-bluetooth-options','accent-purple')}</section><section class="screen-card settings-card wireless-actions"><div class="wireless-tile-grid">${actions}</div></section></div></main>`;
       };
       const renderBooks = () => `${pageHeader('Audiobooks')}<main class="page-body"><div class="stack"><section><div class="card-head"><span>Continue listening</span><small>ON THIS DEVICE</small></div><section class="screen-card track-list"><div class="empty-state">Books with a saved position appear here. No sample books are included in this preview.</div><button class="simple-row" type="button" data-action="navigate" data-view="book-continue">${glyph('play','accent-amber',17)}<span class="row-copy"><strong>Open Continue list</strong><small>Resume a saved book position</small></span>${glyph('chevron','muted-icon',14,'chevron-right')}</button></section></section><section class="screen-card settings-card">${row('books','Library','All audiobooks','book-library','accent-amber')}${row('list','Series','Browse book series','book-series','accent-purple')}${row('artist','Authors','Browse by author','book-authors','accent-blue')}${row('finished','Finished','Completed audiobooks','book-finished','accent-green')}${row('bookmark','Bookmarks','Saved reading positions','bookmarks','accent-cyan')}</section></div></main>`;
       const renderMore = () => {
@@ -443,6 +448,8 @@
       };
       const renderGeneric = () => {
         const map = {
+          'wireless-wifi-options':['Wi-Fi options','Available networks · current connection','wifiSearch','accent-cyan'],
+          'wireless-bluetooth-options':['Bluetooth options','Paired devices · nearby devices','bluetoothSearch','accent-purple'],
           'wireless-airplay':['AirPlay','Receive audio from Apple devices','airplay','accent-cyan'],
           'wireless-transfer':['Wi-Fi Transfer','Transfer files to and from the player','transfer','accent-green'],
           'streaming-radio':['Radio','Browse stations and recent streams','radio','accent-purple'],
