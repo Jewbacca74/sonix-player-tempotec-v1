@@ -267,13 +267,8 @@ static lv_obj_t *music_shortcut_card(lv_obj_t *parent) {
 		lv_obj_set_size(button, lv_pct(100), rows[i].wrap ? 42 : 38);
 		lv_obj_set_style_bg_opa(button, LV_OPA_TRANSP, 0);
 		lv_obj_add_style(button, &theme_style_card_pressed, LV_STATE_PRESSED);
+		// Rows are separated by spacing only; do not draw hairline borders.
 		lv_obj_set_style_border_width(button, 0, 0);
-		if (i + 1 < sizeof(rows) / sizeof(rows[0])) {
-			lv_obj_set_style_border_side(button, LV_BORDER_SIDE_BOTTOM, 0);
-			lv_obj_set_style_border_width(button, 1, 0);
-			lv_obj_set_style_border_color(button, theme()->text_secondary, 0);
-			lv_obj_set_style_border_opa(button, LV_OPA_0, 0);
-		}
 		lv_obj_set_style_radius(button, 0, 0);
 		lv_obj_set_style_pad_hor(button, 5, 0);
 		lv_obj_set_style_pad_column(button, 7, 0);
@@ -366,12 +361,6 @@ static void tokyo_music_build(gui_config_t *cfg) {
 		lv_obj_set_style_bg_opa(row->button, LV_OPA_TRANSP, 0);
 		lv_obj_add_style(row->button, &theme_style_card_pressed, LV_STATE_PRESSED);
 		lv_obj_set_style_border_width(row->button, 0, 0);
-		if (i + 1 < TOKYO_RECENT_COUNT) {
-			lv_obj_set_style_border_side(row->button, LV_BORDER_SIDE_BOTTOM, 0);
-			lv_obj_set_style_border_width(row->button, 1, 0);
-			lv_obj_set_style_border_color(row->button, theme()->text_secondary, 0);
-			lv_obj_set_style_border_opa(row->button, LV_OPA_0, 0);
-		}
 		lv_obj_set_style_radius(row->button, 0, 0);
 		lv_obj_set_style_pad_hor(row->button, 4, 0);
 		lv_obj_set_style_pad_column(row->button, 7, 0);

@@ -1239,12 +1239,6 @@ static void tokyo_continue_panel_build(gui_config_t *cfg) {
 		lv_obj_set_style_bg_opa(button, LV_OPA_TRANSP, 0);
 		lv_obj_add_style(button, &theme_style_card_pressed, LV_STATE_PRESSED);
 		lv_obj_set_style_border_width(button, 0, 0);
-		if (i + 1 < sizeof(category_rows) / sizeof(category_rows[0])) {
-			lv_obj_set_style_border_side(button, LV_BORDER_SIDE_BOTTOM, 0);
-			lv_obj_set_style_border_width(button, 1, 0);
-			lv_obj_set_style_border_color(button, theme()->text_secondary, 0);
-			lv_obj_set_style_border_opa(button, LV_OPA_0, 0);
-		}
 		lv_obj_set_style_radius(button, 0, 0);
 		lv_obj_set_style_pad_hor(button, 5, 0);
 		lv_obj_set_style_pad_column(button, 7, 0);

@@ -178,6 +178,10 @@ ICONS = [
     # Dialog glyphs: a pairing in flight, and "the volume is over there".
     ("bluetooth-connecting.svg", "bluetooth_connecting", 56),
     ("headphones.svg", "headphones_big", 56),
+    # Settings categories on the compact V1: display controls and hidden
+    # developer tools, drawn in the same Lucide outline style as the rest.
+    ("monitor.svg", "monitor", 30),
+    ("terminal.svg", "terminal", 30),
     ("sun.svg", "sun", 30),
     # Keyboard. Shift and caps lock share one key, so they share a size.
     ("shift.svg", "shift", 30),

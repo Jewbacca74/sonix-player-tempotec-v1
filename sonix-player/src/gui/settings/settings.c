@@ -505,7 +505,7 @@ void settings_init(gui_config_t *cfg) {
 	settingsrow_add_icon(appearance_row, &icon_ebook_theme, THEME_SEMANTIC_PURPLE);
 	settingsrow_add_caption(appearance_row, "settings_appearance_detail");
 	lv_obj_t *screen_row = settingsrow_add(container, "settings_screen", NULL, switch_screen_cb, screensettings_screen);
-	settingsrow_add_icon(screen_row, &icon_sun, THEME_SEMANTIC_CYAN);
+	settingsrow_add_icon(screen_row, &icon_monitor, THEME_SEMANTIC_CYAN);
 	settingsrow_add_caption(screen_row, "settings_screen_detail");
 	lv_obj_t *clock_row = settingsrow_add(container, "date_and_time", NULL, clock_clicked_cb, NULL);
 	settingsrow_add_icon(clock_row, &icon_sort_date_new, THEME_SEMANTIC_BLUE);
@@ -528,6 +528,6 @@ void settings_init(gui_config_t *cfg) {
 	// Built regardless, so unlocking is a visibility change rather than a
 	// rebuild of the page.
 	devoptions_row = settingsrow_add(container, "developer_options", NULL, switch_screen_cb, devoptions_screen);
-	settingsrow_add_icon(devoptions_row, &icon_equalizer, THEME_SEMANTIC_AMBER);
+	settingsrow_add_icon(devoptions_row, &icon_terminal, THEME_SEMANTIC_AMBER);
 	settings_refresh_devoptions();
 }

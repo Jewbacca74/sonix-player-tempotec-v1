@@ -100,6 +100,8 @@ extern const lv_image_dsc_t icon_bluetooth_receiver;
 extern const lv_image_dsc_t icon_change_codec;
 extern const lv_image_dsc_t icon_bluetooth_connecting;
 extern const lv_image_dsc_t icon_headphones_big;
+extern const lv_image_dsc_t icon_monitor;
+extern const lv_image_dsc_t icon_terminal;
 extern const lv_image_dsc_t icon_sun;
 extern const lv_image_dsc_t icon_shift;
 extern const lv_image_dsc_t icon_caps_lock;

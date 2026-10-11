@@ -246,10 +246,8 @@ static void main_menu_refresh_theme(void) {
 		// Status bar: y=0..24. The 36 px title row and single-line note lead
 		// into six horizontal icon-and-label cards; the mini-player sits below.
 		// The six existing tile objects are simply reflowed, not duplicated.
-		lv_obj_set_style_border_width(home_header, 1, 0);
-		lv_obj_set_style_border_side(home_header, LV_BORDER_SIDE_BOTTOM, 0);
-		lv_obj_set_style_border_color(home_header, theme()->surface_pressed, 0);
-		lv_obj_set_style_border_opa(home_header, LV_OPA_0, 0);
+		// No divider beneath the compact header; the note and menu flow directly below it.
+		lv_obj_set_style_border_width(home_header, 0, 0);
 
 		lv_color_t strip_fill = lv_color_mix(theme()->accent, theme()->surface, LV_OPA_10);
 		lv_color_t strip_edge = lv_color_mix(theme()->accent, theme()->surface, LV_OPA_30);
