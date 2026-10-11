@@ -162,9 +162,13 @@ void volume_overlay_show(int percent) {
 
 void volume_overlay_init(gui_config_t *cfg) {
 	const bool compact = cfg->screen_width < 320;
-	// Keep the V1 pill clear of the player's back button in the top-left and
-	// out of the middle of the 192 px artwork.  The regular layout keeps its
-	// established full control strip.
+	// The V1's pill is centred on the top edge, at the same inset the player's
+	// own rows keep. It used to be pushed into the top-right corner to stand
+	// clear of the back chevron, which left it the only thing on the panel not
+	// measured from the same margin and a bar of its own rather than the strip
+	// the level is read off. It is above the chevron for a second and a half,
+	// and the chevron is not what a hand is reaching for while it is up.
+	// The regular layout keeps its established full control strip.
 	const int overlay_width = compact ? LV_MIN(180, (int)cfg->screen_width - 2 * cfg->padding) : OVERLAY_WIDTH;
 	const int overlay_height = compact ? 44 : OVERLAY_HEIGHT;
 	const int slider_height = compact ? 8 : 10;
@@ -183,11 +187,9 @@ void volume_overlay_init(gui_config_t *cfg) {
 
 	overlay = lv_obj_create(veil);
 	lv_obj_set_size(overlay, overlay_width, overlay_height);
-	if (compact) {
-		lv_obj_align(overlay, LV_ALIGN_TOP_RIGHT, -cfg->padding, cfg->padding);
-	} else {
-		lv_obj_align(overlay, LV_ALIGN_TOP_MID, 0, OVERLAY_TOP_Y);
-	}
+	// Centred on the top edge either way: what changes with the panel is how far
+	// down it goes, not which corner it hides in.
+	lv_obj_align(overlay, LV_ALIGN_TOP_MID, 0, compact ? cfg->padding : OVERLAY_TOP_Y);
 	lv_obj_set_style_radius(overlay, compact ? overlay_height / 2 : OVERLAY_RADIUS, 0);
 	lv_obj_set_style_border_width(overlay, 0, 0);
 	lv_obj_set_style_shadow_width(overlay, 0, 0);
