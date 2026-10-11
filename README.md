@@ -86,7 +86,7 @@ The project includes a local music library and file browser, album artwork, play
 
 Local audio decoder inputs include WAV, FLAC, MP3, Ogg Vorbis, Opus, M4A/M4B/MP4, AAC, ALAC, WavPack, APE, AIFF/AIFC, CAF and DSD (DSF/DFF) files. DSP features include a 10-band graphic equalizer, parametric EQ, MSEB, crossfeed, channel balance and ReplayGain.
 
-The interface font is a setting (Settings → Appearance → Font): MiSans, Neon 80s, Roboto Mono, Roboto Condensed, Inter and Barlow Semi Condensed, plus any `.ttf`/`.otf` file put in the `Fonts` folder on the card. Whatever a face is missing — Cyrillic, Greek, Hangul, kanji, Arabic — is drawn by MiSans behind it, so the whole interface stays legible in every language. The four added families are under the SIL Open Font License; see [`sonix-player/assets/fonts/FONT-LICENSES.txt`](sonix-player/assets/fonts/FONT-LICENSES.txt) for the copyright notices and the exact files.
+The interface font is a setting (Settings → Appearance → Font): MiSans, Neon 80s, Roboto, Roboto Condensed, Inter and Barlow Semi Condensed, plus any `.ttf`/`.otf` file put in the `Fonts` folder on the card. Whatever a face is missing — Cyrillic, Greek, Hangul, kanji, Arabic — is drawn by MiSans behind it, so the whole interface stays legible in every language. The four added families are under the SIL Open Font License; see [`sonix-player/assets/fonts/FONT-LICENSES.txt`](sonix-player/assets/fonts/FONT-LICENSES.txt) for the copyright notices and the exact files.
 
 The boot screen is a setting too (Settings → Appearance → Boot screen): **Retrospace**, the default, **Space**, **Travelling in space**, or **Stock**, the firmware's own light and dark pictures. The choice cannot live in the config — the script that draws the logo runs before any filesystem holding a config is mounted — so it is written to the same flash marker the theme uses, and appears from the next power-on.
 
@@ -137,6 +137,24 @@ api_secret =
 api_key =
 api_secret =
 ```
+
+### Last.fm sign-in: TLS certificate error
+
+If sign-in shows **“No reply from Last.fm”** and the player log says the certificate is not signed by a known authority, this is a TLS trust-store problem, not a Last.fm password or API-key problem. The player loads its CA bundle at startup.
+
+On a Windows PC with ADB installed, connect the player by USB, enable **Developer options → ADB**, then run these commands in PowerShell. They download the current CA bundle from curl's official CA-bundle site and copy it to the microSD card:
+
+```powershell
+curl.exe -fL "https://curl.se/ca/cacert.pem" -o "$HOME\Downloads\cacert.pem"
+Get-Item "$HOME\Downloads\cacert.pem"
+adb shell mkdir -p /mnt/sd_0/.local
+adb push "$HOME\Downloads\cacert.pem" /mnt/sd_0/.local/cacert.pem
+adb shell ls -l /mnt/sd_0/.local/cacert.pem
+```
+
+`Get-Item` should show that the downloaded file exists and has a non-zero length; the final `ls` checks the copy on the card. If the file was downloaded somewhere other than `Downloads`, use its actual path in the `adb push` command.
+
+If `[network] ca_bundle` is set in `/usr/data/device_config.ini`, that configured file takes priority: update that file instead. Otherwise, the player checks `/mnt/sd_0/.local/cacert.pem` before its firmware CA bundle. After copying, restart the player normally so it reloads the certificates; do not interrupt an update that is still in progress. If the TLS error persists, try a different trusted Wi-Fi network and see [how to collect a log](docs/collecting-logs.md). Never share `streaming-keys.ini`, API secrets, or your Last.fm password.
 
 For a private development build, `sonix-player/tools/seal_streamkeys.py` can place a sealed credentials file in the assets before compilation. This format is **obfuscation, not secure encryption**: the key is compiled into the player binary and can be recovered by someone who analyzes it. Never publish a binary containing credentials you do not intend to disclose.
 

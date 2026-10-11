@@ -1576,7 +1576,7 @@ void browser_init(gui_config_t *cfg) {
 	lv_obj_add_style(browser_screen, &theme_style_screen, 0);
 
 	config = cfg;
-	title_label = settingsrow_title(browser_screen, cfg, "browser_file_browser");
+	title_label = settingsrow_title(browser_screen, cfg, "music_browse");
 	settingsrow_title_corner_slots(title_label, cfg, 2); // root, and shuffle beside it
 
 	// Straight back to the top of the card, from however deep the walk went.

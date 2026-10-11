@@ -7,11 +7,11 @@ stock firmware have always shipped. This file covers the four families added
 for Settings -> Appearance -> UI font, each with the licence it is published
 under and the file it was taken from. Every one of them is used unmodified.
 
---- Roboto Mono (RobotoMono.ttf)
-Copyright 2015 The Roboto Mono Project Authors
-    from https://github.com/googlefonts/RobotoMono -- fonts/ttf/RobotoMono-Regular.ttf (version 3.001)
+--- Roboto (Roboto.ttf)
+Source: https://github.com/google/fonts/tree/bd8f81ddb5c74d5c8897b36ad88b440266245103/ofl/roboto/Roboto[wdth,wght].ttf
+Packaged unchanged as Roboto.ttf. Roboto.ttf SHA-256 d7598e12c5dbef095ff8272cfc55da0250bd07fbdecbac8a530b9b277872a134.
 
-Copyright 2015 The Roboto Mono Project Authors (https://github.com/googlefonts/robotomono)
+Copyright 2011 The Roboto Project Authors (https://github.com/googlefonts/roboto-classic)
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:
@@ -31,7 +31,7 @@ with others.
 
 The OFL allows the licensed fonts to be used, studied, modified and
 redistributed freely as long as they are not sold by themselves. The
-fonts, including any derivative works, can be bundled, embedded, 
+fonts, including any derivative works, can be bundled, embedded,
 redistributed and/or sold with any software provided that any reserved
 names are not used by derivative works. The fonts and derivatives,
 however, cannot be released under any other type of license. The
@@ -133,7 +133,7 @@ with others.
 
 The OFL allows the licensed fonts to be used, studied, modified and
 redistributed freely as long as they are not sold by themselves. The
-fonts, including any derivative works, can be bundled, embedded, 
+fonts, including any derivative works, can be bundled, embedded,
 redistributed and/or sold with any software provided that any reserved
 names are not used by derivative works. The fonts and derivatives,
 however, cannot be released under any other type of license. The
@@ -231,7 +231,7 @@ with others.
 
 The OFL allows the licensed fonts to be used, studied, modified and
 redistributed freely as long as they are not sold by themselves. The
-fonts, including any derivative works, can be bundled, embedded, 
+fonts, including any derivative works, can be bundled, embedded,
 redistributed and/or sold with any software provided that any reserved
 names are not used by derivative works. The fonts and derivatives,
 however, cannot be released under any other type of license. The
@@ -329,7 +329,7 @@ with others.
 
 The OFL allows the licensed fonts to be used, studied, modified and
 redistributed freely as long as they are not sold by themselves. The
-fonts, including any derivative works, can be bundled, embedded, 
+fonts, including any derivative works, can be bundled, embedded,
 redistributed and/or sold with any software provided that any reserved
 names are not used by derivative works. The fonts and derivatives,
 however, cannot be released under any other type of license. The
@@ -402,4 +402,3 @@ INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
 DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
 OTHER DEALINGS IN THE FONT SOFTWARE.
-
