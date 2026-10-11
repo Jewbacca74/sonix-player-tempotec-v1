@@ -86,7 +86,14 @@ The project includes a local music library and file browser, album artwork, play
 
 Local audio decoder inputs include WAV, FLAC, MP3, Ogg Vorbis, Opus, M4A/M4B/MP4, AAC, ALAC, WavPack, APE, AIFF/AIFC, CAF and DSD (DSF/DFF) files. DSP features include a 10-band graphic equalizer, parametric EQ, MSEB, crossfeed, channel balance and ReplayGain.
 
-The interface font is a setting (Settings → Appearance → Font): MiSans, Neon 80s, Roboto Mono, Roboto Condensed, Inter and Barlow Semi Condensed, plus any `.ttf`/`.otf` file put in the `Fonts` folder on the card. Whatever a face is missing — Cyrillic, Greek, Hangul, kanji, Arabic — is drawn by MiSans behind it, so the whole interface stays legible in every language. The four added families are under the SIL Open Font License; see [`sonix-player/assets/fonts/FONT-LICENSES.txt`](sonix-player/assets/fonts/FONT-LICENSES.txt) for the copyright notices and the exact files.
+The interface font is configurable in **Settings → Appearance → Font**. Choices include MiSans, Neon 80s, Roboto, Noto Sans, IBM Plex Sans, Fira Code, Source Sans 3, Atkinson Hyperlegible, Roboto Condensed, Inter and Barlow Semi Condensed; **Roboto Mono is no longer selectable**. User-provided `.ttf`/`.otf` fonts in the card's `Fonts` folder also appear in the picker. Missing glyphs — such as Cyrillic, Greek, Hangul, kanji or Arabic — fall back to MiSans. The six newly bundled families are licensed under the SIL Open Font License; see [`sonix-player/assets/fonts/FONT-LICENSES.txt`](sonix-player/assets/fonts/FONT-LICENSES.txt) for notices and source files.
+
+#### Third-party font sources and licensing
+
+These repositories are mentioned as references only; their fonts are **not included** in the firmware:
+
+- [inkarnation-tor/Ndot57font](https://github.com/inkarnation-tor/Ndot57font) currently contains `ndot-47-inspired-by-nothing.ttf` (an Ndot 47-inspired font, not Ndot57) and does not declare a license. Check with the author for the correct font and written usage/redistribution rights before using or redistributing it.
+- [AppleDesignResources/SanFranciscoFont](https://github.com/AppleDesignResources/SanFranciscoFont) is a mirror of Apple San Francisco font files, not a redistribution license. Apple's [official font license](https://developer.apple.com/fonts/) restricts use to UI mockups for Apple-platform software and prohibits non-Apple UI use, embedding and transfer without permission. Copying the files to the card does not bypass those terms; do not use them with this V1 port unless Apple grants written permission.
 
 The boot screen is a setting too (Settings → Appearance → Boot screen): **Retrospace**, the default, **Space**, **Travelling in space**, or **Stock**, the firmware's own light and dark pictures. The choice cannot live in the config — the script that draws the logo runs before any filesystem holding a config is mounted — so it is written to the same flash marker the theme uses, and appears from the next power-on.
 
