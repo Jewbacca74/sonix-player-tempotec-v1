@@ -1,64 +1,91 @@
 #include "morepage.h"
 
+#include <string.h>
+
 #include "lvgl/lvgl.h"
 
 #include "src/gui/audio/dacpage.h"
+#include "src/gui/board_profile.h"
 #include "src/gui/ebook/ebookpage.h"
 #include "src/gui/flappybird/flappybird.h"
-#include "src/gui/library/filespage.h"
 #include "src/gui/gearboy/gearboypage.h"
-#include "src/gui/board_profile.h"
+#include "src/gui/library/filespage.h"
+#include "src/gui/nowplaying/player.h"
 #include "src/gui/shell/gridpage.h"
 #include "src/gui/shell/icons.h"
 #include "src/gui/shell/settingsrow.h"
+#include "src/gui/shell/switcher.h"
 #include "src/gui/shell/theme.h"
 
 lv_obj_t *morepage_screen;
 
 static lv_obj_t *more_grid;
-static gui_config_t *more_cfg;
+static lv_obj_t *more_list;
 
-#if GB_CORE
-#define MORE_FILE_INDEX 3
-#define MORE_BIRD_INDEX 4
-#else
-#define MORE_FILE_INDEX 2
-#define MORE_BIRD_INDEX 3
-#endif
-
-// Tokyo Night keeps the final Flappy Bird card square and centered, so the
-// line-drawn bird sits in the middle of its own tile rather than on a wide bar.
-// The other palettes retain the original full-width final tile and artwork.
-static void more_refresh_theme(void) {
-	if (!more_grid || !more_cfg) {
-		return;
+static void more_action_cb(lv_event_t *e) {
+	void (*action)(void) = (void (*)(void))lv_event_get_user_data(e);
+	if (action) {
+		action();
 	}
+}
 
-	bool tokyo_v1 = bp_is_tempotec_v1() && theme_is_tokyo_night();
-	int padding = more_cfg->padding;
-	int gap = bp_is_tempotec_v1() ? 6 : 14;
-	int usable_width = (int)more_cfg->screen_width - 2 * padding;
-	int tile_width = (usable_width - gap) / 2;
-	int count = (int)lv_obj_get_child_count(more_grid);
-
-	if (tokyo_v1 && count == 5) {
-		lv_obj_set_width(lv_obj_get_child(more_grid, MORE_BIRD_INDEX), tile_width);
-		lv_obj_set_flex_align(more_grid, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START);
-		for (int i = 0; i < count; i++) {
-			gridpage_set_tile_orientation(more_grid, i, i != MORE_BIRD_INDEX);
-		}
-		gridpage_set_tile_label_lines(more_grid, MORE_FILE_INDEX, 2);
+static bool more_tokyo_icon(const char *label, const lv_image_dsc_t **icon, theme_semantic_t *tone) {
+	if (!label || !icon || !tone) {
+		return false;
+	}
+	if (strcmp(label, "dac") == 0) {
+		*icon = &icon_usbaudioout;
+		*tone = THEME_SEMANTIC_CYAN;
+	} else if (strcmp(label, "gearboy") == 0) {
+		*icon = &icon_files_game;
+		*tone = THEME_SEMANTIC_GREEN;
+	} else if (strcmp(label, "books") == 0) {
+		*icon = &icon_files_book;
+		*tone = THEME_SEMANTIC_AMBER;
+	} else if (strcmp(label, "file_explorer") == 0) {
+		*icon = &icon_folder;
+		*tone = THEME_SEMANTIC_BLUE;
+	} else if (strcmp(label, "flappy_bird") == 0) {
+		*icon = &icon_bird;
+		*tone = THEME_SEMANTIC_PURPLE;
 	} else {
-		if (count == 5) {
-			lv_obj_set_width(lv_obj_get_child(more_grid, MORE_BIRD_INDEX), usable_width);
-		}
-		lv_obj_set_flex_align(more_grid, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START);
-		for (int i = 0; i < count; i++) {
-			gridpage_set_tile_orientation(more_grid, i, tokyo_v1);
-		}
-		gridpage_set_tile_label_lines(more_grid, MORE_FILE_INDEX, 1);
+		return false;
 	}
-	lv_obj_update_layout(more_grid);
+	return true;
+}
+
+static void more_list_build(gui_config_t *cfg, const grid_entry_t *entries, int count) {
+	more_list = settingsrow_page(morepage_screen, cfg, "more");
+	player_sheet_attach_drag(more_list, true);
+
+	for (int i = 0; i < count; i++) {
+		const grid_entry_t *entry = &entries[i];
+		// Tokyo Night puts File Manager in Music > Browse. Keep the existing
+		// destination in the Dark/Light grid, but do not show it twice in Tokyo.
+		if (strcmp(entry->label, "file_explorer") == 0) {
+			continue;
+		}
+
+		lv_event_cb_t callback = entry->target ? switch_screen_cb : more_action_cb;
+		void *user_data = entry->target ? (void *)*entry->target : (void *)entry->action;
+		lv_obj_t *row = settingsrow_add(more_list, entry->label, NULL, callback, user_data);
+		lv_obj_set_style_border_width(row, 0, 0);
+		const lv_image_dsc_t *icon = NULL;
+		theme_semantic_t tone;
+		if (more_tokyo_icon(entry->label, &icon, &tone)) {
+			settingsrow_add_icon(row, icon, tone);
+		}
+	}
+}
+
+static void more_refresh_theme(void) {
+	bool tokyo_v1 = bp_is_tempotec_v1() && theme_is_tokyo_night();
+	if (more_grid) {
+		lv_obj_set_hidden(more_grid, tokyo_v1);
+	}
+	if (more_list) {
+		lv_obj_set_hidden(more_list, !tokyo_v1);
+	}
 }
 
 void morepage_init(gui_config_t *cfg) {
@@ -81,13 +108,14 @@ void morepage_init(gui_config_t *cfg) {
 		{"flappy_bird", &icon_menu_flappy_bird, NULL, flappybird_open},
 	};
 
-	// Two columns by three rows, like the Music and Wireless pages, so a tile
-	// here is exactly the size of a tile there. The grid is laid out as full
-	// even with fewer entries, so the only tile sits where it would with six --
-	// top left -- instead of floating in the middle of a page of its own.
-	more_cfg = cfg;
+	// Dark and Light retain the established two-column grid. Tokyo Night uses a
+	// compact, single-column list whose rows share the Settings list styling.
 	more_grid = gridpage_build(morepage_screen, cfg, entries, (int)(sizeof(entries) / sizeof(entries[0])), 2, 3, true);
-	settingsrow_title(morepage_screen, cfg, "more");
+	if (bp_is_tempotec_v1()) {
+		more_list_build(cfg, entries, (int)(sizeof(entries) / sizeof(entries[0])));
+	} else {
+		settingsrow_title(morepage_screen, cfg, "more");
+	}
 	more_refresh_theme();
 	theme_register_refresh(more_refresh_theme);
 }

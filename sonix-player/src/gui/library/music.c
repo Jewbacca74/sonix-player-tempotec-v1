@@ -9,6 +9,7 @@
 #include "src/gui/board_profile.h"
 #include "src/gui/fonts/fonts.h"
 #include "src/gui/library/browser.h"
+#include "src/gui/library/filespage.h"
 #include "src/gui/library/libraryscan.h"
 #include "src/gui/library/medialist.h"
 #include "src/gui/library/playlistpage.h"
@@ -215,10 +216,10 @@ static lv_obj_t *make_browse_button(lv_obj_t *parent, const char *label_key, con
 static void browse_artists_cb(lv_event_t *e) { (void)e; open_artists(); }
 static void browse_albums_cb(lv_event_t *e) { (void)e; open_albums(); }
 static void browse_album_artists_cb(lv_event_t *e) { (void)e; open_album_artists(); }
+static void browse_files_cb(lv_event_t *e) { (void)e; filespage_open(); }
 static void browse_search_cb(lv_event_t *e) { (void)e; search_cb(NULL); }
 static void shortcut_all_tracks_cb(lv_event_t *e) { (void)e; open_all_tracks(); }
 static void shortcut_genres_cb(lv_event_t *e) { (void)e; open_genres(); }
-static void shortcut_files_cb(lv_event_t *e) { (void)e; switch_screen(browser_screen); }
 
 static void label_set_wrapped_translation(lv_obj_t *label, const char *key, bool wrap) {
 	const char *text = tr(key);
@@ -247,7 +248,6 @@ static lv_obj_t *music_shortcut_card(lv_obj_t *parent) {
 		{"music_all_tracks", &icon_music2, THEME_SEMANTIC_CYAN, false, shortcut_all_tracks_cb},
 		{"music_album_artist", &icon_artist_album, THEME_SEMANTIC_BLUE, true, browse_album_artists_cb},
 		{"music_genres", &icon_genre, THEME_SEMANTIC_AMBER, false, shortcut_genres_cb},
-		{"file_explorer", &icon_folder, THEME_SEMANTIC_GREEN, true, shortcut_files_cb},
 		{"favourites", &icon_star, THEME_SEMANTIC_RED, false, favourites_cb},
 	};
 	lv_obj_t *card = lv_obj_create(parent);
@@ -272,7 +272,7 @@ static lv_obj_t *music_shortcut_card(lv_obj_t *parent) {
 			lv_obj_set_style_border_side(button, LV_BORDER_SIDE_BOTTOM, 0);
 			lv_obj_set_style_border_width(button, 1, 0);
 			lv_obj_set_style_border_color(button, theme()->text_secondary, 0);
-			lv_obj_set_style_border_opa(button, LV_OPA_20, 0);
+			lv_obj_set_style_border_opa(button, LV_OPA_0, 0);
 		}
 		lv_obj_set_style_radius(button, 0, 0);
 		lv_obj_set_style_pad_hor(button, 5, 0);
@@ -370,7 +370,7 @@ static void tokyo_music_build(gui_config_t *cfg) {
 			lv_obj_set_style_border_side(row->button, LV_BORDER_SIDE_BOTTOM, 0);
 			lv_obj_set_style_border_width(row->button, 1, 0);
 			lv_obj_set_style_border_color(row->button, theme()->text_secondary, 0);
-			lv_obj_set_style_border_opa(row->button, LV_OPA_20, 0);
+			lv_obj_set_style_border_opa(row->button, LV_OPA_0, 0);
 		}
 		lv_obj_set_style_radius(row->button, 0, 0);
 		lv_obj_set_style_pad_hor(row->button, 4, 0);
@@ -452,11 +452,10 @@ static void tokyo_music_build(gui_config_t *cfg) {
 	lv_obj_set_flex_align(browse_grid, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
 	make_browse_button(browse_grid, "artists", &icon_artist, THEME_SEMANTIC_CYAN, false, browse_artists_cb, 0);
 	make_browse_button(browse_grid, "albums", &icon_album, THEME_SEMANTIC_PURPLE, false, browse_albums_cb, 1);
-	make_browse_button(browse_grid, "music_album_artist", &icon_artist_album, THEME_SEMANTIC_BLUE, true,
-					   browse_album_artists_cb, 2);
+	make_browse_button(browse_grid, "file_explorer", &icon_folder, THEME_SEMANTIC_GREEN, true, browse_files_cb, 2);
 	make_browse_button(browse_grid, "search", &icon_search, THEME_SEMANTIC_AMBER, false, browse_search_cb, 3);
 
-	music_shortcut_card(tokyo_music_panel);
+	lv_obj_t *shortcut_card = music_shortcut_card(tokyo_music_panel);
 
 	tokyo_scan_button = lv_btn_create(tokyo_music_panel);
 	lv_obj_set_size(tokyo_scan_button, lv_pct(100), 38);
@@ -485,6 +484,16 @@ static void tokyo_music_build(gui_config_t *cfg) {
 	lv_obj_set_flex_grow(scan_label, 1);
 	lv_obj_add_style(scan_label, &theme_style_text, 0);
 	lv_obj_set_style_text_font(scan_label, &font_ui_14, 0);
+
+	// Keep the browse destinations and scan action at the top. The queue-derived
+	// Recently played section belongs at the end of the scrollable Music page.
+	lv_obj_move_to_index(browse_card, 0);
+	lv_obj_move_to_index(shortcut_card, 1);
+	lv_obj_move_to_index(tokyo_scan_button, 2);
+	lv_obj_move_to_index(recent_heading, 3);
+	lv_obj_move_to_index(tokyo_recent_card, 4);
+	lv_obj_move_to_index(queue_note, 5);
+	lv_obj_update_layout(tokyo_music_panel);
 
 	player_sheet_attach_drag(tokyo_music_panel, true);
 	switcher_attach_back_gesture(tokyo_music_panel);

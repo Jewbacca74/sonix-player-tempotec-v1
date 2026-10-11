@@ -249,7 +249,7 @@ static void main_menu_refresh_theme(void) {
 		lv_obj_set_style_border_width(home_header, 1, 0);
 		lv_obj_set_style_border_side(home_header, LV_BORDER_SIDE_BOTTOM, 0);
 		lv_obj_set_style_border_color(home_header, theme()->surface_pressed, 0);
-		lv_obj_set_style_border_opa(home_header, LV_OPA_20, 0);
+		lv_obj_set_style_border_opa(home_header, LV_OPA_0, 0);
 
 		lv_color_t strip_fill = lv_color_mix(theme()->accent, theme()->surface, LV_OPA_10);
 		lv_color_t strip_edge = lv_color_mix(theme()->accent, theme()->surface, LV_OPA_30);

@@ -338,12 +338,14 @@ static void fit_row(lv_obj_t *row) {
 	avail -= leading_width;
 
 	lv_obj_t *caption = settingsrow_caption(row);
-	bool two_line = caption && compact_rows() && theme_is_tokyo_night();
+	bool captioned = caption && compact_rows() && theme_is_tokyo_night();
 	if (caption) {
-		lv_obj_set_hidden(caption, !two_line);
+		lv_obj_set_hidden(caption, !captioned);
 	}
-	if (two_line) {
-		lv_obj_set_height(row, 60);
+	if (captioned) {
+		// Translated descriptions can exceed a single V1 line. Give them three
+		// wrapped lines and let the page scroll rather than clipping the text.
+		lv_obj_set_height(row, 76);
 		lv_obj_set_style_text_font(label, &font_ui_18, 0);
 		lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
 		lv_obj_set_style_text_line_space(label, 0, 0);
@@ -351,10 +353,10 @@ static void fit_row(lv_obj_t *row) {
 		lv_obj_set_height(label, lv_font_get_line_height(&font_ui_18));
 		lv_obj_align(label, LV_ALIGN_TOP_LEFT, leading_width, 4);
 
-		lv_label_set_long_mode(caption, LV_LABEL_LONG_DOT);
+		lv_label_set_long_mode(caption, LV_LABEL_LONG_WRAP);
 		lv_obj_set_style_text_line_space(caption, 0, 0);
 		lv_obj_set_width(caption, LV_MAX(1, avail));
-		lv_obj_set_height(caption, lv_font_get_line_height(&font_ui_14));
+		lv_obj_set_height(caption, 3 * lv_font_get_line_height(&font_ui_14));
 		lv_obj_align(caption, LV_ALIGN_TOP_LEFT, leading_width, lv_font_get_line_height(&font_ui_18) + 7);
 		return;
 	}

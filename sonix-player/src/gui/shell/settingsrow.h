@@ -56,9 +56,9 @@ lv_obj_t *settingsrow_add(lv_obj_t *parent, const char *name, lv_obj_t **value_o
 // Dark and Light keep the original text-and-chevron row layout.
 void settingsrow_add_icon(lv_obj_t *row, const lv_image_dsc_t *source, theme_semantic_t tone);
 
-// Optional second line for a section row. The caption appears only in Tokyo
-// Night on the compact V1; Dark/Light and larger players keep their original
-// one-line row geometry.
+// Optional description for a section row. Tokyo Night on the compact V1 wraps
+// it across multiple lines rather than ellipsizing; Dark/Light and larger
+// players keep their original one-line row geometry.
 void settingsrow_add_caption(lv_obj_t *row, const char *text);
 
 // The row's own name label, for the one row whose text is not a fixed tag: the
