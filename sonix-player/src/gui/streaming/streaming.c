@@ -40,7 +40,6 @@ static void streaming_list_build(gui_config_t *cfg) {
 	for (unsigned int i = 0; i < sizeof(tokyo_items) / sizeof(tokyo_items[0]); i++) {
 		const streaming_item_t *item = &tokyo_items[i];
 		lv_obj_t *row = settingsrow_add(streaming_list, item->label, NULL, switch_screen_cb, *item->target);
-		lv_obj_set_style_border_width(row, 0, 0);
 		settingsrow_add_icon(row, item->icon, item->tone);
 	}
 }

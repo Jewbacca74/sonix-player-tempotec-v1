@@ -112,7 +112,7 @@
     .page-body { height: 260px; overflow-y: auto; overscroll-behavior: contain; padding: 6px; scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--screen-muted) 36%, transparent) transparent; }
     .page-body::-webkit-scrollbar { width: 3px; }
     .page-body::-webkit-scrollbar-thumb { border-radius: 9px; background: color-mix(in srgb, var(--screen-muted) 38%, transparent); }
-    .screen-card { border: 0; border-radius: 9px; background: var(--surface); box-shadow: 0 3px 12px rgba(0,0,0,.07); }
+    .screen-card { border: 0; border-radius: 9px; background: var(--surface); box-shadow: none; }
     .card-pad { padding: 8px; }
     .card-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 0 0 6px; color: var(--screen-text); font-size: 11px; font-weight: 650; }
     .card-head small { color: var(--screen-soft); font: 7px var(--mono); letter-spacing: .07em; text-transform: uppercase; }
@@ -123,11 +123,11 @@
     .home-title-note { margin: 0 1px 6px; color: var(--screen-muted); font-size: 9px; }
     .stack { display: flex; flex-direction: column; gap: 6px; }
     .menu-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 6px; }
-    .menu-tile { display: flex; min-width: 0; min-height: 51px; align-items: center; gap: 8px; padding: 7px; border: 1px solid color-mix(in srgb,var(--screen-muted) 10%,transparent); border-radius: 8px; color: var(--screen-text); background: var(--surface); cursor: pointer; text-align: left; }
-    .menu-tile:hover { border-color: color-mix(in srgb,var(--accent) 58%,transparent); background: var(--surface-pressed); }
+    .menu-tile { display: flex; min-width: 0; min-height: 51px; align-items: center; gap: 8px; padding: 7px; border: 0; border-radius: 8px; color: var(--screen-text); background: var(--surface); cursor: pointer; text-align: left; }
+    .menu-tile:hover { background: var(--surface-pressed); }
     .menu-tile .glyph,.menu-tile .bird-glyph { width: 20px; height: 20px; flex: 0 0 20px; }
     .tile-text { min-width: 0; font-size: 9px; font-weight: 600; line-height: 1.15; }
-    .now-playing-strip { display: flex; align-items: center; gap: 7px; min-height: 41px; margin-top: 7px; padding: 4px 6px; border: 1px solid color-mix(in srgb,var(--accent) 27%,transparent); border-radius: 8px; color: var(--screen-text); background: color-mix(in srgb,var(--accent) 8%,var(--surface)); cursor: pointer; text-align: left; }
+    .now-playing-strip { display: flex; align-items: center; gap: 7px; min-height: 41px; margin-top: 7px; padding: 4px 6px; border: 0; border-radius: 8px; color: var(--screen-text); background: color-mix(in srgb,var(--accent) 8%,var(--surface)); cursor: pointer; text-align: left; }
     .now-playing-strip .glyph { width: 15px; height: 15px; flex: 0 0 15px; }
     .now-playing-strip .row-copy strong { font-size: 9px; }
     .now-playing-strip .row-copy small { font-size: 7.5px; }
@@ -160,7 +160,10 @@
     .inline-action .glyph { width: 13px; height: 13px; }
     .wireless-row { display: flex; align-items: center; gap: 8px; min-height: 46px; padding: 5px 8px; border: 0; }
     .wireless-row>.glyph { width: 20px; height: 20px; flex: 0 0 20px; }
-    .wireless-actions .simple-row { min-height: 28px; padding: 2px 6px; }
+    .wireless-actions { padding: 4px; }
+    .wireless-tile-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 4px; }
+    .wireless-tile { display: flex; min-width: 0; min-height: 48px; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border: 0; border-radius: 7px; padding: 4px; color: var(--screen-text); background: color-mix(in srgb,var(--surface-pressed) 58%,var(--surface)); cursor: pointer; font-size: 8px; font-weight: 600; }
+    .wireless-tile .glyph { width: 18px; height: 18px; }
     .mini-toggle { position: relative; flex: 0 0 29px; width: 29px; height: 17px; border: 0; border-radius: 999px; background: var(--screen-soft); cursor: pointer; }
     .mini-toggle::after { content: ""; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 50%; background: #fff; transition: transform .15s; }
     .mini-toggle[aria-checked="true"] { background: var(--accent); }
@@ -189,7 +192,7 @@
     .transport-button.primary { width: 38px; height: 38px; color: #11131b; background: var(--accent); }
     .transport-button .glyph { width: 18px; height: 18px; }
     .transport-button.primary .glyph { color: #11131b; }
-    .player-actions { display: flex; width: 100%; margin-top: 4px; border: 1px solid color-mix(in srgb,var(--screen-muted) 10%,transparent); border-radius: 7px; background: var(--surface); }
+    .player-actions { display: flex; width: 100%; margin-top: 4px; border: 0; border-radius: 7px; background: var(--surface); }
     .player-actions .simple-row { flex: 1 1 0; min-width: 0; width: auto; min-height: 34px; border: 0; padding: 4px 7px; }
     .player-actions .simple-row .row-copy strong { font-size: 8px; }
     .player-actions .glyph { width: 15px; height: 15px; }
@@ -292,7 +295,7 @@
       <div aria-hidden="true"></div>
       <section class="note-panel">
         <h2>On-device scope</h2>
-        <p>Music opens with Browse and keeps Recently played at the bottom; File Manager appears once in the Music browse tiles. Wireless preserves Wi-Fi, Bluetooth, AirPlay, transfer, SonixLink, and DLNA without a separate audio-output row. More and Streaming use lists; More keeps DAC, optional Gearboy, Books, and Flappy Bird. Appearance retains Dark, Light, and Tokyo Night themes.</p>
+        <p>Music opens with Browse and keeps Recently played at the bottom; File Manager appears once in the Music browse tiles. Wireless keeps Wi-Fi and Bluetooth as full-width switches, with AirPlay, Transfer, SonixLink, and DLNA in a two-column tile grid; there is no separate audio-output row. More and Streaming use lists; More keeps DAC, optional Gearboy, Books, and Flappy Bird. Appearance retains Dark, Light, and Tokyo Night themes.</p>
       </section>
     </div>
   </div>
@@ -393,7 +396,9 @@
       const renderSettings = () => `${pageHeader('Settings')}<main class="page-body"><p class="home-title-note">Choose an option to continue.</p><section class="screen-card settings-card">${row('theme','Appearance','Theme · accent · display','appearance','accent-purple')}${row('sun','Screen','Brightness · timeout','settings-screen','accent-cyan')}${row('clock','Date and time','Clock · time zone','settings-time','accent-blue')}${row('power','Power','Sleep · charge limit','settings-power','accent-red')}${row('list','Language','Interface language','settings-language','accent-amber')}${row('eq','More','Remote · controls · developer options','settings-more','accent-green')}${row('settings','System','Firmware · device information','settings-system','muted-icon')}</section></main>`;
       const renderWireless = () => {
         const toggleRow = (kind,title,detail,on,tone) => `<div class="wireless-row">${glyph(kind,tone,20)}<span class="row-copy"><strong>${title}</strong><small>${detail}</small></span><button class="mini-toggle" type="button" role="switch" aria-checked="${on}" data-action="toggle-${kind}" aria-label="Toggle ${title}"></button></div>`;
-        return `${pageHeader('Wireless')}<main class="page-body"><div class="stack"><section class="screen-card wireless-card">${toggleRow('wifi','Wi-Fi',state.wifi ? 'On · manage networks' : 'Off',state.wifi,'accent-cyan')}${toggleRow('bluetooth','Bluetooth',state.bluetooth ? 'On · manage devices' : 'Off',state.bluetooth,'accent-purple')}</section><section class="screen-card settings-card wireless-actions">${row('airplay','AirPlay','Receive music from Apple devices','wireless-airplay','accent-cyan')}${row('transfer','Wi-Fi Transfer','Move files over Wi-Fi','wireless-transfer','accent-green')}${row('sonixlink','SonixLink','Connect to Sonix Player','wireless-sonixlink','accent-amber')}${row('dlna','DLNA','Network audio renderer','wireless-dlna','accent-blue')}</section></div></main>`;
+        const actionTile = (icon,title,view,tone) => `<button class="wireless-tile" type="button" data-action="navigate" data-view="${view}">${glyph(icon,tone,18)}<span>${title}</span></button>`;
+        const actions = actionTile('airplay','AirPlay','wireless-airplay','accent-cyan') + actionTile('transfer','Transfer','wireless-transfer','accent-green') + actionTile('sonixlink','SonixLink','wireless-sonixlink','accent-amber') + actionTile('dlna','DLNA','wireless-dlna','accent-blue');
+        return `${pageHeader('Wireless')}<main class="page-body"><div class="stack"><section class="screen-card wireless-card">${toggleRow('wifi','Wi-Fi',state.wifi ? 'On · manage networks' : 'Off',state.wifi,'accent-cyan')}${toggleRow('bluetooth','Bluetooth',state.bluetooth ? 'On · manage devices' : 'Off',state.bluetooth,'accent-purple')}</section><section class="screen-card settings-card wireless-actions"><div class="wireless-tile-grid">${actions}</div></section></div></main>`;
       };
       const renderBooks = () => `${pageHeader('Audiobooks')}<main class="page-body"><div class="stack"><section><div class="card-head"><span>Continue listening</span><small>ON THIS DEVICE</small></div><section class="screen-card track-list"><div class="empty-state">Books with a saved position appear here. No sample books are included in this preview.</div><button class="simple-row" type="button" data-action="navigate" data-view="book-continue">${glyph('play','accent-amber',17)}<span class="row-copy"><strong>Open Continue list</strong><small>Resume a saved book position</small></span>${glyph('chevron','muted-icon',14,'chevron-right')}</button></section></section><section class="screen-card settings-card">${row('books','Library','All audiobooks','book-library','accent-amber')}${row('list','Series','Browse book series','book-series','accent-purple')}${row('artist','Authors','Browse by author','book-authors','accent-blue')}${row('finished','Finished','Completed audiobooks','book-finished','accent-green')}${row('bookmark','Bookmarks','Saved reading positions','bookmarks','accent-cyan')}</section></div></main>`;
       const renderMore = () => {

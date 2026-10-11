@@ -69,7 +69,6 @@ static void more_list_build(gui_config_t *cfg, const grid_entry_t *entries, int 
 		lv_event_cb_t callback = entry->target ? switch_screen_cb : more_action_cb;
 		void *user_data = entry->target ? (void *)*entry->target : (void *)entry->action;
 		lv_obj_t *row = settingsrow_add(more_list, entry->label, NULL, callback, user_data);
-		lv_obj_set_style_border_width(row, 0, 0);
 		const lv_image_dsc_t *icon = NULL;
 		theme_semantic_t tone;
 		if (more_tokyo_icon(entry->label, &icon, &tone)) {

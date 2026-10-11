@@ -456,18 +456,33 @@ static lv_obj_t *make_card(lv_obj_t *parent, const char *name, lv_obj_t **value_
 static lv_obj_t *built_sliders[SETTINGSROW_MAX_SLIDERS];
 static int built_slider_count;
 
+static void settingsrow_update_edges(lv_obj_t *row, bool flat) {
+	if (!row) {
+		return;
+	}
+	if (flat) {
+		lv_obj_set_style_border_width(row, 0, 0);
+		lv_obj_set_style_outline_width(row, 0, 0);
+	} else {
+		lv_obj_remove_local_style_prop(row, LV_STYLE_BORDER_WIDTH, 0);
+		lv_obj_remove_local_style_prop(row, LV_STYLE_OUTLINE_WIDTH, 0);
+	}
+}
+
 static void settingsrow_refresh_theme(void) {
 	for (int i = 0; i < built_slider_count; i++) {
 		theme_apply_slider_knob(built_sliders[i]);
 	}
 
 	bool tokyo = theme_is_tokyo_night();
+	bool flat_rows = compact_rows() && tokyo;
 	for (int i = 0; i < leading_icon_count; i++) {
 		lv_obj_t *row = leading_icons[i].row;
 		lv_obj_t *icon = leading_icons[i].icon;
 		if (!row || !icon) {
 			continue;
 		}
+		settingsrow_update_edges(row, flat_rows);
 		lv_obj_set_hidden(icon, !tokyo);
 		lv_obj_t *label = lv_obj_get_child(row, 0);
 		if (label && lv_obj_check_type(label, &lv_label_class)) {

@@ -1098,11 +1098,13 @@ static void tokyo_open_authors_cb(lv_event_t *e) { (void)e; open_authors(); }
 
 static lv_obj_t *tokyo_section_card(lv_obj_t *parent) {
 	lv_obj_t *card = lv_obj_create(parent);
+	lv_obj_remove_style_all(card);
 	lv_obj_set_width(card, lv_pct(100));
 	lv_obj_set_height(card, LV_SIZE_CONTENT);
 	lv_obj_add_style(card, &theme_style_card, 0);
 	lv_obj_set_style_radius(card, bp_tile_radius(), 0);
 	lv_obj_set_style_border_width(card, 0, 0);
+	lv_obj_set_style_outline_width(card, 0, 0);
 	lv_obj_set_style_shadow_width(card, 0, 0);
 	lv_obj_set_style_pad_all(card, 4, 0);
 	lv_obj_set_scrollable(card, false);
@@ -1117,10 +1119,12 @@ static void tokyo_continue_panel_build(gui_config_t *cfg) {
 	}
 	int top = settingsrow_content_top(cfg);
 	tokyo_books_panel = lv_obj_create(audiobooks_screen);
+	lv_obj_remove_style_all(tokyo_books_panel);
 	lv_obj_set_size(tokyo_books_panel, lv_pct(100), cfg->screen_height - top);
 	lv_obj_align(tokyo_books_panel, LV_ALIGN_TOP_LEFT, 0, top);
 	lv_obj_set_style_bg_opa(tokyo_books_panel, LV_OPA_TRANSP, 0);
 	lv_obj_set_style_border_width(tokyo_books_panel, 0, 0);
+	lv_obj_set_style_outline_width(tokyo_books_panel, 0, 0);
 	lv_obj_set_style_radius(tokyo_books_panel, 0, 0);
 	lv_obj_set_style_pad_hor(tokyo_books_panel, cfg->padding, 0);
 	lv_obj_set_style_pad_ver(tokyo_books_panel, 4, 0);
@@ -1147,10 +1151,13 @@ static void tokyo_continue_panel_build(gui_config_t *cfg) {
 	lv_obj_set_style_text_align(tokyo_continue_empty, LV_TEXT_ALIGN_CENTER, 0);
 
 	tokyo_continue_book = lv_btn_create(continue_card);
+	lv_obj_remove_style_all(tokyo_continue_book);
 	lv_obj_set_size(tokyo_continue_book, lv_pct(100), 41);
 	lv_obj_set_style_bg_opa(tokyo_continue_book, LV_OPA_TRANSP, 0);
 	lv_obj_add_style(tokyo_continue_book, &theme_style_card_pressed, LV_STATE_PRESSED);
 	lv_obj_set_style_border_width(tokyo_continue_book, 0, 0);
+	lv_obj_set_style_outline_width(tokyo_continue_book, 0, 0);
+	lv_obj_set_style_shadow_width(tokyo_continue_book, 0, 0);
 	lv_obj_set_style_pad_hor(tokyo_continue_book, 4, 0);
 	lv_obj_set_style_pad_column(tokyo_continue_book, 7, 0);
 	lv_obj_set_flex_flow(tokyo_continue_book, LV_FLEX_FLOW_ROW);
@@ -1188,10 +1195,13 @@ static void tokyo_continue_panel_build(gui_config_t *cfg) {
 	lv_obj_set_hidden(tokyo_continue_book, true);
 
 	lv_obj_t *open_continue = lv_btn_create(continue_card);
+	lv_obj_remove_style_all(open_continue);
 	lv_obj_set_size(open_continue, lv_pct(100), 36);
 	lv_obj_set_style_bg_opa(open_continue, LV_OPA_TRANSP, 0);
 	lv_obj_add_style(open_continue, &theme_style_card_pressed, LV_STATE_PRESSED);
 	lv_obj_set_style_border_width(open_continue, 0, 0);
+	lv_obj_set_style_outline_width(open_continue, 0, 0);
+	lv_obj_set_style_shadow_width(open_continue, 0, 0);
 	lv_obj_set_style_pad_hor(open_continue, 4, 0);
 	lv_obj_set_style_pad_column(open_continue, 7, 0);
 	lv_obj_set_flex_flow(open_continue, LV_FLEX_FLOW_ROW);
@@ -1235,10 +1245,13 @@ static void tokyo_continue_panel_build(gui_config_t *cfg) {
 	};
 	for (size_t i = 0; i < sizeof(category_rows) / sizeof(category_rows[0]); i++) {
 		lv_obj_t *button = lv_btn_create(categories);
+		lv_obj_remove_style_all(button);
 		lv_obj_set_size(button, lv_pct(100), 38);
 		lv_obj_set_style_bg_opa(button, LV_OPA_TRANSP, 0);
 		lv_obj_add_style(button, &theme_style_card_pressed, LV_STATE_PRESSED);
 		lv_obj_set_style_border_width(button, 0, 0);
+		lv_obj_set_style_outline_width(button, 0, 0);
+		lv_obj_set_style_shadow_width(button, 0, 0);
 		lv_obj_set_style_radius(button, 0, 0);
 		lv_obj_set_style_pad_hor(button, 5, 0);
 		lv_obj_set_style_pad_column(button, 7, 0);
@@ -1272,11 +1285,14 @@ static void tokyo_continue_panel_build(gui_config_t *cfg) {
 	}
 
 	tokyo_scan_button = lv_btn_create(tokyo_books_panel);
+	lv_obj_remove_style_all(tokyo_scan_button);
 	lv_obj_set_size(tokyo_scan_button, lv_pct(100), 38);
 	lv_obj_add_style(tokyo_scan_button, &theme_style_card, 0);
 	lv_obj_add_style(tokyo_scan_button, &theme_style_card_pressed, LV_STATE_PRESSED);
 	lv_obj_set_style_radius(tokyo_scan_button, bp_tile_radius(), 0);
 	lv_obj_set_style_border_width(tokyo_scan_button, 0, 0);
+	lv_obj_set_style_outline_width(tokyo_scan_button, 0, 0);
+	lv_obj_set_style_shadow_width(tokyo_scan_button, 0, 0);
 	lv_obj_set_style_pad_hor(tokyo_scan_button, 8, 0);
 	lv_obj_set_style_pad_column(tokyo_scan_button, 7, 0);
 	lv_obj_set_flex_flow(tokyo_scan_button, LV_FLEX_FLOW_ROW);

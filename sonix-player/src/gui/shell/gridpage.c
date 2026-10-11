@@ -280,12 +280,14 @@ static void gridpage_apply_theme_page(gridpage_theme_page_t *page) {
 
 		lv_obj_t *tile = lv_obj_get_child(page->grid, i);
 		if (tile) {
-			lv_obj_set_style_border_width(tile, tokyo ? 1 : 0, 0);
+			// Tokyo Night tiles are separated by gaps and fill, not keylines.
+			// Clear both border and focus-outline styles; a zero-opacity line
+			// still reads as a card edge on the V1's small panel.
+			lv_obj_set_style_border_width(tile, 0, 0);
 			if (tokyo) {
-				lv_obj_set_style_border_color(tile, theme()->text_secondary, 0);
-				lv_obj_set_style_border_opa(tile, LV_OPA_20, 0);
+				lv_obj_set_style_outline_width(tile, 0, 0);
 			} else {
-				lv_obj_set_style_border_opa(tile, LV_OPA_COVER, 0);
+				lv_obj_remove_local_style_prop(tile, LV_STYLE_OUTLINE_WIDTH, 0);
 			}
 		}
 	}

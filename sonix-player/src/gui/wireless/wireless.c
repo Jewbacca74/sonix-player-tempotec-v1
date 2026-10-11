@@ -33,6 +33,7 @@ typedef struct {
 } radio_row_t;
 
 typedef struct {
+	lv_obj_t *button;
 	lv_obj_t *icon;
 	theme_semantic_t tone;
 } wireless_icon_t;
@@ -116,13 +117,22 @@ static void radio_changed_cb(lv_event_t *e) {
 	radios_refresh();
 }
 
+static void wireless_remove_edges(lv_obj_t *obj) {
+	lv_obj_remove_style_all(obj);
+	lv_obj_set_style_border_width(obj, 0, 0);
+	lv_obj_set_style_outline_width(obj, 0, 0);
+	lv_obj_set_style_shadow_width(obj, 0, 0);
+}
+
 static lv_obj_t *wireless_card(lv_obj_t *parent, int height) {
 	lv_obj_t *card = lv_obj_create(parent);
+	wireless_remove_edges(card);
 	lv_obj_set_width(card, lv_pct(100));
 	lv_obj_set_height(card, height);
 	lv_obj_add_style(card, &theme_style_card, 0);
 	lv_obj_set_style_radius(card, bp_tile_radius(), 0);
 	lv_obj_set_style_border_width(card, 0, 0);
+	lv_obj_set_style_outline_width(card, 0, 0);
 	lv_obj_set_style_shadow_width(card, 0, 0);
 	lv_obj_set_style_pad_all(card, 8, 0);
 	lv_obj_set_scrollable(card, false);
@@ -135,7 +145,7 @@ static lv_obj_t *radio_card(lv_obj_t *parent, const char *label, const lv_image_
 	lv_obj_t *card = wireless_card(parent, 46);
 	lv_obj_set_style_pad_all(card, 5, 0);
 	lv_obj_t *open = lv_btn_create(card);
-	lv_obj_remove_style_all(open);
+	wireless_remove_edges(open);
 	lv_obj_set_size(open, wireless_cfg->screen_width - 2 * wireless_cfg->padding - 10 - 44 - 8, 36);
 	lv_obj_align(open, LV_ALIGN_LEFT_MID, 0, 0);
 	lv_obj_set_style_bg_opa(open, LV_OPA_TRANSP, 0);
@@ -194,53 +204,54 @@ static lv_obj_t *radio_card(lv_obj_t *parent, const char *label, const lv_image_
 	return card;
 }
 
-static lv_obj_t *wireless_action_list(lv_obj_t *parent) {
-	lv_obj_t *card = wireless_card(parent, 4 * 28 + 4);
-	lv_obj_set_style_pad_all(card, 2, 0);
-	lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
+static lv_obj_t *wireless_action_grid(lv_obj_t *parent) {
+	const int tile_gap = 4;
+	const int card_pad = 4;
+	const int tile_height = 48;
+	const int content_width = wireless_cfg->screen_width - 2 * wireless_cfg->padding;
+	const int tile_width = LV_MAX(1, (content_width - 2 * card_pad - tile_gap) / 2);
+	lv_obj_t *card = wireless_card(parent, 2 * tile_height + tile_gap + 2 * card_pad);
+	lv_obj_set_style_pad_all(card, card_pad, 0);
+	lv_obj_set_style_pad_gap(card, tile_gap, 0);
+	lv_obj_set_flex_flow(card, LV_FLEX_FLOW_ROW_WRAP);
 	lv_obj_set_flex_align(card, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
 	for (int i = 0; i < WIRELESS_ACTION_COUNT; i++) {
 		const wireless_action_item_t *item = &tokyo_actions[i];
 		lv_obj_t *button = lv_btn_create(card);
-		lv_obj_set_size(button, lv_pct(100), 28);
-		lv_obj_set_style_bg_opa(button, LV_OPA_TRANSP, 0);
+		wireless_remove_edges(button);
+		lv_obj_set_size(button, tile_width, tile_height);
+		lv_obj_set_style_bg_color(button, theme()->surface_pressed, 0);
+		lv_obj_set_style_bg_opa(button, LV_OPA_COVER, 0);
 		lv_obj_add_style(button, &theme_style_card_pressed, LV_STATE_PRESSED);
-		// Divider strokes are omitted; the rows are separated by spacing only.
-		lv_obj_set_style_border_width(button, 0, 0);
-		lv_obj_set_style_radius(button, 0, 0);
-		lv_obj_set_style_pad_all(button, 1, 0);
-		lv_obj_set_style_pad_hor(button, 4, 0);
-		lv_obj_set_style_pad_column(button, 5, 0);
+		lv_obj_set_style_radius(button, bp_tile_radius(), 0);
+		lv_obj_set_style_pad_all(button, 4, 0);
+		lv_obj_set_style_pad_gap(button, 2, 0);
 		lv_obj_set_event_bubble(button, true);
-		lv_obj_set_flex_flow(button, LV_FLEX_FLOW_ROW);
-		lv_obj_set_flex_align(button, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+		lv_obj_set_scrollable(button, false);
+		lv_obj_set_flex_flow(button, LV_FLEX_FLOW_COLUMN);
+		lv_obj_set_flex_align(button, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 		lv_obj_add_event_cb(button, switch_screen_cb, LV_EVENT_CLICKED, *item->target);
 
 		lv_obj_t *icon = lv_image_create(button);
 		lv_image_set_src(icon, item->icon);
 		lv_obj_add_style(icon, &theme_style_icon, 0);
-		lv_obj_set_size(icon, 16, 16);
+		lv_obj_set_size(icon, 20, 20);
 		lv_image_set_inner_align(icon, LV_IMAGE_ALIGN_CENTER);
 		int side = LV_MAX((int)item->icon->header.w, (int)item->icon->header.h);
-		lv_image_set_scale(icon, side ? (uint32_t)(LV_SCALE_NONE * 16 / side) : LV_SCALE_NONE);
+		lv_image_set_scale(icon, side ? (uint32_t)(LV_SCALE_NONE * 20 / side) : LV_SCALE_NONE);
 		lv_obj_set_style_image_recolor(icon, theme_semantic_color(item->tone), 0);
 		lv_obj_set_style_image_recolor_opa(icon, LV_OPA_COVER, 0);
-		action_icons[i] = (wireless_icon_t){.icon = icon, .tone = item->tone};
 
 		lv_obj_t *label = lv_label_create(button);
 		lv_label_set_text(label, tr(item->label));
 		lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
-		lv_obj_set_flex_grow(label, 1);
+		lv_obj_set_width(label, lv_pct(100));
+		lv_obj_set_height(label, lv_font_get_line_height(&font_ui_14));
 		lv_obj_add_style(label, &theme_style_text, 0);
 		lv_obj_set_style_text_font(label, &font_ui_14, 0);
+		lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
 
-		lv_obj_t *chevron = lv_image_create(button);
-		lv_image_set_src(chevron, &icon_chevron_right);
-		lv_obj_add_style(chevron, &theme_style_icon, 0);
-		lv_obj_set_size(chevron, 12, 12);
-		lv_image_set_scale(chevron, (uint32_t)(LV_SCALE_NONE * 12 / 36));
-		lv_image_set_inner_align(chevron, LV_IMAGE_ALIGN_CENTER);
-		lv_obj_set_style_image_opa(chevron, LV_OPA_60, 0);
+		action_icons[i] = (wireless_icon_t){.button = button, .icon = icon, .tone = item->tone};
 	}
 	return card;
 }
@@ -252,10 +263,12 @@ static void tokyo_panel_build(gui_config_t *cfg) {
 
 	int top = settingsrow_content_top(cfg);
 	tokyo_wireless_panel = lv_obj_create(wireless_screen);
+	wireless_remove_edges(tokyo_wireless_panel);
 	lv_obj_set_size(tokyo_wireless_panel, lv_pct(100), cfg->screen_height - top);
 	lv_obj_align(tokyo_wireless_panel, LV_ALIGN_TOP_LEFT, 0, top);
 	lv_obj_set_style_bg_opa(tokyo_wireless_panel, LV_OPA_TRANSP, 0);
 	lv_obj_set_style_border_width(tokyo_wireless_panel, 0, 0);
+	lv_obj_set_style_outline_width(tokyo_wireless_panel, 0, 0);
 	lv_obj_set_style_radius(tokyo_wireless_panel, 0, 0);
 	lv_obj_set_style_pad_hor(tokyo_wireless_panel, cfg->padding, 0);
 	lv_obj_set_style_pad_ver(tokyo_wireless_panel, 0, 0);
@@ -269,7 +282,7 @@ static void tokyo_panel_build(gui_config_t *cfg) {
 	radio_card(tokyo_wireless_panel, "wi_fi", &icon_wifi, THEME_SEMANTIC_BLUE, wifisettings_screen, &wifi_row);
 	radio_card(tokyo_wireless_panel, "bluetooth", &icon_bluetooth, THEME_SEMANTIC_PURPLE, btsettings_screen,
 			   &bluetooth_row);
-	wireless_action_list(tokyo_wireless_panel);
+	wireless_action_grid(tokyo_wireless_panel);
 	player_sheet_attach_drag(tokyo_wireless_panel, true);
 	switcher_attach_back_gesture(tokyo_wireless_panel);
 }
@@ -286,6 +299,9 @@ static void wireless_refresh_theme(void) {
 		if (action_icons[i].icon) {
 			lv_obj_set_style_image_recolor(action_icons[i].icon, theme_semantic_color(action_icons[i].tone), 0);
 			lv_obj_set_style_image_recolor_opa(action_icons[i].icon, LV_OPA_COVER, 0);
+		}
+		if (action_icons[i].button) {
+			lv_obj_set_style_bg_color(action_icons[i].button, theme()->surface_pressed, 0);
 		}
 	}
 	radios_refresh();

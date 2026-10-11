@@ -63,6 +63,13 @@ static lv_obj_t *playlists_icon;
 static gui_config_t *music_cfg;
 static lv_obj_t *empty_panel;
 
+static void music_remove_edges(lv_obj_t *obj) {
+	lv_obj_remove_style_all(obj);
+	lv_obj_set_style_border_width(obj, 0, 0);
+	lv_obj_set_style_outline_width(obj, 0, 0);
+	lv_obj_set_style_shadow_width(obj, 0, 0);
+}
+
 // The index tiles load their list from the database and then switch screen,
 // so each gets a tiny opener instead of a target screen pointer.
 static void open_all_tracks(void) { medialist_open(tr("music_all_tracks"), LIBRARY_LIST_TRACKS, LIBRARY_FILTER_NONE, NULL); }
@@ -174,6 +181,7 @@ static void label_set_wrapped_translation(lv_obj_t *label, const char *key, bool
 static lv_obj_t *make_browse_button(lv_obj_t *parent, const char *label_key, const lv_image_dsc_t *source,
 									 theme_semantic_t tone, bool two_lines, lv_event_cb_t cb, int index) {
 	lv_obj_t *button = lv_btn_create(parent);
+	music_remove_edges(button);
 	int cell_width = (music_cfg->screen_width - 2 * music_cfg->padding - 14 - 4) / 2;
 	lv_obj_set_size(button, cell_width, 42);
 	lv_obj_set_style_bg_color(button, theme()->surface_pressed, 0);
@@ -251,6 +259,7 @@ static lv_obj_t *music_shortcut_card(lv_obj_t *parent) {
 		{"favourites", &icon_star, THEME_SEMANTIC_RED, false, favourites_cb},
 	};
 	lv_obj_t *card = lv_obj_create(parent);
+	music_remove_edges(card);
 	lv_obj_set_width(card, lv_pct(100));
 	lv_obj_set_height(card, LV_SIZE_CONTENT);
 	lv_obj_add_style(card, &theme_style_card, 0);
@@ -264,6 +273,7 @@ static lv_obj_t *music_shortcut_card(lv_obj_t *parent) {
 
 	for (size_t i = 0; i < sizeof(rows) / sizeof(rows[0]); i++) {
 		lv_obj_t *button = lv_btn_create(card);
+		music_remove_edges(button);
 		lv_obj_set_size(button, lv_pct(100), rows[i].wrap ? 42 : 38);
 		lv_obj_set_style_bg_opa(button, LV_OPA_TRANSP, 0);
 		lv_obj_add_style(button, &theme_style_card_pressed, LV_STATE_PRESSED);
@@ -312,6 +322,7 @@ static void tokyo_music_build(gui_config_t *cfg) {
 	}
 	int top = settingsrow_content_top(cfg);
 	tokyo_music_panel = lv_obj_create(music_screen);
+	music_remove_edges(tokyo_music_panel);
 	lv_obj_set_size(tokyo_music_panel, lv_pct(100), cfg->screen_height - top);
 	lv_obj_align(tokyo_music_panel, LV_ALIGN_TOP_LEFT, 0, top);
 	lv_obj_set_style_bg_opa(tokyo_music_panel, LV_OPA_TRANSP, 0);
@@ -332,6 +343,7 @@ static void tokyo_music_build(gui_config_t *cfg) {
 	lv_obj_set_style_text_font(recent_heading, &font_ui_14, 0);
 
 	tokyo_recent_card = lv_obj_create(tokyo_music_panel);
+	music_remove_edges(tokyo_recent_card);
 	lv_obj_set_width(tokyo_recent_card, lv_pct(100));
 	lv_obj_set_height(tokyo_recent_card, LV_SIZE_CONTENT);
 	lv_obj_add_style(tokyo_recent_card, &theme_style_card, 0);
@@ -357,6 +369,7 @@ static void tokyo_music_build(gui_config_t *cfg) {
 		recent_row_t *row = &recent_rows[i];
 		row->queue_index = -1;
 		row->button = lv_btn_create(tokyo_recent_card);
+		music_remove_edges(row->button);
 		lv_obj_set_size(row->button, lv_pct(100), 39);
 		lv_obj_set_style_bg_opa(row->button, LV_OPA_TRANSP, 0);
 		lv_obj_add_style(row->button, &theme_style_card_pressed, LV_STATE_PRESSED);
@@ -413,6 +426,7 @@ static void tokyo_music_build(gui_config_t *cfg) {
 	lv_obj_set_style_text_font(queue_note, &font_ui_14, 0);
 
 	lv_obj_t *browse_card = lv_obj_create(tokyo_music_panel);
+	music_remove_edges(browse_card);
 	lv_obj_set_width(browse_card, lv_pct(100));
 	lv_obj_set_height(browse_card, LV_SIZE_CONTENT);
 	lv_obj_add_style(browse_card, &theme_style_card, 0);
@@ -431,6 +445,7 @@ static void tokyo_music_build(gui_config_t *cfg) {
 	lv_obj_set_style_text_font(browse_heading, &font_ui_14, 0);
 
 	lv_obj_t *browse_grid = lv_obj_create(browse_card);
+	music_remove_edges(browse_grid);
 	lv_obj_set_size(browse_grid, lv_pct(100), LV_SIZE_CONTENT);
 	lv_obj_set_style_bg_opa(browse_grid, LV_OPA_TRANSP, 0);
 	lv_obj_set_style_border_width(browse_grid, 0, 0);
@@ -447,6 +462,7 @@ static void tokyo_music_build(gui_config_t *cfg) {
 	lv_obj_t *shortcut_card = music_shortcut_card(tokyo_music_panel);
 
 	tokyo_scan_button = lv_btn_create(tokyo_music_panel);
+	music_remove_edges(tokyo_scan_button);
 	lv_obj_set_size(tokyo_scan_button, lv_pct(100), 38);
 	lv_obj_add_style(tokyo_scan_button, &theme_style_card, 0);
 	lv_obj_add_style(tokyo_scan_button, &theme_style_card_pressed, LV_STATE_PRESSED);
