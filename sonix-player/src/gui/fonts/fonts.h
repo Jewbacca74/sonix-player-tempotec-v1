@@ -24,11 +24,10 @@
 //
 // MiSans is the face the interface was designed with, and the one it falls
 // back to. Alongside Neon 80s, the picker can offer Roboto, Noto Sans, IBM
-// Plex Sans, Fira Code, Source Sans 3, Atkinson Hyperlegible, Roboto Condensed,
-// Inter and Barlow Semi Condensed when their bundled files are present. Apple
-// San Francisco and Ndot57 are offered only when the user supplies them in the
-// card's Fonts folder. MiSans stays at the end of every chain, so a face with
-// no Cyrillic, no kanji or no Hangul still draws the whole interface.
+// Plex Sans, Fira Code, Source Sans 3, Atkinson Hyperlegible, Roboto Condensed
+// and Inter when their bundled files are present. MiSans stays at the end of
+// every chain, so a face with no Cyrillic, no kanji or no Hangul still draws
+// the whole interface.
 //
 // The script faces each have an optional -bold file, like bold.otf.
 // fonts_init() opens them once and builds one fallback chain per size.

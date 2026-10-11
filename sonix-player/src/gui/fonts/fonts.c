@@ -2,7 +2,6 @@
 
 #include "src/system/core/respath.h"
 
-#include <ctype.h>
 #include <dirent.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -71,7 +70,6 @@ static const char *const FONT_ATKINSON_BOLD_FILES[] = {
 };
 static const char *const FONT_ROBOTO_CONDENSED_FILES[] = FACE_FILES("RobotoCondensed");
 static const char *const FONT_INTER_FILES[] = FACE_FILES("Inter");
-static const char *const FONT_BARLOW_FILES[] = FACE_FILES("BarlowSemiCondensed");
 
 // ---------------------------------------------------------------------------
 // Settings -> Appearance -> UI font
@@ -105,7 +103,6 @@ static const ui_face_t faces[] = {
 	{"atkinson_hyperlegible", "Atkinson Hyperlegible", FONT_ATKINSON_FILES, FONT_ATKINSON_BOLD_FILES},
 	{"roboto_condensed", "Roboto Condensed", FONT_ROBOTO_CONDENSED_FILES, NULL},
 	{"inter", "Inter", FONT_INTER_FILES, NULL},
-	{"barlow_semi_condensed", "Barlow Semi Condensed", FONT_BARLOW_FILES, NULL},
 };
 
 #define FACE_COUNT (sizeof(faces) / sizeof(faces[0]))
@@ -352,47 +349,6 @@ static bool card_name_ok(const char *name) {
 	return face_extension(name) != 0;
 }
 
-static bool name_contains_case_insensitive(const char *name, const char *fragment) {
-	if (!name || !fragment || !fragment[0]) {
-		return false;
-	}
-	size_t fragment_len = strlen(fragment);
-	for (const char *start = name; *start; start++) {
-		size_t i = 0;
-		while (i < fragment_len && start[i] &&
-			   tolower((unsigned char)start[i]) == tolower((unsigned char)fragment[i])) {
-			i++;
-		}
-		if (i == fragment_len) {
-			return true;
-		}
-	}
-	return false;
-}
-
-// The picker offers these two card-provided families by their usual names.
-// Files stay user-supplied: neither family is redistributed in the firmware.
-static const char *card_family_alias(const char *filename) {
-	if (name_contains_case_insensitive(filename, "ndot57") ||
-			name_contains_case_insensitive(filename, "ndot-57") ||
-			name_contains_case_insensitive(filename, "ndot_57") ||
-			name_contains_case_insensitive(filename, "ndot 57")) {
-		return "Ndot57";
-	}
-	if (name_contains_case_insensitive(filename, "sanfrancisco") ||
-			name_contains_case_insensitive(filename, "san francisco") ||
-			name_contains_case_insensitive(filename, "san-francisco") ||
-			name_contains_case_insensitive(filename, "sf-pro") ||
-			name_contains_case_insensitive(filename, "sfpro") ||
-			name_contains_case_insensitive(filename, "sf pro") ||
-			name_contains_case_insensitive(filename, "sf-compact") ||
-			name_contains_case_insensitive(filename, "sfcompact") ||
-			name_contains_case_insensitive(filename, "sf compact")) {
-		return "Apple San Francisco";
-	}
-	return NULL;
-}
-
 // Reads <card>/Fonts/<name> into the tmpfs and reports where it landed.
 // False when there is no card, no such file, or one too large to hold in RAM.
 static bool card_font_stage(const char *name, char *out, size_t out_size) {
@@ -555,20 +511,16 @@ static void card_scan(void) {
 		if (!join_path(card_ids[card_count], sizeof(card_ids[0]), CARD_ID_PREFIX, entry->d_name)) {
 			continue;
 		}
-		// Recognize the two requested names for matching user-provided fonts;
-		// all other card fonts keep the file-name label, shortened to fit a pill.
-		const char *alias = card_family_alias(entry->d_name);
-		if (alias) {
-			snprintf(card_labels[card_count], sizeof(card_labels[0]), "%s", alias);
+		// The pill says the file's name without its extension, cut short if
+		// the name is a sentence: a label on a 240-pixel panel has no room
+		// for one, and the pill would hang out of its card.
+		size_t extension = face_extension(entry->d_name);
+		size_t name_len = strlen(entry->d_name) - extension;
+		if (name_len <= CARD_LABEL_MAX) {
+			snprintf(card_labels[card_count], sizeof(card_labels[0]), "%.*s", (int)name_len, entry->d_name);
 		} else {
-			size_t extension = face_extension(entry->d_name);
-			size_t name_len = strlen(entry->d_name) - extension;
-			if (name_len <= CARD_LABEL_MAX) {
-				snprintf(card_labels[card_count], sizeof(card_labels[0]), "%.*s", (int)name_len, entry->d_name);
-			} else {
-				snprintf(card_labels[card_count], sizeof(card_labels[0]), "%.*s…", (int)(CARD_LABEL_MAX - 1),
-						 entry->d_name);
-			}
+			snprintf(card_labels[card_count], sizeof(card_labels[0]), "%.*s…", (int)(CARD_LABEL_MAX - 1),
+					 entry->d_name);
 		}
 		card_count++;
 	}
