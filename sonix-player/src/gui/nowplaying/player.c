@@ -116,8 +116,6 @@ static bool progress_running;
 // the previous/next buttons instead of making adjacent targets overlap.
 #define CORNER_BTN_EXT_CLICK 20
 #define COMPACT_CORNER_BTN_EXT_CLICK 6
-#define COMPACT_PROGRESS_EXTRA_INSET 12
-#define COMPACT_CONTROLS_EXTRA_INSET 4
 
 // How often the progress display is carried forward between polls.
 //
@@ -151,6 +149,16 @@ static int polls_since_stop = POLLS_FAST_AFTER_STOP;
 // the 320 px goes to the sleeve. The standard sleeve shares the chevron's
 // top edge and keeps a generous gap off the names; the alternative sleeve
 // stays below the chevron row. Both keep the side margins when width-limited.
+
+// What every row of the V1's deck keeps to the panel's side edges: the names and
+// the format over them, the bar under them, the two clocks below it and the
+// transport at the bottom, all flush at one measure. The panel's own padding is
+// six, and a line of words at six sits wider than the bar under it, which reads
+// as text spilled over the controls rather than as rows of them; twelve is where
+// the layout this page is measured against puts the lot. It is also what the
+// corner buttons of the transport row need: they are pinned to the row's ends,
+// wider than the glyphs inside them, and no extra inset is asked for on top.
+#define COMPACT_DECK_SIDE 12
 #define COMPACT_DECK_PAD_TOP 4
 #define COMPACT_DECK_PAD_BOTTOM 4
 #define COMPACT_DECK_GAP 4
@@ -4827,9 +4835,11 @@ void player_init(gui_config_t *cfg) {
 	// behind the whole screen rather than behind the deck alone.
 	const bool compact = bp_is_tempotec_v1();
 	backdrop_full = compact;
-	compact_progress_width = compact
-						 ? (int)cfg->screen_width - 2 * (cfg->padding + COMPACT_PROGRESS_EXTRA_INSET)
-						 : 0;
+	// The side inset every row of the deck is laid out at, and the width of a
+	// row that follows from it. Outside the V1 that is the panel's own padding,
+	// and the bar takes the row whole.
+	const int deck_side = compact ? COMPACT_DECK_SIDE : (int)cfg->padding;
+	compact_progress_width = compact ? (int)cfg->screen_width - 2 * deck_side : 0;
 	if (compact_progress_width < 1) {
 		compact_progress_width = 0;
 	}
@@ -4887,7 +4897,7 @@ void player_init(gui_config_t *cfg) {
 	lv_obj_set_flex_align(player_menu, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_style_border_width(player_menu, 0, 0);
 	lv_obj_set_style_radius(player_menu, 0, 0);
-	lv_obj_set_style_pad_hor(player_menu, cfg->padding, 0);
+	lv_obj_set_style_pad_hor(player_menu, deck_side, 0);
 	if (compact) {
 		// The rows start at the top of the deck rather than floating in the
 		// middle of it: the deck is the height they add up to, and what the
@@ -4916,9 +4926,9 @@ void player_init(gui_config_t *cfg) {
 	lv_obj_set_style_border_width(song_info, 0, 0);
 	lv_obj_set_style_radius(song_info, 0, 0);
 	lv_obj_set_style_pad_all(song_info, 0, 0);
-	// The gutter between the names and the star/format column is the same measure
-	// as the padding the deck keeps to the panel's edges, so the three gaps along
-	// that line read as one: 6 px on the V1, as the screenshot has it.
+	// The gutter between the names and the star/format column is the panel's own
+	// padding rather than the deck's wider side inset: half of it, so the two
+	// halves of the line are held apart without the gap eating the row.
 	lv_obj_set_style_pad_column(song_info, compact ? (int)cfg->padding : 10, 0);
 	// Raise the complete row so the text stays aligned with the star and has
 	// a little more breathing room above the progress bar on every track.
@@ -4985,7 +4995,7 @@ void player_init(gui_config_t *cfg) {
 	// column's edge: the same price the row already charges for a title longer
 	// than its half. Neither of the two is then ever drawn over the other, in
 	// either direction, whatever the tags say.
-	lv_obj_set_style_max_width(song_side, ((int)cfg->screen_width - 2 * cfg->padding) / 2, 0);
+	lv_obj_set_style_max_width(song_side, ((int)cfg->screen_width - 2 * deck_side) / 2, 0);
 
 	lv_obj_t *fav_btn = lv_btn_create(song_side);
 	fav_btn_obj = fav_btn;
@@ -5020,7 +5030,7 @@ void player_init(gui_config_t *cfg) {
 	lv_obj_set_hidden(wave_box, true);
 
 	{
-		wave_w = (int)cfg->screen_width - 2 * cfg->padding;
+		wave_w = (int)cfg->screen_width - 2 * deck_side;
 		if (wave_w < WAVEFORM_BARS) {
 			wave_w = WAVEFORM_BARS;
 		}
@@ -5127,8 +5137,7 @@ void player_init(gui_config_t *cfg) {
 	// the left, out of the way of the transport controls.
 	lv_obj_t *player_controls_buttons = lv_obj_create(player_menu);
 	controls_row = player_controls_buttons;
-	int controls_width = (int)cfg->screen_width -
-					  2 * (cfg->padding + (compact ? COMPACT_CONTROLS_EXTRA_INSET : 0));
+	int controls_width = (int)cfg->screen_width - 2 * deck_side;
 	lv_obj_set_size(player_controls_buttons, compact ? controls_width : lv_pct(100), LV_SIZE_CONTENT);
 	lv_obj_set_style_bg_opa(player_controls_buttons, 0, 0);
 	lv_obj_set_style_border_width(player_controls_buttons, 0, 0);

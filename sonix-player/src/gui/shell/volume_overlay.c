@@ -20,6 +20,17 @@
 #define OVERLAY_HEIGHT 72
 #define OVERLAY_TOP_Y 96 // clear of the artwork
 #define OVERLAY_RADIUS (OVERLAY_HEIGHT / 2)
+
+// The V1's strip, at the size and in the place the layout it is measured
+// against has it: a hundred and ninety by forty, centred on the top edge and
+// ten down from it. It is centred on the panel rather than tucked into a corner
+// because that is where the middle of the panel is, and the back chevron is
+// beside the bar for the second and a half the bar is up, not the reason for it
+// to be somewhere else. Same pill, same contents: only the frame around them.
+#define COMPACT_OVERLAY_WIDTH 190
+#define COMPACT_OVERLAY_HEIGHT 40
+#define COMPACT_OVERLAY_TOP 10
+#define COMPACT_SLIDER_HEIGHT 8
 #define OVERLAY_HIDE_MS 1600
 
 // Where the icon changes: silent, quiet, loud.
@@ -162,16 +173,13 @@ void volume_overlay_show(int percent) {
 
 void volume_overlay_init(gui_config_t *cfg) {
 	const bool compact = cfg->screen_width < 320;
-	// The V1's pill is centred on the top edge, at the same inset the player's
-	// own rows keep. It used to be pushed into the top-right corner to stand
-	// clear of the back chevron, which left it the only thing on the panel not
-	// measured from the same margin and a bar of its own rather than the strip
-	// the level is read off. It is above the chevron for a second and a half,
-	// and the chevron is not what a hand is reaching for while it is up.
-	// The regular layout keeps its established full control strip.
-	const int overlay_width = compact ? LV_MIN(180, (int)cfg->screen_width - 2 * cfg->padding) : OVERLAY_WIDTH;
-	const int overlay_height = compact ? 44 : OVERLAY_HEIGHT;
-	const int slider_height = compact ? 8 : 10;
+	// The V1's strip: centred on the top edge, never wider than the panel less
+	// its own padding -- which only bites on a board narrower than the V1, where
+	// the strip would otherwise run off both sides at once. The regular layout
+	// keeps its established full control strip.
+	const int overlay_width = compact ? LV_MIN(COMPACT_OVERLAY_WIDTH, (int)cfg->screen_width - 2 * cfg->padding) : OVERLAY_WIDTH;
+	const int overlay_height = compact ? COMPACT_OVERLAY_HEIGHT : OVERLAY_HEIGHT;
+	const int slider_height = compact ? COMPACT_SLIDER_HEIGHT : 10;
 
 	// The veil under the pill. A parent that takes no input does not stop its
 	// children from taking theirs: the pill and its slider still get the finger.
@@ -189,7 +197,7 @@ void volume_overlay_init(gui_config_t *cfg) {
 	lv_obj_set_size(overlay, overlay_width, overlay_height);
 	// Centred on the top edge either way: what changes with the panel is how far
 	// down it goes, not which corner it hides in.
-	lv_obj_align(overlay, LV_ALIGN_TOP_MID, 0, compact ? cfg->padding : OVERLAY_TOP_Y);
+	lv_obj_align(overlay, LV_ALIGN_TOP_MID, 0, compact ? COMPACT_OVERLAY_TOP : OVERLAY_TOP_Y);
 	lv_obj_set_style_radius(overlay, compact ? overlay_height / 2 : OVERLAY_RADIUS, 0);
 	lv_obj_set_style_border_width(overlay, 0, 0);
 	lv_obj_set_style_shadow_width(overlay, 0, 0);
@@ -233,7 +241,7 @@ void volume_overlay_init(gui_config_t *cfg) {
 	lv_obj_set_style_radius(overlay_slider, LV_RADIUS_CIRCLE, LV_PART_KNOB);
 	lv_obj_set_style_bg_color(overlay_slider, lv_color_white(), LV_PART_KNOB);
 	lv_obj_set_style_bg_opa(overlay_slider, LV_OPA_COVER, LV_PART_KNOB);
-	lv_obj_set_style_pad_all(overlay_slider, compact ? 5 : 7, LV_PART_KNOB);
+	lv_obj_set_style_pad_all(overlay_slider, compact ? 4 : 7, LV_PART_KNOB);
 	lv_obj_set_style_shadow_width(overlay_slider, compact ? 4 : 6, LV_PART_KNOB);
 	lv_obj_set_style_shadow_opa(overlay_slider, LV_OPA_30, LV_PART_KNOB);
 	lv_obj_set_style_shadow_color(overlay_slider, lv_color_black(), LV_PART_KNOB);
