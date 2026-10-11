@@ -54,20 +54,38 @@ static bool more_tokyo_icon(const char *label, const lv_image_dsc_t **icon, them
 	return true;
 }
 
+static void more_list_add_entry(const grid_entry_t *entry) {
+	lv_event_cb_t callback = entry->target ? switch_screen_cb : more_action_cb;
+	void *user_data = entry->target ? (void *)*entry->target : (void *)entry->action;
+	lv_obj_t *row = settingsrow_add(more_list, entry->label, NULL, callback, user_data);
+	const lv_image_dsc_t *icon = NULL;
+	theme_semantic_t tone;
+	if (more_tokyo_icon(entry->label, &icon, &tone)) {
+		settingsrow_add_icon(row, icon, tone);
+	}
+}
+
 static void more_list_build(gui_config_t *cfg, const grid_entry_t *entries, int count) {
+	static const char *const priority_labels[] = {"dac", "file_explorer"};
 	more_list = settingsrow_page(morepage_screen, cfg, "more");
 	player_sheet_attach_drag(more_list, true);
 
-	for (int i = 0; i < count; i++) {
-		const grid_entry_t *entry = &entries[i];
-		lv_event_cb_t callback = entry->target ? switch_screen_cb : more_action_cb;
-		void *user_data = entry->target ? (void *)*entry->target : (void *)entry->action;
-		lv_obj_t *row = settingsrow_add(more_list, entry->label, NULL, callback, user_data);
-		const lv_image_dsc_t *icon = NULL;
-		theme_semantic_t tone;
-		if (more_tokyo_icon(entry->label, &icon, &tone)) {
-			settingsrow_add_icon(row, icon, tone);
+	// Keep the File Manager near the top on the short V1 screen, where the
+	// bottom rows otherwise fall below the initial viewport.
+	for (size_t p = 0; p < sizeof(priority_labels) / sizeof(priority_labels[0]); p++) {
+		for (int i = 0; i < count; i++) {
+			if (strcmp(entries[i].label, priority_labels[p]) == 0) {
+				more_list_add_entry(&entries[i]);
+				break;
+			}
 		}
+	}
+
+	for (int i = 0; i < count; i++) {
+		if (strcmp(entries[i].label, "dac") == 0 || strcmp(entries[i].label, "file_explorer") == 0) {
+			continue;
+		}
+		more_list_add_entry(&entries[i]);
 	}
 }
 
