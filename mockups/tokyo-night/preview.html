@@ -104,10 +104,6 @@
     .status-right .battery-glyph { width: 15px; }
     .status-time { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); font: 10px var(--mono); color: var(--screen-text); }
     .page-header { display: flex; align-items: center; height: 36px; padding: 0 6px; gap: 5px; border: 0; }
-    .home-brand { display: flex; align-items: center; height: 36px; margin: 0 6px; padding: 0 8px; background: transparent; }
-    .home-brand-title { margin: 0; color: var(--screen-text); font-size: 14px; font-weight: 650; line-height: 1; }
-    body[data-theme="tokyo"] .home-brand { border-radius: 8px; background: var(--surface); }
-    body[data-theme="tokyo"] .home-brand-title { font-weight: 800; }
     .header-back, .header-action { display: grid; place-items: center; flex: 0 0 28px; width: 28px; height: 30px; border: 0; border-radius: 7px; color: var(--screen-muted); background: transparent; cursor: pointer; }
     .header-back:hover, .header-action:hover { color: var(--screen-text); background: var(--surface); }
     .header-back .glyph { width: 17px; height: 17px; }
@@ -126,7 +122,6 @@
     .service-detail-head .service-mark { width: 28px; height: 28px; flex-basis: 28px; font-size: 16px; }
     .service-detail-head .row-copy strong { font-size: 11px; }
     .home-title-note { margin: 0 1px 6px; color: var(--screen-muted); font-size: 9px; }
-    .home-quote { margin-top: 0; }
     .stack { display: flex; flex-direction: column; gap: 6px; }
     .menu-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 6px; }
     .menu-tile { display: flex; min-width: 0; min-height: 51px; align-items: center; gap: 8px; padding: 7px; border: 0; border-radius: 8px; color: var(--screen-text); background: var(--surface); cursor: pointer; text-align: left; }
@@ -185,10 +180,6 @@
     .theme-choices { display: grid; grid-template-columns: 1fr 1fr 1.3fr; gap: 4px; }
     .theme-choice { min-height: 31px; padding: 4px; border: 1px solid color-mix(in srgb,var(--screen-muted) 16%,transparent); border-radius: 6px; color: var(--screen-muted); background: var(--surface-pressed); cursor: pointer; font-size: 8px; font-weight: 600; white-space: nowrap; }
     .theme-choice[aria-checked="true"] { border-color: var(--accent); color: var(--screen-text); background: color-mix(in srgb,var(--accent) 17%,var(--surface)); box-shadow: inset 0 -2px var(--accent); }
-    .font-pills { display: flex; flex-wrap: wrap; gap: 4px; }
-    .font-pill { display: inline-flex; align-items: center; gap: 4px; min-height: 23px; padding: 4px 6px; border: 0; border-radius: 6px; color: var(--screen-muted); background: var(--surface-pressed); cursor: pointer; font-size: 7px; font-weight: 600; line-height: 1.15; }
-    .font-pill[aria-pressed="true"] { color: var(--screen-text); background: color-mix(in srgb,var(--accent) 18%,var(--surface)); box-shadow: inset 0 -2px var(--accent); }
-    .font-note { margin: 5px 0 0; color: var(--screen-muted); font-size: 7px; line-height: 1.35; }
     .palette-row { display: flex; gap: 3px; height: 12px; margin-top: 6px; overflow: hidden; border-radius: 4px; }
     .palette-row span { flex: 1; border-radius: 2px; }
     .accent-row { display: flex; gap: 6px; padding: 3px 0; }
@@ -333,7 +324,7 @@
       })();
       const state = {
         theme: 'tokyo', view: 'home', history: [], tint: false, wifi: false, bluetooth: false,
-        battery: true, accent: 'blue', font: 'MiSans', queue: Array.isArray(initialQueue) ? initialQueue : [], current: -1,
+        battery: true, accent: 'blue', queue: Array.isArray(initialQueue) ? initialQueue : [], current: -1,
         playing: false, progress: 0, favorites: new Set(), search: '', selectedGroup: '', birdScore: 0
       };
       if (state.queue.length) state.current = state.queue.length - 1;
@@ -400,7 +391,7 @@
         const current = state.queue[state.current];
         const title = current ? escapeHtml(current.title) : 'No track loaded';
         const artist = current ? escapeHtml(current.artist) : '';
-        return `<header class="home-brand"><h2 class="home-brand-title">Sonix Player</h2></header><main class="page-body"><p class="home-title-note home-quote">Ta musique, prête quand tu l'es.</p><div class="menu-grid">${tiles}</div><button class="now-playing-strip" type="button" data-action="navigate" data-view="player">${glyph(state.playing ? 'pause' : 'play','accent-cyan',15)}<span class="row-copy"><strong>${title}</strong><small>${artist}</small></span></button></main>`;
+        return `<header class="page-header"><span style="width:5px"></span><h2 class="page-title">Sonix Player</h2></header><main class="page-body"><p class="home-title-note">Ta musique, prête quand tu l'es.</p><div class="menu-grid">${tiles}</div><button class="now-playing-strip" type="button" data-action="navigate" data-view="player">${glyph(state.playing ? 'pause' : 'play','accent-cyan',15)}<span class="row-copy"><strong>${title}</strong><small>${artist}</small></span></button></main>`;
       };
       const renderMusic = () => {
         const browse = [['artist','Artists','accent-cyan','artists'],['album','Albums','accent-purple','albums'],['folder','Browse','accent-green','sd-browser'],['search','Search','accent-amber','search']].map(([icon,title,tone,view]) => `<button class="glyph-demo" type="button" data-action="navigate" data-view="${view}">${glyph(icon,tone,17)}<span>${title}</span></button>`).join('');
@@ -416,8 +407,7 @@
         const choices = [['dark','Dark'],['light','Light'],['tokyo','Tokyo Night']].map(([id,label]) => `<button class="theme-choice" type="button" role="radio" aria-checked="${state.theme === id}" data-action="theme" data-theme-choice="${id}">${label}</button>`).join('');
         const swatches = ['#1a1b26','#24283b','#c0caf5','#7aa2f7','#7dcfff','#bb9af7','#9ece6a','#f7768e'].map(color => `<span style="background:${color}"></span>`).join('');
         const accents = [['blue','#7aa2f7'],['cyan','#7dcfff'],['purple','#bb9af7'],['green','#9ece6a'],['amber','#e0af68'],['red','#f7768e']].map(([id,color]) => `<button class="accent-dot" type="button" aria-label="${id} accent" aria-pressed="${state.accent === id}" data-action="accent" data-accent="${id}" style="background:${color}"></button>`).join('');
-        const fonts = ['MiSans','Neon 80s','Roboto','Noto Sans','Fira Code','Source Sans 3','Roboto Condensed','Inter'].map(name => `<button class="font-pill" type="button" aria-pressed="${state.font === name}" data-action="font" data-font="${name}">${name}</button>`).join('');
-        return `${pageHeader('Appearance')}<main class="page-body"><div class="stack"><section class="screen-card card-pad"><div class="card-head"><span>Theme</span><small>DISPLAY</small></div><div class="theme-choices" role="radiogroup" aria-label="Theme">${choices}</div><p class="subtle-copy">Applies now · saved on this device</p></section><section class="screen-card card-pad"><div class="card-head"><span>Font</span><small>TYPEFACE</small></div><div class="font-pills">${fonts}</div><p class="font-note">Your own .ttf or .otf files in the SD card's Fonts folder also appear here.</p></section><section class="screen-card card-pad"><div class="card-head"><span>Tokyo Night colors</span><small>PALETTE</small></div><div class="palette-row">${swatches}</div><p class="subtle-copy">Blue · cyan · violet · green · amber · red</p></section><section class="screen-card card-pad"><div class="card-head"><span>Accent colour</span><small>PREVIEW</small></div><div class="accent-row">${accents}</div></section><section class="screen-card card-pad"><div class="switch-row"><span>Dynamic tint</span><button type="button" role="switch" aria-checked="${state.tint}" data-action="toggle-tint">${state.tint ? 'On' : 'Off'}</button></div><div class="switch-row"><span>Battery percentage</span><button type="button" role="switch" aria-checked="${state.battery}" data-action="toggle-battery">${state.battery ? 'On' : 'Off'}</button></div></section><section class="screen-card settings-card">${row('sun','Boot screen','Choose the next power-on image','settings-screen','accent-amber')}${row('clock','Clock position','Status bar alignment','settings-time','accent-cyan')}${row('settings','Text size and font','Interface typography','settings-more','accent-purple')}</section></div></main>`;
+        return `${pageHeader('Appearance')}<main class="page-body"><div class="stack"><section class="screen-card card-pad"><div class="card-head"><span>Theme</span><small>DISPLAY</small></div><div class="theme-choices" role="radiogroup" aria-label="Theme">${choices}</div><p class="subtle-copy">Applies now · saved on this device</p></section><section class="screen-card card-pad"><div class="card-head"><span>Tokyo Night colors</span><small>PALETTE</small></div><div class="palette-row">${swatches}</div><p class="subtle-copy">Blue · cyan · violet · green · amber · red</p></section><section class="screen-card card-pad"><div class="card-head"><span>Accent colour</span><small>PREVIEW</small></div><div class="accent-row">${accents}</div></section><section class="screen-card card-pad"><div class="switch-row"><span>Dynamic tint</span><button type="button" role="switch" aria-checked="${state.tint}" data-action="toggle-tint">${state.tint ? 'On' : 'Off'}</button></div><div class="switch-row"><span>Battery percentage</span><button type="button" role="switch" aria-checked="${state.battery}" data-action="toggle-battery">${state.battery ? 'On' : 'Off'}</button></div></section><section class="screen-card settings-card">${row('sun','Boot screen','Choose the next power-on image','settings-screen','accent-amber')}${row('clock','Clock position','Status bar alignment','settings-time','accent-cyan')}${row('settings','Text size and font','Interface typography','settings-more','accent-purple')}</section></div></main>`;
       };
       const renderSettings = () => `${pageHeader('Settings')}<main class="page-body"><p class="home-title-note">Choose an option to continue.</p><section class="screen-card settings-card">${row('theme','Appearance','Theme · accent · display','appearance','accent-purple')}${row('sun','Screen','Brightness · timeout','settings-screen','accent-cyan')}${row('clock','Date and time','Clock · time zone','settings-time','accent-blue')}${row('power','Power','Sleep · charge limit','settings-power','accent-red')}${row('list','Language','Interface language','settings-language','accent-amber')}${row('eq','More','Remote · controls','settings-more','accent-green')}${row('settings','System','Firmware · device information','settings-system','muted-icon')}</section></main>`;
       const renderWireless = () => {
@@ -426,7 +416,7 @@
         const actions = actionTile('airplay','AirPlay','wireless-airplay','accent-cyan') + actionTile('transfer','Transfer','wireless-transfer','accent-green') + actionTile('sonixlink','SonixLink','wireless-sonixlink','accent-amber') + actionTile('dlna','DLNA','wireless-dlna','accent-blue');
         return `${pageHeader('Wireless')}<main class="page-body"><div class="stack"><section class="screen-card wireless-card">${toggleRow('wifi','Wi-Fi',state.wifi,'accent-cyan','Available networks','wifiSearch','wireless-wifi-options','accent-cyan')}${toggleRow('bluetooth','Bluetooth',state.bluetooth,'accent-purple','Paired devices','bluetoothSearch','wireless-bluetooth-options','accent-purple')}</section><section class="screen-card settings-card wireless-actions"><div class="wireless-tile-grid">${actions}</div></section></div></main>`;
       };
-      const renderBooks = () => `${pageHeader('Audiobooks')}<main class="page-body"><div class="stack"><section class="screen-card track-list"><div class="empty-state">Books with a saved position appear here. No sample books are included in this preview.</div><button class="simple-row" type="button" data-action="navigate" data-view="book-continue">${glyph('play','accent-amber',17)}<span class="row-copy"><strong>Open Continue list</strong><small>Resume a saved book position</small></span>${glyph('chevron','muted-icon',14,'chevron-right')}</button></section><section class="screen-card settings-card">${row('books','Library','All audiobooks','book-library','accent-amber')}${row('artist','Authors','Browse by author','book-authors','accent-blue')}</section></div></main>`;
+      const renderBooks = () => `${pageHeader('Audiobooks')}<main class="page-body"><div class="stack"><section><div class="card-head"><span>Continue listening</span><small>ON THIS DEVICE</small></div><section class="screen-card track-list"><div class="empty-state">Books with a saved position appear here. No sample books are included in this preview.</div><button class="simple-row" type="button" data-action="navigate" data-view="book-continue">${glyph('play','accent-amber',17)}<span class="row-copy"><strong>Open Continue list</strong><small>Resume a saved book position</small></span>${glyph('chevron','muted-icon',14,'chevron-right')}</button></section></section><section class="screen-card settings-card">${row('books','Library','All audiobooks','book-library','accent-amber')}${row('artist','Authors','Browse by author','book-authors','accent-blue')}</section></div></main>`;
       const renderMore = () => {
         return `${pageHeader('More')}<main class="page-body"><section class="screen-card settings-card">${row('dac','DAC','Headphone and USB DAC options','dac','accent-cyan')}${row('folder','File Manager','Manage files on the SD card','files','accent-blue')}${row('game','Gearboy','Game Boy emulator','gearboy','accent-green')}${row('ebook','Books','E-book shelf and bookmarks','ebook','accent-amber')}${row('bird','Flappy Bird','Mini game','bird-game','accent-purple')}</section></main>`;
       };
@@ -561,7 +551,6 @@
           return;
         }
         if (action === 'theme') { state.theme = button.dataset.themeChoice; render(); showToast(`${state.theme === 'tokyo' ? 'Tokyo Night' : state.theme === 'dark' ? 'Dark' : 'Light'} theme preview`); return; }
-        if (action === 'font') { state.font = button.dataset.font; render(); showToast(`${state.font} font selected in preview`); return; }
         if (action === 'accent') { state.accent = button.dataset.accent; showToast(`${state.accent} accent selected in preview`); render(); return; }
         if (action === 'toggle-tint') { state.tint = !state.tint; render(); return; }
         if (action === 'toggle-battery') { state.battery = !state.battery; render(); return; }

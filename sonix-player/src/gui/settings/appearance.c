@@ -84,9 +84,9 @@ static void text_size_cb(lv_event_t *e) {
 // ---------------------------------------------------------------------------
 
 // The families in the firmware plus the ones on the card, as fonts_choices()
-// reports them. The row wraps onto as many lines as it needs -- the page
-// scrolls, the row does not.
-#define FONT_CHOICES_MAX 24 // 8 bundled faces plus up to 16 card fonts
+// reports them: a handful, and the row wraps onto as many lines as it needs
+// if there are ever more -- the page scrolls, the row does not.
+#define FONT_CHOICES_MAX 24
 #define FONT_ID_MAX 160
 
 static lv_obj_t *font_pills;
@@ -642,9 +642,9 @@ void appearance_init(gui_config_t *cfg) {
 		settingsrow_pill(text_size_pills, "appearance_text_large", FONTS_TEXT_LARGE, text_size_cb);
 
 	// The face of the whole interface, right under the size of it: the two are
-	// the same decision taken twice. The row wraps across bundled and
-	// card-provided families, and a family's name is not translated: it is its
-	// name.
+	// the same decision taken twice. The row wraps -- there can be eight
+	// families now and a cardful later -- and a family's name is not
+	// translated: it is its name.
 	settingsrow_pills(container, "appearance_font", &font_pills);
 
 	lv_obj_t *font_note = lv_label_create(container);
