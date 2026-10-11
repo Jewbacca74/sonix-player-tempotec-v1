@@ -33,6 +33,7 @@ lv_obj_t *music_screen;
 
 #define TOKYO_RECENT_COUNT 2
 #define TOKYO_BROWSE_COUNT 4
+#define TOKYO_SHORTCUT_COUNT 4
 
 typedef struct {
 	lv_obj_t *button;
@@ -46,15 +47,30 @@ typedef struct {
 typedef struct {
 	lv_obj_t *button;
 	lv_obj_t *icon;
+	lv_obj_t *title;
 	theme_semantic_t tone;
 } browse_tile_t;
 
+typedef struct {
+	lv_obj_t *button;
+	lv_obj_t *icon;
+	lv_obj_t *label;
+	lv_obj_t *chevron;
+	theme_semantic_t tone;
+} shortcut_tile_t;
+
 static recent_row_t recent_rows[TOKYO_RECENT_COUNT];
 static browse_tile_t browse_tiles[TOKYO_BROWSE_COUNT];
+static shortcut_tile_t shortcut_tiles[TOKYO_SHORTCUT_COUNT];
 static lv_obj_t *tokyo_music_panel;
 static lv_obj_t *tokyo_recent_card;
 static lv_obj_t *tokyo_recent_empty;
+static lv_obj_t *tokyo_browse_card;
+static lv_obj_t *tokyo_browse_heading;
+static lv_obj_t *tokyo_shortcut_card;
 static lv_obj_t *tokyo_scan_button;
+static lv_obj_t *tokyo_scan_icon;
+static lv_obj_t *tokyo_scan_label;
 static int cached_queue_count = -1;
 static int cached_queue_current = -2;
 static unsigned cached_queue_revision = (unsigned)-1;
@@ -210,9 +226,12 @@ static lv_obj_t *make_browse_button(lv_obj_t *parent, const char *label_key, con
 		browse_tiles[index] = (browse_tile_t){.button = button, .icon = icon, .tone = tone};
 	}
 
-		lv_obj_t *label = lv_label_create(button);
-		label_set_wrapped_translation(label, label_key, two_lines);
-		lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
+	lv_obj_t *label = lv_label_create(button);
+	label_set_wrapped_translation(label, label_key, two_lines);
+	if (index >= 0 && index < TOKYO_BROWSE_COUNT) {
+		browse_tiles[index].title = label;
+	}
+	lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
 	lv_obj_set_flex_grow(label, 1);
 	lv_obj_set_style_text_line_space(label, 0, 0);
 	lv_obj_add_style(label, &theme_style_text, 0);
@@ -267,9 +286,11 @@ static lv_obj_t *music_shortcut_card(lv_obj_t *parent) {
 	lv_obj_set_style_border_width(card, 0, 0);
 	lv_obj_set_style_shadow_width(card, 0, 0);
 	lv_obj_set_style_pad_all(card, 4, 0);
+	lv_obj_set_style_pad_gap(card, 4, 0);
 	lv_obj_set_scrollable(card, false);
 	lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
 	lv_obj_set_flex_align(card, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+	tokyo_shortcut_card = card;
 
 	for (size_t i = 0; i < sizeof(rows) / sizeof(rows[0]); i++) {
 		lv_obj_t *button = lv_btn_create(card);
@@ -279,7 +300,7 @@ static lv_obj_t *music_shortcut_card(lv_obj_t *parent) {
 		lv_obj_add_style(button, &theme_style_card_pressed, LV_STATE_PRESSED);
 		// Rows are separated by spacing only; do not draw hairline borders.
 		lv_obj_set_style_border_width(button, 0, 0);
-		lv_obj_set_style_radius(button, 0, 0);
+		lv_obj_set_style_radius(button, bp_tile_radius(), 0);
 		lv_obj_set_style_pad_hor(button, 5, 0);
 		lv_obj_set_style_pad_column(button, 7, 0);
 		lv_obj_set_flex_flow(button, LV_FLEX_FLOW_ROW);
@@ -312,6 +333,8 @@ static lv_obj_t *music_shortcut_card(lv_obj_t *parent) {
 		lv_image_set_scale(chevron, (uint32_t)(LV_SCALE_NONE * 14 / 36));
 		lv_image_set_inner_align(chevron, LV_IMAGE_ALIGN_CENTER);
 		lv_obj_set_style_image_opa(chevron, LV_OPA_60, 0);
+		shortcut_tiles[i] = (shortcut_tile_t){
+			.button = button, .icon = icon, .label = label, .chevron = chevron, .tone = rows[i].tone};
 	}
 	return card;
 }
@@ -425,7 +448,8 @@ static void tokyo_music_build(gui_config_t *cfg) {
 	lv_obj_add_style(queue_note, &theme_style_text_dim, 0);
 	lv_obj_set_style_text_font(queue_note, &font_ui_14, 0);
 
-	lv_obj_t *browse_card = lv_obj_create(tokyo_music_panel);
+	tokyo_browse_card = lv_obj_create(tokyo_music_panel);
+	lv_obj_t *browse_card = tokyo_browse_card;
 	music_remove_edges(browse_card);
 	lv_obj_set_width(browse_card, lv_pct(100));
 	lv_obj_set_height(browse_card, LV_SIZE_CONTENT);
@@ -439,7 +463,8 @@ static void tokyo_music_build(gui_config_t *cfg) {
 	lv_obj_set_flex_flow(browse_card, LV_FLEX_FLOW_COLUMN);
 	lv_obj_set_flex_align(browse_card, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
 
-	lv_obj_t *browse_heading = lv_label_create(browse_card);
+	tokyo_browse_heading = lv_label_create(browse_card);
+	lv_obj_t *browse_heading = tokyo_browse_heading;
 	lv_label_set_text(browse_heading, tr("music_browse"));
 	lv_obj_add_style(browse_heading, &theme_style_text, 0);
 	lv_obj_set_style_text_font(browse_heading, &font_ui_14, 0);
@@ -475,7 +500,8 @@ static void tokyo_music_build(gui_config_t *cfg) {
 	lv_obj_set_flex_align(tokyo_scan_button, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_event_bubble(tokyo_scan_button, true);
 	lv_obj_add_event_cb(tokyo_scan_button, scan_cb, LV_EVENT_CLICKED, NULL);
-	lv_obj_t *scan_icon = lv_image_create(tokyo_scan_button);
+	tokyo_scan_icon = lv_image_create(tokyo_scan_button);
+	lv_obj_t *scan_icon = tokyo_scan_icon;
 	lv_image_set_src(scan_icon, &icon_folder);
 	lv_obj_add_style(scan_icon, &theme_style_icon, 0);
 	lv_obj_set_size(scan_icon, 18, 18);
@@ -483,7 +509,8 @@ static void tokyo_music_build(gui_config_t *cfg) {
 	lv_image_set_inner_align(scan_icon, LV_IMAGE_ALIGN_CENTER);
 	lv_obj_set_style_image_recolor(scan_icon, theme_semantic_color(THEME_SEMANTIC_CYAN), 0);
 	lv_obj_set_style_image_recolor_opa(scan_icon, LV_OPA_COVER, 0);
-	lv_obj_t *scan_label = lv_label_create(tokyo_scan_button);
+	tokyo_scan_label = lv_label_create(tokyo_scan_button);
+	lv_obj_t *scan_label = tokyo_scan_label;
 	lv_label_set_text(scan_label, tr("music_scan_library"));
 	lv_label_set_long_mode(scan_label, LV_LABEL_LONG_DOT);
 	lv_obj_set_flex_grow(scan_label, 1);
@@ -579,27 +606,117 @@ static void music_update_visibility(void) {
 	}
 }
 
+static void music_tile_text(lv_obj_t *label, bool purple_tile) {
+	if (!label) {
+		return;
+	}
+	if (purple_tile) {
+		lv_obj_set_style_text_color(label, theme()->screen_bg, 0);
+	} else {
+		lv_obj_remove_local_style_prop(label, LV_STYLE_TEXT_COLOR, 0);
+	}
+}
+
+static void music_tile_icon(lv_obj_t *icon, bool purple_tile, theme_semantic_t tone) {
+	if (!icon) {
+		return;
+	}
+	lv_obj_set_style_image_recolor(icon,
+							   purple_tile ? theme()->screen_bg : theme_semantic_color(tone), 0);
+	lv_obj_set_style_image_recolor_opa(icon, LV_OPA_COVER, 0);
+}
+
+static void music_tile_pressed_fill(lv_obj_t *button, bool purple_tile) {
+	if (!button) {
+		return;
+	}
+	if (purple_tile) {
+		lv_obj_set_style_bg_color(button, theme_semantic_color(THEME_SEMANTIC_PURPLE), LV_STATE_PRESSED);
+		lv_obj_set_style_bg_opa(button, LV_OPA_COVER, LV_STATE_PRESSED);
+	} else {
+		lv_obj_remove_local_style_prop(button, LV_STYLE_BG_COLOR, LV_STATE_PRESSED);
+		lv_obj_remove_local_style_prop(button, LV_STYLE_BG_OPA, LV_STATE_PRESSED);
+	}
+}
+
+static void music_card_fill(lv_obj_t *card, bool purple_tile, bool transparent_when_active) {
+	if (!card) {
+		return;
+	}
+	if (purple_tile) {
+		if (transparent_when_active) {
+			lv_obj_set_style_bg_opa(card, LV_OPA_TRANSP, 0);
+		} else {
+			lv_obj_set_style_bg_color(card, theme_semantic_color(THEME_SEMANTIC_PURPLE), 0);
+			lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
+		}
+	} else {
+		lv_obj_remove_local_style_prop(card, LV_STYLE_BG_COLOR, 0);
+		lv_obj_remove_local_style_prop(card, LV_STYLE_BG_OPA, 0);
+	}
+}
+
 static void music_refresh_theme(void) {
 	if (!tile_grid) {
 		return;
 	}
+	bool purple_tile = bp_is_tempotec_v1() && theme_is_tokyo_night();
+	lv_color_t browse_fill = purple_tile ? theme_semantic_color(THEME_SEMANTIC_PURPLE) : theme_now_playing_fill();
 	music_update_visibility();
-	lv_color_t browse_fill = theme_now_playing_fill();
+
+	// The Browse, Recently played and scan surfaces follow the lilac palette;
+	// the shortcut wrapper becomes transparent so its individual rows read as tiles.
+	music_card_fill(tokyo_browse_card, purple_tile, false);
+	music_card_fill(tokyo_recent_card, purple_tile, false);
+	music_card_fill(tokyo_shortcut_card, purple_tile, true);
+	music_card_fill(tokyo_scan_button, purple_tile, false);
+	music_tile_text(tokyo_browse_heading, purple_tile);
+	music_tile_text(tokyo_recent_empty, purple_tile);
+	music_tile_text(tokyo_scan_label, purple_tile);
+	music_tile_icon(tokyo_scan_icon, purple_tile, THEME_SEMANTIC_CYAN);
+	music_tile_pressed_fill(tokyo_scan_button, purple_tile);
+
 	for (int i = 0; i < TOKYO_BROWSE_COUNT; i++) {
 		if (browse_tiles[i].button) {
 			lv_obj_set_style_bg_color(browse_tiles[i].button, browse_fill, 0);
 			lv_obj_set_style_bg_opa(browse_tiles[i].button, LV_OPA_COVER, 0);
 		}
-		if (browse_tiles[i].icon) {
-			lv_obj_set_style_image_recolor(browse_tiles[i].icon, theme_semantic_color(browse_tiles[i].tone), 0);
-			lv_obj_set_style_image_recolor_opa(browse_tiles[i].icon, LV_OPA_COVER, 0);
+		music_tile_pressed_fill(browse_tiles[i].button, purple_tile);
+		music_tile_icon(browse_tiles[i].icon, purple_tile, browse_tiles[i].tone);
+		music_tile_text(browse_tiles[i].title, purple_tile);
+	}
+
+	for (int i = 0; i < TOKYO_SHORTCUT_COUNT; i++) {
+		shortcut_tile_t *tile = &shortcut_tiles[i];
+		if (tile->button) {
+			if (purple_tile) {
+				lv_obj_set_style_bg_color(tile->button, theme_semantic_color(THEME_SEMANTIC_PURPLE), 0);
+				lv_obj_set_style_bg_opa(tile->button, LV_OPA_COVER, 0);
+			} else {
+				lv_obj_remove_local_style_prop(tile->button, LV_STYLE_BG_COLOR, 0);
+				lv_obj_set_style_bg_opa(tile->button, LV_OPA_TRANSP, 0);
+			}
+		}
+		music_tile_pressed_fill(tile->button, purple_tile);
+		music_tile_icon(tile->icon, purple_tile, tile->tone);
+		music_tile_text(tile->label, purple_tile);
+		if (tile->chevron) {
+			if (purple_tile) {
+				lv_obj_set_style_image_recolor(tile->chevron, theme()->screen_bg, 0);
+				lv_obj_set_style_image_recolor_opa(tile->chevron, LV_OPA_COVER, 0);
+			} else {
+				lv_obj_remove_local_style_prop(tile->chevron, LV_STYLE_IMAGE_RECOLOR, 0);
+				lv_obj_remove_local_style_prop(tile->chevron, LV_STYLE_IMAGE_RECOLOR_OPA, 0);
+			}
 		}
 	}
+
 	for (int i = 0; i < TOKYO_RECENT_COUNT; i++) {
-		if (recent_rows[i].icon) {
-			lv_obj_set_style_image_recolor(recent_rows[i].icon, theme_semantic_color(THEME_SEMANTIC_PURPLE), 0);
-			lv_obj_set_style_image_recolor_opa(recent_rows[i].icon, LV_OPA_COVER, 0);
-		}
+		recent_row_t *row = &recent_rows[i];
+		music_tile_pressed_fill(row->button, purple_tile);
+		music_tile_icon(row->icon, purple_tile, THEME_SEMANTIC_PURPLE);
+		music_tile_text(row->title, purple_tile);
+		music_tile_text(row->artist, purple_tile);
 	}
 	music_recent_refresh();
 }

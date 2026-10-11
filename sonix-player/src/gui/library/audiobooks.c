@@ -37,12 +37,23 @@ static lv_obj_t *books_screen;
 static lv_obj_t *names_screen;
 static lv_obj_t *section_grid;
 static lv_obj_t *section_empty;
+#define TOKYO_AUDIOBOOK_CATEGORY_COUNT 5
 static lv_obj_t *tokyo_books_panel;
+static lv_obj_t *tokyo_continue_card;
 static lv_obj_t *tokyo_continue_empty;
 static lv_obj_t *tokyo_continue_book;
 static lv_obj_t *tokyo_continue_title;
 static lv_obj_t *tokyo_continue_author;
+static lv_obj_t *tokyo_continue_icon;
+static lv_obj_t *tokyo_open_continue_button;
+static lv_obj_t *tokyo_open_continue_icon;
+static lv_obj_t *tokyo_categories_card;
+static lv_obj_t *tokyo_category_tiles[TOKYO_AUDIOBOOK_CATEGORY_COUNT];
+static lv_obj_t *tokyo_category_icons[TOKYO_AUDIOBOOK_CATEGORY_COUNT];
+static theme_semantic_t tokyo_category_tones[TOKYO_AUDIOBOOK_CATEGORY_COUNT];
 static lv_obj_t *tokyo_scan_button;
+static lv_obj_t *tokyo_scan_icon;
+static lv_obj_t *tokyo_scan_label;
 static char tokyo_continue_path[512];
 
 static void start_scan(void *user);
@@ -1140,8 +1151,8 @@ static void tokyo_continue_panel_build(gui_config_t *cfg) {
 	lv_obj_add_style(continue_heading, &theme_style_text, 0);
 	lv_obj_set_style_text_font(continue_heading, &font_ui_14, 0);
 
-	lv_obj_t *continue_card = tokyo_section_card(tokyo_books_panel);
-	tokyo_continue_empty = lv_label_create(continue_card);
+	tokyo_continue_card = tokyo_section_card(tokyo_books_panel);
+	tokyo_continue_empty = lv_label_create(tokyo_continue_card);
 	lv_label_set_text(tokyo_continue_empty, tr("audiobook_continue_empty"));
 	lv_label_set_long_mode(tokyo_continue_empty, LV_LABEL_LONG_DOT);
 	lv_obj_set_width(tokyo_continue_empty, lv_pct(100));
@@ -1150,7 +1161,7 @@ static void tokyo_continue_panel_build(gui_config_t *cfg) {
 	lv_obj_set_style_text_font(tokyo_continue_empty, &font_ui_14, 0);
 	lv_obj_set_style_text_align(tokyo_continue_empty, LV_TEXT_ALIGN_CENTER, 0);
 
-	tokyo_continue_book = lv_btn_create(continue_card);
+	tokyo_continue_book = lv_btn_create(tokyo_continue_card);
 	lv_obj_remove_style_all(tokyo_continue_book);
 	lv_obj_set_size(tokyo_continue_book, lv_pct(100), 41);
 	lv_obj_set_style_bg_opa(tokyo_continue_book, LV_OPA_TRANSP, 0);
@@ -1164,7 +1175,8 @@ static void tokyo_continue_panel_build(gui_config_t *cfg) {
 	lv_obj_set_flex_align(tokyo_continue_book, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_event_bubble(tokyo_continue_book, true);
 	lv_obj_add_event_cb(tokyo_continue_book, tokyo_continue_book_cb, LV_EVENT_CLICKED, NULL);
-	lv_obj_t *book_icon = lv_image_create(tokyo_continue_book);
+	tokyo_continue_icon = lv_image_create(tokyo_continue_book);
+	lv_obj_t *book_icon = tokyo_continue_icon;
 	lv_image_set_src(book_icon, &icon_book_headphones_row);
 	lv_obj_add_style(book_icon, &theme_style_icon, 0);
 	lv_obj_set_size(book_icon, 24, 24);
@@ -1194,7 +1206,8 @@ static void tokyo_continue_panel_build(gui_config_t *cfg) {
 	lv_obj_set_style_text_font(tokyo_continue_author, &font_ui_14, 0);
 	lv_obj_set_hidden(tokyo_continue_book, true);
 
-	lv_obj_t *open_continue = lv_btn_create(continue_card);
+	tokyo_open_continue_button = lv_btn_create(tokyo_continue_card);
+	lv_obj_t *open_continue = tokyo_open_continue_button;
 	lv_obj_remove_style_all(open_continue);
 	lv_obj_set_size(open_continue, lv_pct(100), 36);
 	lv_obj_set_style_bg_opa(open_continue, LV_OPA_TRANSP, 0);
@@ -1208,7 +1221,8 @@ static void tokyo_continue_panel_build(gui_config_t *cfg) {
 	lv_obj_set_flex_align(open_continue, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_event_bubble(open_continue, true);
 	lv_obj_add_event_cb(open_continue, tokyo_open_continue_cb, LV_EVENT_CLICKED, NULL);
-	lv_obj_t *open_icon = lv_image_create(open_continue);
+	tokyo_open_continue_icon = lv_image_create(open_continue);
+	lv_obj_t *open_icon = tokyo_open_continue_icon;
 	lv_image_set_src(open_icon, &icon_play);
 	lv_obj_add_style(open_icon, &theme_style_icon, 0);
 	lv_obj_set_size(open_icon, 17, 17);
@@ -1230,7 +1244,10 @@ static void tokyo_continue_panel_build(gui_config_t *cfg) {
 	lv_image_set_inner_align(open_chevron, LV_IMAGE_ALIGN_CENTER);
 	lv_obj_set_style_image_opa(open_chevron, LV_OPA_60, 0);
 
-	lv_obj_t *categories = tokyo_section_card(tokyo_books_panel);
+	tokyo_categories_card = tokyo_section_card(tokyo_books_panel);
+	lv_obj_set_style_bg_opa(tokyo_categories_card, LV_OPA_TRANSP, 0);
+	lv_obj_set_style_pad_gap(tokyo_categories_card, 4, 0);
+	lv_obj_t *categories = tokyo_categories_card;
 	static const struct {
 		const char *label;
 		const lv_image_dsc_t *icon;
@@ -1245,6 +1262,7 @@ static void tokyo_continue_panel_build(gui_config_t *cfg) {
 	};
 	for (size_t i = 0; i < sizeof(category_rows) / sizeof(category_rows[0]); i++) {
 		lv_obj_t *button = lv_btn_create(categories);
+		tokyo_category_tiles[i] = button;
 		lv_obj_remove_style_all(button);
 		lv_obj_set_size(button, lv_pct(100), 38);
 		lv_obj_set_style_bg_opa(button, LV_OPA_TRANSP, 0);
@@ -1252,7 +1270,7 @@ static void tokyo_continue_panel_build(gui_config_t *cfg) {
 		lv_obj_set_style_border_width(button, 0, 0);
 		lv_obj_set_style_outline_width(button, 0, 0);
 		lv_obj_set_style_shadow_width(button, 0, 0);
-		lv_obj_set_style_radius(button, 0, 0);
+		lv_obj_set_style_radius(button, bp_tile_radius(), 0);
 		lv_obj_set_style_pad_hor(button, 5, 0);
 		lv_obj_set_style_pad_column(button, 7, 0);
 		lv_obj_set_flex_flow(button, LV_FLEX_FLOW_ROW);
@@ -1261,6 +1279,8 @@ static void tokyo_continue_panel_build(gui_config_t *cfg) {
 		lv_obj_add_event_cb(button, category_rows[i].callback, LV_EVENT_CLICKED, NULL);
 
 		lv_obj_t *icon = lv_image_create(button);
+		tokyo_category_icons[i] = icon;
+		tokyo_category_tones[i] = category_rows[i].tone;
 		lv_image_set_src(icon, category_rows[i].icon);
 		lv_obj_add_style(icon, &theme_style_icon, 0);
 		lv_obj_set_size(icon, 18, 18);
@@ -1299,7 +1319,8 @@ static void tokyo_continue_panel_build(gui_config_t *cfg) {
 	lv_obj_set_flex_align(tokyo_scan_button, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_event_bubble(tokyo_scan_button, true);
 	lv_obj_add_event_cb(tokyo_scan_button, section_scan_cb, LV_EVENT_CLICKED, NULL);
-	lv_obj_t *scan_icon = lv_image_create(tokyo_scan_button);
+	tokyo_scan_icon = lv_image_create(tokyo_scan_button);
+	lv_obj_t *scan_icon = tokyo_scan_icon;
 	lv_image_set_src(scan_icon, &icon_book_headphones_row);
 	lv_obj_add_style(scan_icon, &theme_style_icon, 0);
 	lv_obj_set_size(scan_icon, 18, 18);
@@ -1307,7 +1328,8 @@ static void tokyo_continue_panel_build(gui_config_t *cfg) {
 	lv_image_set_inner_align(scan_icon, LV_IMAGE_ALIGN_CENTER);
 	lv_obj_set_style_image_recolor(scan_icon, theme_semantic_color(THEME_SEMANTIC_AMBER), 0);
 	lv_obj_set_style_image_recolor_opa(scan_icon, LV_OPA_COVER, 0);
-	lv_obj_t *scan_label = lv_label_create(tokyo_scan_button);
+	tokyo_scan_label = lv_label_create(tokyo_scan_button);
+	lv_obj_t *scan_label = tokyo_scan_label;
 	lv_label_set_text(scan_label, tr("audiobook_scan_audiobooks_2"));
 	lv_label_set_long_mode(scan_label, LV_LABEL_LONG_DOT);
 	lv_obj_set_flex_grow(scan_label, 1);
@@ -1318,8 +1340,92 @@ static void tokyo_continue_panel_build(gui_config_t *cfg) {
 	switcher_attach_back_gesture(tokyo_books_panel);
 }
 
+static void audiobook_tile_surface(lv_obj_t *tile, bool active, bool transparent_when_inactive) {
+	if (!tile) {
+		return;
+	}
+	if (active) {
+		lv_obj_set_style_bg_color(tile, theme_semantic_color(THEME_SEMANTIC_PURPLE), 0);
+		lv_obj_set_style_bg_opa(tile, LV_OPA_COVER, 0);
+		lv_obj_set_style_border_width(tile, 0, 0);
+		lv_obj_set_style_outline_width(tile, 0, 0);
+	} else {
+		lv_obj_remove_local_style_prop(tile, LV_STYLE_BG_COLOR, 0);
+		if (transparent_when_inactive) {
+			lv_obj_set_style_bg_opa(tile, LV_OPA_TRANSP, 0);
+		} else {
+			lv_obj_remove_local_style_prop(tile, LV_STYLE_BG_OPA, 0);
+		}
+	}
+}
+
+static void audiobook_tile_pressed_fill(lv_obj_t *button, bool active) {
+	if (!button) {
+		return;
+	}
+	if (active) {
+		lv_obj_set_style_bg_color(button, theme_semantic_color(THEME_SEMANTIC_PURPLE), LV_STATE_PRESSED);
+		lv_obj_set_style_bg_opa(button, LV_OPA_COVER, LV_STATE_PRESSED);
+	} else {
+		lv_obj_remove_local_style_prop(button, LV_STYLE_BG_COLOR, LV_STATE_PRESSED);
+		lv_obj_remove_local_style_prop(button, LV_STYLE_BG_OPA, LV_STATE_PRESSED);
+	}
+}
+
+static void audiobook_tile_icon(lv_obj_t *icon, bool active, theme_semantic_t tone) {
+	if (!icon) {
+		return;
+	}
+	lv_obj_set_style_image_recolor(icon, active ? theme()->screen_bg : theme_semantic_color(tone), 0);
+	lv_obj_set_style_image_recolor_opa(icon, LV_OPA_COVER, 0);
+}
+
+static void audiobook_tile_foreground(lv_obj_t *tile, bool active) {
+	if (!tile) {
+		return;
+	}
+	uint32_t count = lv_obj_get_child_count(tile);
+	for (uint32_t i = 0; i < count; i++) {
+		lv_obj_t *child = lv_obj_get_child(tile, (int32_t)i);
+		if (lv_obj_check_type(child, &lv_label_class)) {
+			if (active) {
+				lv_obj_set_style_text_color(child, theme()->screen_bg, 0);
+			} else {
+				lv_obj_remove_local_style_prop(child, LV_STYLE_TEXT_COLOR, 0);
+			}
+		} else if (lv_obj_check_type(child, &lv_image_class)) {
+			if (active) {
+				lv_obj_set_style_image_recolor(child, theme()->screen_bg, 0);
+				lv_obj_set_style_image_recolor_opa(child, LV_OPA_COVER, 0);
+			} else {
+				lv_obj_remove_local_style_prop(child, LV_STYLE_IMAGE_RECOLOR, 0);
+				lv_obj_remove_local_style_prop(child, LV_STYLE_IMAGE_RECOLOR_OPA, 0);
+			}
+		}
+		audiobook_tile_foreground(child, active);
+	}
+}
+
 static void section_refresh_theme(void) {
 	bool tokyo = bp_is_tempotec_v1() && theme_is_tokyo_night();
+	audiobook_tile_surface(tokyo_continue_card, tokyo, false);
+	audiobook_tile_foreground(tokyo_continue_card, tokyo);
+	audiobook_tile_pressed_fill(tokyo_continue_book, tokyo);
+	audiobook_tile_pressed_fill(tokyo_open_continue_button, tokyo);
+	for (int i = 0; i < TOKYO_AUDIOBOOK_CATEGORY_COUNT; i++) {
+		audiobook_tile_surface(tokyo_category_tiles[i], tokyo, true);
+		audiobook_tile_pressed_fill(tokyo_category_tiles[i], tokyo);
+		audiobook_tile_foreground(tokyo_category_tiles[i], tokyo);
+	}
+	audiobook_tile_surface(tokyo_scan_button, tokyo, false);
+	audiobook_tile_pressed_fill(tokyo_scan_button, tokyo);
+	audiobook_tile_foreground(tokyo_scan_button, tokyo);
+	audiobook_tile_icon(tokyo_continue_icon, tokyo, THEME_SEMANTIC_AMBER);
+	audiobook_tile_icon(tokyo_open_continue_icon, tokyo, THEME_SEMANTIC_AMBER);
+	for (int i = 0; i < TOKYO_AUDIOBOOK_CATEGORY_COUNT; i++) {
+		audiobook_tile_icon(tokyo_category_icons[i], tokyo, tokyo_category_tones[i]);
+	}
+	audiobook_tile_icon(tokyo_scan_icon, tokyo, THEME_SEMANTIC_AMBER);
 	if (tokyo && tokyo_books_panel) {
 		lv_obj_set_hidden(section_grid, true);
 		lv_obj_set_hidden(section_empty, true);

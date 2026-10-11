@@ -86,8 +86,8 @@ void theme_init(void);
 void theme_notify_screen_shown(lv_obj_t *screen);
 
 const theme_palette_t *theme(void);
-// The subtle accent-tinted surface shared by the Tokyo Night home mini-player
-// and Music browse tiles.
+// The subtle accent-tinted home mini-player surface. Music Browse keeps this
+// fill outside Tokyo Night V1, whose tiles use the lilac theme surface.
 lv_color_t theme_now_playing_fill(void);
 bool theme_is_dark(void);
 bool theme_is_tokyo_night(void);
