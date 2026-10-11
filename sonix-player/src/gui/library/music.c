@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include "lvgl/lvgl.h"
 
@@ -37,10 +38,13 @@ lv_obj_t *music_screen;
 typedef struct {
 	lv_obj_t *button;
 	lv_obj_t *icon;
+	lv_obj_t *play_icon;
 	lv_obj_t *title;
 	lv_obj_t *artist;
+	char path[512];
 	int queue_index;
 	unsigned queue_revision;
+	bool library_file;
 } recent_row_t;
 
 typedef struct {
@@ -153,26 +157,42 @@ static void compact_more_cb(lv_event_t *e) {
 static void music_recent_refresh(void);
 static void music_update_visibility(void);
 
+static bool recent_library_file_available(const recent_row_t *row) {
+	if (!row || !row->library_file || !row->path[0]) {
+		return false;
+	}
+	struct stat info;
+	return stat(row->path, &info) == 0 && S_ISREG(info.st_mode);
+}
+
 static void recent_track_clicked_cb(lv_event_t *e) {
 	if (player_sheet_drag_active() || switcher_back_drag_active()) {
 		return;
 	}
 	recent_row_t *row = lv_event_get_user_data(e);
-	if (!row || row->queue_index < 0) {
+	if (!row) {
 		return;
 	}
-	if (row->queue_revision != playlist_revision()) {
+
+	// Prefer the queue index while it still names this row. The saved path is
+	// also kept so a local library track remains playable if the queue changed
+	// between drawing the row and the user's tap.
+	bool started = false;
+	char queued_path[512];
+	if (row->queue_index >= 0 && row->path[0] && row->queue_revision == playlist_revision() &&
+		playlist_path_at(row->queue_index, queued_path, sizeof(queued_path)) && strcmp(queued_path, row->path) == 0) {
+		started = device_state_play_queue_index(row->queue_index);
+	}
+	if (!started && recent_library_file_available(row)) {
+		device_state_play_file(row->path);
+		started = true;
+	}
+	if (started) {
 		music_recent_refresh();
-		return;
-	}
-	char path[512];
-	if (!playlist_path_at(row->queue_index, path, sizeof(path))) {
-		music_recent_refresh();
-		return;
-	}
-	if (device_state_play_queue_index(row->queue_index)) {
 		player_refresh_now_playing();
 		player_sheet_open(true);
+	} else {
+		music_recent_refresh();
 	}
 }
 
@@ -374,8 +394,8 @@ static void tokyo_music_build(gui_config_t *cfg) {
 		lv_obj_set_style_bg_opa(row->button, LV_OPA_TRANSP, 0);
 		lv_obj_add_style(row->button, &theme_style_card_pressed, LV_STATE_PRESSED);
 		lv_obj_set_style_border_width(row->button, 0, 0);
-		lv_obj_set_style_radius(row->button, 0, 0);
-		lv_obj_set_style_pad_hor(row->button, 4, 0);
+		lv_obj_set_style_radius(row->button, bp_tile_radius(), 0);
+		lv_obj_set_style_pad_hor(row->button, 6, 0);
 		lv_obj_set_style_pad_column(row->button, 7, 0);
 		lv_obj_set_flex_flow(row->button, LV_FLEX_FLOW_ROW);
 		lv_obj_set_flex_align(row->button, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
@@ -414,6 +434,17 @@ static void tokyo_music_build(gui_config_t *cfg) {
 		lv_obj_set_height(row->artist, lv_font_get_line_height(&font_ui_14));
 		lv_obj_add_style(row->artist, &theme_style_text_dim, 0);
 		lv_obj_set_style_text_font(row->artist, &font_ui_14, 0);
+
+		row->play_icon = lv_image_create(row->button);
+		lv_image_set_src(row->play_icon, &icon_play);
+		lv_obj_add_style(row->play_icon, &theme_style_icon, 0);
+		lv_obj_set_size(row->play_icon, 16, 16);
+		lv_image_set_scale(row->play_icon, (uint32_t)(LV_SCALE_NONE * 16 / 40));
+		lv_image_set_inner_align(row->play_icon, LV_IMAGE_ALIGN_CENTER);
+		lv_obj_set_style_image_recolor(row->play_icon, theme_semantic_color(THEME_SEMANTIC_CYAN), 0);
+		lv_obj_set_style_image_recolor_opa(row->play_icon, LV_OPA_COVER, 0);
+		row->path[0] = '\0';
+		row->library_file = false;
 		lv_obj_set_hidden(row->button, true);
 	}
 
@@ -531,7 +562,8 @@ static void music_recent_refresh(void) {
 
 			char title[256] = "";
 			char artist[256] = "";
-			if (!library_track_names(path, title, sizeof(title), artist, sizeof(artist))) {
+			bool library_file = library_track_names(path, title, sizeof(title), artist, sizeof(artist));
+			if (!library_file) {
 				device_state_t state;
 				device_state_get(&state);
 				if (index != current || state.live || strcmp(state.current_file, path) != 0 || !state.metadata.title[0]) {
@@ -548,6 +580,8 @@ static void music_recent_refresh(void) {
 			recent_row_t *row = &recent_rows[filled];
 			row->queue_index = index;
 			row->queue_revision = revision;
+			snprintf(row->path, sizeof(row->path), "%s", path);
+			row->library_file = library_file;
 			lv_label_set_text(row->title, title);
 			lv_label_set_text(row->artist, artist);
 			lv_obj_set_hidden(row->button, false);
@@ -556,6 +590,8 @@ static void music_recent_refresh(void) {
 	}
 	for (int i = filled; i < TOKYO_RECENT_COUNT; i++) {
 		recent_rows[i].queue_index = -1;
+		recent_rows[i].path[0] = '\0';
+		recent_rows[i].library_file = false;
 		lv_obj_set_hidden(recent_rows[i].button, true);
 	}
 	lv_obj_set_hidden(tokyo_recent_empty, filled != 0);
@@ -599,6 +635,10 @@ static void music_refresh_theme(void) {
 		if (recent_rows[i].icon) {
 			lv_obj_set_style_image_recolor(recent_rows[i].icon, theme_semantic_color(THEME_SEMANTIC_PURPLE), 0);
 			lv_obj_set_style_image_recolor_opa(recent_rows[i].icon, LV_OPA_COVER, 0);
+		}
+		if (recent_rows[i].play_icon) {
+			lv_obj_set_style_image_recolor(recent_rows[i].play_icon, theme_semantic_color(THEME_SEMANTIC_CYAN), 0);
+			lv_obj_set_style_image_recolor_opa(recent_rows[i].play_icon, LV_OPA_COVER, 0);
 		}
 	}
 	music_recent_refresh();

@@ -141,7 +141,10 @@
     .simple-row:hover,.track-row:hover { border-radius: 6px; background: var(--surface-pressed); }
     .simple-row>.glyph,.track-row>.glyph { width: 18px; height: 18px; flex: 0 0 18px; }
     .settings-card,.wireless-card,.track-list { overflow: hidden; }
-    .track-row { min-height: 43px; }
+    .track-row { min-height: 43px; transition: background-color .12s ease, transform .12s ease; }
+    .track-row:active { border-radius: 6px; background: var(--surface-pressed); }
+    .recent-track-row { min-height: 45px; border-radius: 6px; }
+    .recent-track-row:active { transform: scale(.985); }
     .track-art { display: grid; width: 29px; height: 29px; flex: 0 0 29px; place-items: center; border-radius: 5px; color: var(--accent-purple); background: color-mix(in srgb,var(--accent-purple) 18%,var(--surface-pressed)); }
     .track-art .glyph { width: 17px; height: 17px; }
     .track-row[aria-current="true"] { background: color-mix(in srgb,var(--accent) 10%,var(--surface)); }
@@ -367,11 +370,13 @@
       };
       const pageHeader = (title, action = '') => `<header class="page-header"><button class="header-back" type="button" data-action="back" aria-label="Back">${glyph('back','muted-icon',17)}</button><h2 class="page-title">${title}</h2><span class="header-spacer"></span>${action}</header>`;
       const row = (icon, title, detail, view, tone = 'accent-blue', end = '') => `<button class="simple-row" type="button" data-action="navigate" data-view="${view}">${glyph(icon,tone,18)}<span class="row-copy"><strong>${title}</strong>${detail ? `<small>${detail}</small>` : ''}</span>${end || glyph('chevron','muted-icon',14,'chevron-right')}</button>`;
-      const trackRows = (items, withCurrent = false) => {
+      const trackRows = (items, withCurrent = false, showPlayAffordance = false) => {
         if (!items.length) return `<div class="empty-state">No queue tracks to show. Add your own queue item beside the preview.</div>`;
         return items.map(({track,index}) => {
           const t = safeTrack(track);
-          return `<button class="track-row" type="button" data-action="select-track" data-index="${index}" aria-current="${withCurrent && state.current === index}"><span class="track-art">${glyph('music','accent-purple',16)}</span><span class="row-copy"><strong>${t.title || 'Untitled track'}</strong><small>${t.artist || ''}</small></span>${state.current === index ? glyph('play','accent-cyan',14,'playmark') : ''}</button>`;
+          const current = withCurrent && state.current === index;
+          const playmark = (showPlayAffordance || current) ? glyph('play','accent-cyan',14,'playmark') : '';
+          return `<button class="track-row${showPlayAffordance ? ' recent-track-row' : ''}" type="button" data-action="select-track" data-index="${index}" aria-current="${current}" aria-label="Play ${escapeHtml(t.title || 'Untitled track')} by ${escapeHtml(t.artist || 'unknown artist')}"><span class="track-art">${glyph('music','accent-purple',16)}</span><span class="row-copy"><strong>${t.title || 'Untitled track'}</strong><small>${t.artist || ''}</small></span>${playmark}</button>`;
         }).join('');
       };
       const recentItems = () => {
@@ -398,7 +403,7 @@
       const renderMusic = () => {
         const browse = [['artist','Artists','accent-cyan','artists'],['album','Albums','accent-purple','albums'],['folder','Browse','accent-green','sd-browser'],['search','Search','accent-amber','search']].map(([icon,title,tone,view]) => `<button class="glyph-demo" type="button" data-action="navigate" data-view="${view}">${glyph(icon,tone,17)}<span>${title}</span></button>`).join('');
         const more = `<button class="header-action" type="button" data-action="navigate" data-view="library" aria-label="More music lists">${glyph('list','muted-icon',16)}</button>`;
-        return `${pageHeader('Music',`<button class="header-action" type="button" data-action="navigate" data-view="settings-music" aria-label="Music settings">${glyph('settings','muted-icon',16)}</button>${more}`)}<main class="page-body"><div class="stack"><section class="screen-card card-pad"><div class="card-head"><span>Browse music</span><small>LIBRARY</small></div><div class="browse-grid">${browse}</div></section><section class="screen-card settings-card">${row('list','All tracks','Indexed music library','library','accent-cyan')}${row('albumArtist','Album artist','Browse credited artists','album-artists','accent-blue')}${row('genre','Genres','Browse by genre','genres','accent-amber')}${row('heart','Favourites','Saved tracks','favourites','accent-red')}</section><section><div class="card-head"><span>Recently played</span><small>ACTIVE QUEUE</small></div><section class="screen-card track-list">${trackRows(recentItems(),true)}</section><p class="subtle-copy">Queue-derived · not persistent listening history</p></section></div></main>`;
+        return `${pageHeader('Music',`<button class="header-action" type="button" data-action="navigate" data-view="settings-music" aria-label="Music settings">${glyph('settings','muted-icon',16)}</button>${more}`)}<main class="page-body"><div class="stack"><section class="screen-card card-pad"><div class="card-head"><span>Browse music</span><small>LIBRARY</small></div><div class="browse-grid">${browse}</div></section><section class="screen-card settings-card">${row('list','All tracks','Indexed music library','library','accent-cyan')}${row('albumArtist','Album artist','Browse credited artists','album-artists','accent-blue')}${row('genre','Genres','Browse by genre','genres','accent-amber')}${row('heart','Favourites','Saved tracks','favourites','accent-red')}</section><section><div class="card-head"><span>Recently played</span><small>TAP TO PLAY</small></div><section class="screen-card track-list">${trackRows(recentItems(),true,true)}</section><p class="subtle-copy">Tracks from the active queue · tap a row to play</p></section></div></main>`;
       };
       const renderSdBrowser = () => {
         const rows = state.queue.map((track,index) => ({track,index}));
