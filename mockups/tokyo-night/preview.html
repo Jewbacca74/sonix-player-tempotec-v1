@@ -110,7 +110,6 @@
     .page-title { min-width: 0; overflow: hidden; margin: 0; color: var(--screen-text); font-size: 14px; font-weight: 650; line-height: 1; text-overflow: ellipsis; white-space: nowrap; }
     .header-spacer { flex: 1; }
     .header-action .glyph { width: 16px; height: 16px; }
-    .page-header.tokyo-home-header { margin: 0 6px; padding: 0 8px; border-radius: 8px; background: var(--surface); }
     .tokyo-home-title { min-width: 0; overflow: hidden; margin: 0; color: var(--screen-text); font-size: 14px; font-weight: 750; line-height: 1; text-overflow: ellipsis; white-space: nowrap; }
     .page-body { height: 260px; overflow-y: auto; overscroll-behavior: contain; padding: 6px; scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--screen-muted) 36%, transparent) transparent; }
     .page-body::-webkit-scrollbar { width: 3px; }
@@ -309,7 +308,7 @@
       <div aria-hidden="true"></div>
       <section class="note-panel">
         <h2>On-device scope</h2>
-        <p>Music opens with Browse and keeps Recently played at the bottom; Browse lists playable music from the SD card, while File Manager appears once under More. Wireless keeps Wi-Fi and Bluetooth as full-width switches; turning either on reveals its network or device options. AirPlay, Transfer, SonixLink, and DLNA stay in a two-column tile grid; there is no separate audio-output row. More and Streaming use lists; More keeps DAC, optional Gearboy, Books, File Manager, and Flappy Bird. Appearance retains Dark, Light, and Tokyo Night themes, with MiSans, Neon 80s, Roboto, Roboto Condensed, Inter, and Barlow Semi Condensed in the font picker; card fonts appear by file name. In Tokyo Night, the bold Sonix Player title sits on a surface header with the tagline below it.</p>
+        <p>Music opens with Browse and keeps Recently played at the bottom; Browse lists playable music from the SD card, while File Manager appears once under More. Wireless keeps Wi-Fi and Bluetooth as full-width switches; turning either on reveals its network or device options. AirPlay, Transfer, SonixLink, and DLNA stay in a two-column tile grid; there is no separate audio-output row. More and Streaming use lists; More keeps DAC, optional Gearboy, Books, File Manager, and Flappy Bird. Appearance retains Dark, Light, and Tokyo Night themes, with MiSans, Neon 80s, Roboto, Roboto Condensed, Inter, and Barlow Semi Condensed in the font picker; card fonts appear by file name. In Tokyo Night, the bold Sonix Player title sits directly on the background above the tagline.</p>
       </section>
     </div>
   </div>
@@ -396,7 +395,7 @@
         const current = state.queue[state.current];
         const title = current ? escapeHtml(current.title) : 'No track loaded';
         const artist = current ? escapeHtml(current.artist) : '';
-        const brandHeader = state.theme === 'tokyo' ? `<header class="page-header tokyo-home-header"><span style="width:5px"></span><h2 class="tokyo-home-title">Sonix Player</h2></header>` : `<header class="page-header"><span style="width:5px"></span><h2 class="page-title">Sonix Player</h2></header>`;
+        const brandHeader = state.theme === 'tokyo' ? `<header class="page-header"><h2 class="tokyo-home-title">Sonix Player</h2></header>` : `<header class="page-header"><span style="width:5px"></span><h2 class="page-title">Sonix Player</h2></header>`;
         return `${brandHeader}<main class="page-body"><p class="home-title-note">Ta musique, prête quand tu l'es.</p><div class="menu-grid">${tiles}</div><button class="now-playing-strip" type="button" data-action="navigate" data-view="player">${glyph(state.playing ? 'pause' : 'play','accent-cyan',15)}<span class="row-copy"><strong>${title}</strong><small>${artist}</small></span></button></main>`;
       };
       const renderMusic = () => {
