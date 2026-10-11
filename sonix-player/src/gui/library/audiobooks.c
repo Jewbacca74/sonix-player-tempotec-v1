@@ -47,7 +47,6 @@ static char tokyo_continue_path[512];
 
 static void start_scan(void *user);
 static void section_scan_cb(lv_event_t *e);
-static void finished_cb(lv_event_t *e);
 static void bookmarks_cb(lv_event_t *e);
 static void section_refresh_theme(void);
 
@@ -1030,12 +1029,10 @@ static void build_names_page(gui_config_t *cfg) {
 }
 
 // ---------------------------------------------------------------------------
-// the section page: four tiles, the bookmarks, the finished books and the
-// options
+// the section page: its browse destinations, Continue, bookmarks and options
 // ---------------------------------------------------------------------------
 
 static void open_library(void) { books_open(LIST_LIBRARY, NULL, tr("audiobook_library")); }
-static void open_series(void) { names_open(LIST_SERIES); }
 static void open_authors(void) { names_open(LIST_AUTHORS); }
 static void open_continue(void) { books_open(LIST_CONTINUE, NULL, tr("audiobook_continue")); }
 
@@ -1093,7 +1090,6 @@ static void tokyo_open_continue_cb(lv_event_t *e) {
 }
 
 static void tokyo_open_library_cb(lv_event_t *e) { (void)e; open_library(); }
-static void tokyo_open_series_cb(lv_event_t *e) { (void)e; open_series(); }
 static void tokyo_open_authors_cb(lv_event_t *e) { (void)e; open_authors(); }
 
 static lv_obj_t *tokyo_section_card(lv_obj_t *parent) {
@@ -1238,9 +1234,7 @@ static void tokyo_continue_panel_build(gui_config_t *cfg) {
 		lv_event_cb_t callback;
 	} category_rows[] = {
 		{"audiobook_library", &icon_book_headphones_row, THEME_SEMANTIC_AMBER, tokyo_open_library_cb},
-		{"audiobook_series", &icon_sort_series, THEME_SEMANTIC_PURPLE, tokyo_open_series_cb},
 		{"audiobook_authors", &icon_artist, THEME_SEMANTIC_BLUE, tokyo_open_authors_cb},
-		{"audiobook_finished", &icon_book_finished, THEME_SEMANTIC_GREEN, finished_cb},
 		{"bookmarks", &icon_bookmark, THEME_SEMANTIC_CYAN, bookmarks_cb},
 	};
 	for (size_t i = 0; i < sizeof(category_rows) / sizeof(category_rows[0]); i++) {
@@ -1338,35 +1332,9 @@ static void section_refresh_theme(void) {
 	}
 }
 
-static void finished_cb(lv_event_t *e) {
-	(void)e;
-	books_open(LIST_FINISHED, NULL, tr("audiobook_finished"));
-}
-
 static void bookmarks_cb(lv_event_t *e) {
 	(void)e;
 	audiobookextras_open_bookmarks();
-}
-
-// The compact header's overflow: the 240 px title row has room for two
-// actions beside the back button and a readable heading, so the finished
-// books and the bookmarks fold into one menu, the way the Music page does it.
-static void section_finished_action(void *unused) {
-	(void)unused;
-	finished_cb(NULL);
-}
-
-static void section_bookmarks_action(void *unused) {
-	(void)unused;
-	bookmarks_cb(NULL);
-}
-
-static void section_more_cb(lv_event_t *e) {
-	popover_item_t items[] = {
-		{"audiobook_finished", section_finished_action, NULL, false},
-		{"bookmarks", section_bookmarks_action, NULL, false},
-	};
-	popover_show(lv_event_get_target(e), items, (int)(sizeof(items) / sizeof(items[0])));
 }
 
 // An index written by an older scan has no authors, series or folder books.
@@ -1393,7 +1361,6 @@ static void section_loaded_cb(lv_event_t *e) {
 static void build_section_page(gui_config_t *cfg) {
 	const grid_entry_t entries[] = {
 		{"audiobook_library", &icon_menu_audiobook_library, NULL, open_library},
-		{"audiobook_series", &icon_menu_audiobook_series, NULL, open_series},
 		{"audiobook_authors", &icon_menu_audiobook_author, NULL, open_authors},
 		{"audiobook_continue", &icon_menu_audiobook_continue, NULL, open_continue},
 	};
@@ -1404,22 +1371,11 @@ static void build_section_page(gui_config_t *cfg) {
 		gridpage_empty_panel(audiobooks_screen, cfg, &icon_book_headphones, "audiobook_no_database", section_scan_cb);
 	tokyo_continue_panel_build(cfg);
 
-	// The options, to their left the finished books, and to the left of those
-	// the bookmarks -- the same glyph the ebook shelf opens its bookmarks with.
-	// On the 240 px header three buttons would squeeze the heading to an
-	// ellipsis, so the finished books and the bookmarks share one overflow
-	// menu there instead.
-	bool compact_header = cfg->screen_width < 320;
-	settingsrow_title_corner_slots(settingsrow_title(audiobooks_screen, cfg, "audiobooks"), cfg,
-								   compact_header ? 2 : 3);
+	// Keep the settings and bookmarks actions within the compact V1 header.
+	settingsrow_title_corner_slots(settingsrow_title(audiobooks_screen, cfg, "audiobooks"), cfg, 2);
 	lv_obj_t *options_btn = corner_button(audiobooks_screen, cfg, 0, &icon_music_settings, NULL);
 	lv_obj_add_event_cb(options_btn, switch_screen_cb, LV_EVENT_CLICKED, audiobooksettings_screen);
-	if (compact_header) {
-		corner_button(audiobooks_screen, cfg, 1, &icon_ellipsis_vertical, section_more_cb);
-	} else {
-		corner_button(audiobooks_screen, cfg, 1, &icon_book_finished, finished_cb);
-		corner_button(audiobooks_screen, cfg, 2, &icon_bookmark, bookmarks_cb);
-	}
+	corner_button(audiobooks_screen, cfg, 1, &icon_bookmark, bookmarks_cb);
 
 	lv_obj_add_event_cb(audiobooks_screen, section_loaded_cb, LV_EVENT_SCREEN_LOADED, NULL);
 }
