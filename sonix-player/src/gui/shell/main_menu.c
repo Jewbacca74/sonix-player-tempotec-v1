@@ -248,7 +248,7 @@ static void main_menu_refresh_theme(void) {
 		// No divider beneath the compact header; the note and menu flow directly below it.
 		lv_obj_set_style_border_width(home_header, 0, 0);
 
-		lv_color_t strip_fill = lv_color_mix(theme()->accent, theme()->surface, LV_OPA_10);
+		lv_color_t strip_fill = theme_now_playing_fill();
 		lv_obj_set_style_bg_color(mini_player, strip_fill, 0);
 		lv_obj_set_style_bg_opa(mini_player, LV_OPA_COVER, 0);
 		lv_obj_set_style_border_width(mini_player, 0, 0);

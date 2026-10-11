@@ -44,12 +44,13 @@ typedef struct {
 } recent_row_t;
 
 typedef struct {
+	lv_obj_t *button;
 	lv_obj_t *icon;
 	theme_semantic_t tone;
-} browse_icon_t;
+} browse_tile_t;
 
 static recent_row_t recent_rows[TOKYO_RECENT_COUNT];
-static browse_icon_t browse_icons[TOKYO_BROWSE_COUNT];
+static browse_tile_t browse_tiles[TOKYO_BROWSE_COUNT];
 static lv_obj_t *tokyo_music_panel;
 static lv_obj_t *tokyo_recent_card;
 static lv_obj_t *tokyo_recent_empty;
@@ -183,8 +184,8 @@ static lv_obj_t *make_browse_button(lv_obj_t *parent, const char *label_key, con
 	music_remove_edges(button);
 	int cell_width = (music_cfg->screen_width - 2 * music_cfg->padding - 14 - 4) / 2;
 	lv_obj_set_size(button, cell_width, 42);
-	lv_obj_set_style_bg_color(button, theme()->surface_pressed, 0);
-	lv_obj_set_style_bg_opa(button, LV_OPA_40, 0);
+	lv_obj_set_style_bg_color(button, theme_now_playing_fill(), 0);
+	lv_obj_set_style_bg_opa(button, LV_OPA_COVER, 0);
 	lv_obj_add_style(button, &theme_style_card_pressed, LV_STATE_PRESSED);
 	lv_obj_set_style_border_width(button, 0, 0);
 	lv_obj_set_style_radius(button, bp_tile_radius(), 0);
@@ -206,7 +207,7 @@ static lv_obj_t *make_browse_button(lv_obj_t *parent, const char *label_key, con
 	lv_obj_set_style_image_recolor(icon, theme_semantic_color(tone), 0);
 	lv_obj_set_style_image_recolor_opa(icon, LV_OPA_COVER, 0);
 	if (index >= 0 && index < TOKYO_BROWSE_COUNT) {
-		browse_icons[index] = (browse_icon_t){.icon = icon, .tone = tone};
+		browse_tiles[index] = (browse_tile_t){.button = button, .icon = icon, .tone = tone};
 	}
 
 		lv_obj_t *label = lv_label_create(button);
@@ -583,10 +584,15 @@ static void music_refresh_theme(void) {
 		return;
 	}
 	music_update_visibility();
+	lv_color_t browse_fill = theme_now_playing_fill();
 	for (int i = 0; i < TOKYO_BROWSE_COUNT; i++) {
-		if (browse_icons[i].icon) {
-			lv_obj_set_style_image_recolor(browse_icons[i].icon, theme_semantic_color(browse_icons[i].tone), 0);
-			lv_obj_set_style_image_recolor_opa(browse_icons[i].icon, LV_OPA_COVER, 0);
+		if (browse_tiles[i].button) {
+			lv_obj_set_style_bg_color(browse_tiles[i].button, browse_fill, 0);
+			lv_obj_set_style_bg_opa(browse_tiles[i].button, LV_OPA_COVER, 0);
+		}
+		if (browse_tiles[i].icon) {
+			lv_obj_set_style_image_recolor(browse_tiles[i].icon, theme_semantic_color(browse_tiles[i].tone), 0);
+			lv_obj_set_style_image_recolor_opa(browse_tiles[i].icon, LV_OPA_COVER, 0);
 		}
 	}
 	for (int i = 0; i < TOKYO_RECENT_COUNT; i++) {

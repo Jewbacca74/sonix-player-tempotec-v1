@@ -72,6 +72,7 @@
       --accent-green: #9ece6a;
       --accent-amber: #e0af68;
       --accent-red: #f7768e;
+      --now-playing-fill: color-mix(in srgb,var(--accent) 10%,var(--surface));
       position: relative; width: 240px; height: 320px; overflow: hidden; isolation: isolate;
       border-radius: 11px; background: var(--screen-bg); color: var(--screen-text);
       box-shadow: inset 0 0 0 1px rgba(255,255,255,.035);
@@ -127,7 +128,7 @@
     .menu-tile:hover { background: var(--surface-pressed); }
     .menu-tile .glyph,.menu-tile .bird-glyph { width: 20px; height: 20px; flex: 0 0 20px; }
     .tile-text { min-width: 0; font-size: 9px; font-weight: 600; line-height: 1.15; }
-    .now-playing-strip { display: flex; align-items: center; gap: 7px; min-height: 41px; margin-top: 7px; padding: 4px 6px; border: 0; border-radius: 8px; color: var(--screen-text); background: color-mix(in srgb,var(--accent) 8%,var(--surface)); cursor: pointer; text-align: left; }
+    .now-playing-strip { display: flex; align-items: center; gap: 7px; min-height: 41px; margin-top: 7px; padding: 4px 6px; border: 0; border-radius: 8px; color: var(--screen-text); background: var(--now-playing-fill); cursor: pointer; text-align: left; }
     .now-playing-strip .glyph { width: 15px; height: 15px; flex: 0 0 15px; }
     .now-playing-strip .row-copy strong { font-size: 9px; }
     .now-playing-strip .row-copy small { font-size: 7.5px; }
@@ -147,7 +148,7 @@
     .track-row[aria-current="true"] .row-copy strong { color: var(--accent); }
     .track-row .playmark { width: 14px; height: 14px; color: var(--accent-cyan); }
     .browse-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 4px; }
-    .glyph-demo { display: flex; min-width: 0; min-height: 45px; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 3px 2px; border: 1px solid transparent; border-radius: 6px; color: var(--screen-muted); background: color-mix(in srgb,var(--screen-bg) 23%,transparent); cursor: pointer; }
+    .glyph-demo { display: flex; min-width: 0; min-height: 45px; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 3px 2px; border: 1px solid transparent; border-radius: 6px; color: var(--screen-muted); background: var(--now-playing-fill); cursor: pointer; }
     .glyph-demo:hover { border-color: color-mix(in srgb,var(--accent) 42%,transparent); }
     .glyph-demo .glyph { width: 17px; height: 17px; }
     .glyph-demo span:last-child { max-width: 100%; overflow: hidden; font-size: 7px; line-height: 1; text-overflow: ellipsis; white-space: nowrap; }

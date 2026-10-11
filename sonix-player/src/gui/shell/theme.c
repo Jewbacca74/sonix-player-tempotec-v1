@@ -372,6 +372,8 @@ void theme_register_refresh(theme_refresh_cb_t cb) {
 
 const theme_palette_t *theme(void) { return active; }
 
+lv_color_t theme_now_playing_fill(void) { return lv_color_mix(active->accent, active->surface, LV_OPA_10); }
+
 bool theme_is_dark(void) { return active->dark; }
 
 bool theme_is_tokyo_night(void) { return selected_kind == THEME_KIND_TOKYO_NIGHT; }
