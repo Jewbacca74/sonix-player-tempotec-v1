@@ -457,6 +457,11 @@ static void build_theme_previews(lv_obj_t *container, bool compact) {
 		lv_obj_set_style_bg_opa(swatch, LV_OPA_COVER, 0);
 		lv_obj_set_style_border_width(swatch, 0, 0);
 		lv_obj_set_style_radius(swatch, 3, 0);
+		// The default theme hands every plain object its card padding, which
+		// is taller than this 12 px box, so LVGL counted each swatch as
+		// scrollable and drew its tiny grey scrollbar pill inside the colour
+		// chip -- the cool specks that showed up over the amber strip.
+		lv_obj_set_scrollable(swatch, false);
 		theme_palette_swatches[i] = swatch;
 	}
 
