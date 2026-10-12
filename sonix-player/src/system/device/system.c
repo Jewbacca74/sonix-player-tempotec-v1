@@ -575,7 +575,20 @@ static int mount_ntfs_rw(const char *device, const char *mount_point) {
 			// big_writes and the default uid/gid: the player is the only user of
 			// this card, and the helper otherwise leaves everything owned by
 			// whoever mounted it.
-			execl(helpers[i], helpers[i], device, mount_point, "-o", "big_writes,noatime", (char *)NULL);
+			//
+			// `force` and `remove_hiberfile` make the mount happen whatever a
+			// Windows machine left behind. Pulling the player out of a PC without
+			// ejecting first sets the NTFS volume-dirty flag, and Windows fast
+			// startup leaves the volume hibernated; in both states ntfs-3g refuses
+			// to mount read-write on its own -- it falls back to read-only, or
+			// refuses outright -- so a card that was just a card reader comes back
+			// browsable with no library, or not at all, until the next reboot.
+			// `force` mounts it read-write anyway and replays the journal, the
+			// recovery Windows itself would run; `remove_hiberfile` does the same
+			// for a hibernated volume and is a no-op when there is no hibernation
+			// file (there normally is not one on removable media).
+			execl(helpers[i], helpers[i], device, mount_point, "-o", "force,remove_hiberfile,big_writes,noatime",
+				  (char *)NULL);
 			_exit(127);
 		}
 
