@@ -261,7 +261,16 @@ static void fit_row_label(lv_obj_t *label, int32_t width) {
 
 // Space left between the row name and whatever sits to its right.
 #define ROW_LABEL_GAP 12
-#define SETTINGSROW_MAX_LEADING_ICONS 24
+// The most leading icons alive at once. Twenty-five of them are built to
+// stay: eight on the Settings page (Developer options is the last of them),
+// seven on Subsonic's home and server pages, and five apiece on the Tokyo
+// Night Streaming and More lists, which the V1 builds alongside the grids.
+// On top of those, a Subsonic browse page lists up to two hundred rows and
+// puts an icon on every one, so anything short of 225 leaves part of that
+// page plain -- at 24 it was the Developer options row, the twenty-fifth
+// built, that came up without its terminal. A slot is a dozen bytes on the
+// device, so the headroom costs little.
+#define SETTINGSROW_MAX_LEADING_ICONS 256
 
 typedef struct {
 	lv_obj_t *row;
@@ -903,7 +912,16 @@ static void settingsrow_icon_row_deleted_cb(lv_event_t *e) {
 }
 
 void settingsrow_add_icon(lv_obj_t *row, const lv_image_dsc_t *source, theme_semantic_t tone) {
-	if (!row || !source || leading_icon_count >= SETTINGSROW_MAX_LEADING_ICONS) {
+	if (!row || !source) {
+		return;
+	}
+	if (leading_icon_count >= SETTINGSROW_MAX_LEADING_ICONS) {
+		// An icon turned away here is a miscounted cap above, not something
+		// to shrug off: it cost the Developer options row its terminal with
+		// no word said anywhere. Name the row that came up plain.
+		lv_obj_t *name = settingsrow_name_label(row);
+		fprintf(stderr, "settingsrow: no leading-icon slot left for %s\n",
+			name && lv_obj_check_type(name, &lv_label_class) ? lv_label_get_text(name) : "(unnamed row)");
 		return;
 	}
 
