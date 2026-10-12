@@ -470,6 +470,25 @@ lv_color_t theme_player_chrome_color(theme_player_chrome_t role) {
 		}
 	}
 
+	// Tokyo Night's Now Playing deck is drawn from three of its own hues:
+	// the track name, the format line and the playback glyph wear the violet,
+	// while the idle shuffle and the overflow button take the comment grey --
+	// quiet controls, the way the palette uses #565f89 elsewhere. The artist
+	// name and the skip glyphs ask for the cyan semantic role themselves.
+	if (selected_kind == THEME_KIND_TOKYO_NIGHT) {
+		switch (role) {
+		case THEME_PLAYER_CHROME_PRIMARY:
+		case THEME_PLAYER_CHROME_SECONDARY:
+		case THEME_PLAYER_CHROME_PLAYBACK:
+			return lv_color_make(187, 154, 247); // #bb9af7
+		case THEME_PLAYER_CHROME_SHUFFLE_IDLE:
+		case THEME_PLAYER_CHROME_OVERFLOW:
+			return lv_color_make(86, 95, 137); // #565f89
+		default:
+			break;
+		}
+	}
+
 	switch (role) {
 	case THEME_PLAYER_CHROME_PRIMARY:
 	case THEME_PLAYER_CHROME_CHEVRON:
