@@ -35,9 +35,6 @@
 #include "src/gui/gearboy/gearboypage.h"
 #include "src/gui/gearboy/gearboysettings.h"
 #include "src/gui/flappybird/flappybird.h"
-#include "src/gui/games/dino.h"
-#include "src/gui/games/game2048.h"
-#include "src/gui/games/snake.h"
 #include "src/gui/gearboy/gearboyplay.h"
 #include "src/gui/shell/main_menu.h"
 #include "src/gui/library/medialist.h"
@@ -636,9 +633,6 @@ void gui_init(gui_config_t *cfg) {
 	gearboypage_screen = lv_obj_create(NULL);
 	gearboyplay_screen = lv_obj_create(NULL);
 	flappybird_screen = lv_obj_create(NULL);
-	game2048_screen = lv_obj_create(NULL);
-	snake_screen = lv_obj_create(NULL);
-	dino_screen = lv_obj_create(NULL);
 
 	// Persistent topbar that stays above every screen.
 	topbar_init(cfg);
@@ -681,12 +675,6 @@ void gui_init(gui_config_t *cfg) {
 	gearboysettings_init(cfg); // before the page: its gear opens this
 	gearboypage_init(cfg);
 	flappybird_init(cfg);
-	// The three games in src/gui/games build their pages the same way and for
-	// the same reason as Flappy Bird: an action rather than a screen, because
-	// a run has to be read back from the config before it can be looked at.
-	game2048_init(cfg);
-	snake_init(cfg);
-	dino_init(cfg);
 	// before morepage: the books tile opens the shelf, and the shelf opens the
 	// reader.
 	ebookreader_init(cfg);
