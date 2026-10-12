@@ -38,6 +38,34 @@ static lv_obj_t *mini_player_subtitle;
 static lv_timer_t *mini_player_timer;
 static gui_config_t *menu_cfg;
 
+// lv_btn supplies state-specific focus and shadow styles. Those do not inherit
+// the zero-width default style below, and on the compact footer their bottom
+// edge is visible as the unwanted grey/cyan bar. Keep the footer flat in every
+// state while retaining its normal pressed fill.
+static void mini_player_clear_edge(void) {
+	if (!mini_player) {
+		return;
+	}
+
+	static const lv_state_t states[] = {
+		LV_STATE_DEFAULT,
+		LV_STATE_PRESSED,
+		LV_STATE_FOCUSED,
+		LV_STATE_FOCUSED | LV_STATE_PRESSED,
+		LV_STATE_FOCUS_KEY,
+		LV_STATE_FOCUS_KEY | LV_STATE_PRESSED,
+	};
+	for (size_t i = 0; i < sizeof(states) / sizeof(states[0]); i++) {
+		lv_style_selector_t selector = LV_PART_MAIN | states[i];
+		lv_obj_set_style_border_width(mini_player, 0, selector);
+		lv_obj_set_style_border_opa(mini_player, LV_OPA_TRANSP, selector);
+		lv_obj_set_style_outline_width(mini_player, 0, selector);
+		lv_obj_set_style_outline_opa(mini_player, LV_OPA_TRANSP, selector);
+		lv_obj_set_style_shadow_width(mini_player, 0, selector);
+		lv_obj_set_style_shadow_opa(mini_player, LV_OPA_TRANSP, selector);
+	}
+}
+
 static const lv_image_dsc_t *const NORMAL_MENU_ICONS[6] = {
 	&icon_menu_music,
 	&icon_menu_streaming,
@@ -256,8 +284,7 @@ static void main_menu_refresh_theme(void) {
 		lv_color_t strip_fill = theme_now_playing_fill();
 		lv_obj_set_style_bg_color(mini_player, strip_fill, 0);
 		lv_obj_set_style_bg_opa(mini_player, LV_OPA_COVER, 0);
-		lv_obj_set_style_border_width(mini_player, 0, 0);
-		lv_obj_set_style_outline_width(mini_player, 0, 0);
+		mini_player_clear_edge();
 		main_menu_layout_tokyo_home(true);
 	} else {
 		lv_obj_set_hidden(home_header, true);
@@ -336,7 +363,7 @@ void main_menu_init(gui_config_t *cfg) {
 	lv_obj_add_style(mini_player, &theme_style_card, 0);
 	lv_obj_add_style(mini_player, &theme_style_card_pressed, LV_STATE_PRESSED);
 	lv_obj_set_style_radius(mini_player, 8, 0);
-	lv_obj_set_style_border_width(mini_player, 0, 0);
+	mini_player_clear_edge();
 	lv_obj_set_style_pad_left(mini_player, 6, 0);
 	lv_obj_set_style_pad_right(mini_player, 6, 0);
 	lv_obj_set_style_pad_top(mini_player, 2, 0);
