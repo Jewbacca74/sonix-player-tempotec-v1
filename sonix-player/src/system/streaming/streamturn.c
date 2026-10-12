@@ -26,7 +26,7 @@ void streamturn_release(void) {
 	pthread_mutex_unlock(&lock);
 }
 
-// Three registrants -- Qobuz, Tidal, podcasts -- plus margin.
+// Four registrants: Qobuz, Tidal, podcasts and the Subsonic RAM bridge.
 //
 // The table has its own lock: registration comes from the main thread at
 // startup, from the card supervisor thread (inserting a card redoes set_root)

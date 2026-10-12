@@ -205,6 +205,11 @@ bool playlist_current_path(char *out, size_t out_size);
 // when playback should stop.
 bool playlist_advance_auto(char *out, size_t out_size);
 
+// Nonmutating look-ahead in PLAYING order, for a single next-track pre-cache.
+// Returns false at normal EOF, or where shuffle-repeat will need a fresh deal
+// (that next item is not knowable until the round is dealt). GUI thread only.
+bool playlist_peek_auto(char *out, size_t out_size);
+
 // User-initiated next/prev, walking the playback order. Copy the new track's
 // path into `out`; return false only when the queue is empty.
 bool playlist_next(char *out, size_t out_size);

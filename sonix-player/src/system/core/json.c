@@ -1,5 +1,6 @@
 #include "json.h"
 
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,13 +15,20 @@ typedef struct {
 	json_doc_t *doc;
 	int capacity;
 	int depth;
+	int max_tokens;
 } parser_t;
 
 static int tok_new(parser_t *p, json_type_t type, int start, int parent) {
+	if (p->doc->count >= p->max_tokens) {
+		return -1;
+	}
 	if (p->doc->count == p->capacity) {
 		// Doubling, starting at 64: a Qobuz response runs to a few thousand
 		// tokens, and starting at one would mean a dozen reallocs per request.
-		int wanted = p->capacity ? p->capacity * 2 : 64;
+		int wanted = p->capacity > p->max_tokens / 2 ? p->max_tokens : p->capacity ? p->capacity * 2 : 64;
+		if (wanted > p->max_tokens) {
+			wanted = p->max_tokens;
+		}
 		json_tok_t *grown = realloc(p->doc->toks, (size_t)wanted * sizeof(*grown));
 		if (!grown) {
 			return -1;
@@ -219,15 +227,13 @@ static bool parse_value(parser_t *p, int parent) {
 	return false;
 }
 
-bool json_parse(const char *text, json_doc_t *doc) {
-	if (!text || !doc) {
-		return false;
-	}
-
+bool json_parse_limited(const char *text, json_doc_t *doc, int max_tokens) {
+	if (!doc) return false;
 	memset(doc, 0, sizeof(*doc));
+	if (!text || max_tokens <= 0) return false;
 	doc->text = text;
 
-	parser_t p = {.text = text, .pos = 0, .doc = doc, .capacity = 0, .depth = 0};
+	parser_t p = {.text = text, .pos = 0, .doc = doc, .capacity = 0, .depth = 0, .max_tokens = max_tokens};
 	if (!parse_value(&p, -1)) {
 		json_free(doc);
 		return false;
@@ -243,6 +249,10 @@ bool json_parse(const char *text, json_doc_t *doc) {
 	}
 
 	return doc->count > 0;
+}
+
+bool json_parse(const char *text, json_doc_t *doc) {
+	return json_parse_limited(text, doc, INT_MAX);
 }
 
 void json_free(json_doc_t *doc) {
@@ -430,7 +440,7 @@ static int hex4(const char *s) {
 	return value;
 }
 
-bool json_str(const json_doc_t *doc, int tok, char *out, size_t size) {
+static bool json_string(const json_doc_t *doc, int tok, char *out, size_t size, bool exact) {
 	if (!out || size == 0) {
 		return false;
 	}
@@ -443,12 +453,17 @@ bool json_str(const json_doc_t *doc, int tok, char *out, size_t size) {
 	int len = doc->toks[tok].end - doc->toks[tok].start;
 	size_t w = 0;
 
-	for (int i = 0; i < len && w + 1 < size; i++) {
+	for (int i = 0; i < len; i++) {
+		if (w + 1 >= size) {
+			if (exact) goto invalid;
+			break;
+		}
 		if (src[i] != '\\') {
 			out[w++] = src[i];
 			continue;
 		}
 		if (i + 1 >= len) {
+			if (exact) goto invalid;
 			break;
 		}
 		char esc = src[++i];
@@ -479,11 +494,13 @@ bool json_str(const json_doc_t *doc, int tok, char *out, size_t size) {
 			break;
 		case 'u': {
 			if (i + 4 >= len) {
+				if (exact) goto invalid;
 				i = len;
 				break;
 			}
 			int cp = hex4(src + i + 1);
 			if (cp < 0) {
+				if (exact) goto invalid;
 				i = len;
 				break;
 			}
@@ -498,10 +515,16 @@ bool json_str(const json_doc_t *doc, int tok, char *out, size_t size) {
 					i += 6;
 				}
 			}
-			w += utf8_put(out + w, size - 1 - w, (unsigned int)cp);
+			// An identity/credential must not be shortened at a NUL, cut at a
+			// multi-byte character, or accept an unpaired surrogate.
+			if (exact && (cp == 0 || (cp >= 0xD800 && cp <= 0xDFFF))) goto invalid;
+			size_t bytes = utf8_put(out + w, size - 1 - w, (unsigned int)cp);
+			if (exact && !bytes) goto invalid;
+			w += bytes;
 			break;
 		}
 		default:
+			if (exact) goto invalid;
 			out[w++] = esc; // unknown escape: keep the character as it is
 			break;
 		}
@@ -509,6 +532,17 @@ bool json_str(const json_doc_t *doc, int tok, char *out, size_t size) {
 
 	out[w] = '\0';
 	return true;
+invalid:
+	out[0] = '\0';
+	return false;
+}
+
+bool json_str(const json_doc_t *doc, int tok, char *out, size_t size) {
+	return json_string(doc, tok, out, size, false);
+}
+
+bool json_str_exact(const json_doc_t *doc, int tok, char *out, size_t size) {
+	return json_string(doc, tok, out, size, true);
 }
 
 long json_long(const json_doc_t *doc, int tok, long fallback) {

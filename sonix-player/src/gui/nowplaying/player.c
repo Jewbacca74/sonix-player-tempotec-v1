@@ -44,6 +44,7 @@
 #include "src/system/streaming/podcastcache.h"
 #include "src/system/streaming/podcastsubs.h"
 #include "src/system/streaming/qobuzcache.h"
+#include "src/system/streaming/subsonicstream.h"
 #include "src/system/streaming/qobuzsync.h"
 #include "src/system/streaming/tidalcache.h"
 #include "src/system/streaming/tidalsync.h"
@@ -1193,7 +1194,7 @@ static bool playing_local_file(const device_state_t *state) {
 		return false;
 	}
 	const char *f = state->current_file;
-	return !qobuzcache_owns(f) && !tidalcache_owns(f) && !podcastcache_is_episode(f) && !dlna_owns_path(f) &&
+	return !subsonicstream_owns(f) && !qobuzcache_owns(f) && !tidalcache_owns(f) && !podcastcache_is_episode(f) && !dlna_owns_path(f) &&
 		   !dlna_owns_playback();
 }
 
@@ -3790,6 +3791,7 @@ static void update_progress(void) {
 
 	device_state_t state;
 	device_state_get(&state);
+	lv_obj_set_clickable(progress_slider, !subsonicstream_owns(state.current_file));
 
 	// The live source moves under the player: the station's own name comes
 	// with the connection, the on-air title arrives later and keeps changing,
