@@ -292,6 +292,18 @@ static void row_show_glyph(row_t *row, bool is_dir) {
 	// browser row can show besides a folder is playable anyway.
 	lv_image_set_src(row->icon, is_dir ? &icon_folder : &icon_music2);
 	lv_obj_add_style(row->icon, &theme_style_icon, 0);
+	// A folder wears the status bar's battery colour -- the signal orange on
+	// Amber on Black -- so it reads as the thing that can be entered. The note
+	// keeps the shared icon colour. Rows are recycled between folders and
+	// files, so the local recolour is dropped again for everything else.
+	if (is_dir) {
+		lv_obj_set_style_image_recolor(row->icon,
+									   theme_uses_function_glyphs() ? theme_semantic_color(THEME_SEMANTIC_GREEN)
+																   : theme()->text_primary,
+									   0);
+	} else {
+		lv_obj_remove_local_style_prop(row->icon, LV_STYLE_IMAGE_RECOLOR, 0);
+	}
 	lv_obj_set_style_image_recolor_opa(row->icon, LV_OPA_COVER, 0);
 }
 
@@ -1499,7 +1511,9 @@ static void build_rows(int width) {
 		row->label = lv_label_create(row->button);
 		lv_label_set_long_mode(row->label, LV_LABEL_LONG_DOT);
 		lv_obj_set_flex_grow(row->label, 1);
-		lv_obj_add_style(row->label, &theme_style_text, 0);
+		// The names read in the quiet colour -- the same one the home screen
+		// uses for its tagline -- rather than the title white.
+		lv_obj_add_style(row->label, &theme_style_text_dim, 0);
 		lv_obj_set_style_text_font(row->label, bp_tile_label_font(), 0);
 		// Two lines at most: the cap on the height is what makes LV_LABEL_LONG_DOT
 		// cut the name there, with the ellipsis, instead of wrapping on past the
