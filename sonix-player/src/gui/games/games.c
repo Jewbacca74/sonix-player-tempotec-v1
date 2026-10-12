@@ -351,6 +351,15 @@ void game_frame_set_period(game_frame_t *g, int period_ms) {
 	}
 	lv_timer_set_period(g->timer, (uint32_t)period_ms);
 	lv_timer_resume(g->timer);
+	// Arming the clock starts it from here. A timer stopped while the card was
+	// up, or while the panel was dark, or while the game held itself, has not
+	// been running for any of that time, and the tick after a resume would
+	// otherwise report the whole of it -- long enough to be read as a panel that
+	// went out mid-run, which is the one gap the check in tick_cb holds a run
+	// for. So a run started off a card that was read for a moment would freeze
+	// before it moved a pixel: the gap that counts is one that happens with the
+	// clock running, and every resume says where its own clock began.
+	g->last_us = now_us();
 }
 
 void game_frame_freeze(game_frame_t *g, bool frozen) {

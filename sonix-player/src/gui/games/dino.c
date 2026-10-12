@@ -194,6 +194,13 @@ static int dino_bottom(void) { return ground_y - (int)(y_fp >> FP_BITS) * UNIT; 
 static lv_obj_t *make_prop(void) {
 	lv_obj_t *obj = lv_obj_create(frame.field);
 	lv_obj_remove_style_all(obj);
+	// Taking every style off a thing takes its background opacity with it, and a
+	// rectangle with a colour and no opacity in LVGL is a rectangle that is not
+	// drawn at all. Everything made here is a flat block of one colour, so the
+	// cover belongs with it; the props that are meant to be see-through say
+	// their own on the way past, which is how the ground is a line of ink at
+	// three fifths and a cloud is one at a fifth.
+	lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, 0);
 	lv_obj_set_scrollable(obj, false);
 	lv_obj_set_clickable(obj, false); // every press belongs to the field, so that
 	// a tap or a swipe can start anywhere over the
@@ -641,6 +648,9 @@ void dino_init(gui_config_t *cfg) {
 	lv_obj_set_style_radius(moon, LV_RADIUS_CIRCLE, 0);
 	lv_obj_set_style_radius(moon_bite, LV_RADIUS_CIRCLE, 0);
 	lv_obj_set_style_bg_opa(moon, LV_OPA_70, 0);
+	lv_obj_set_style_bg_opa(moon_bite, LV_OPA_COVER, 0); // the bite has to be a
+	// piece of the sky laid over the moon, and half a bite is a moon with a
+	// faint mouth rather than a crescent
 	lv_obj_set_hidden(moon, true);
 	lv_obj_set_hidden(moon_bite, true);
 

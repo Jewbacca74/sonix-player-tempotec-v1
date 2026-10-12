@@ -798,6 +798,9 @@ void game2048_init(gui_config_t *cfg) {
 
 	board = lv_obj_create(frame.field);
 	lv_obj_remove_style_all(board);
+	lv_obj_set_style_bg_opa(board, LV_OPA_COVER, 0); // recolour() gives it a
+	// colour, and a colour without an opacity is nothing to draw
+	lv_obj_set_scrollable(board, false);
 	lv_obj_set_scrollable(board, false);
 	lv_obj_set_clickable(board, false);
 	lv_obj_set_overflow_visible(board, true);
