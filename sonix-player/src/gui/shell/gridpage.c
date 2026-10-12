@@ -266,7 +266,7 @@ static void gridpage_apply_theme_page(gridpage_theme_page_t *page) {
 		return;
 	}
 
-	bool tokyo = theme_is_tokyo_night();
+	bool tokyo = theme_uses_function_glyphs();
 	bool horizontal = tokyo && compact_grid();
 	for (int i = 0; i < page->count; i++) {
 		const lv_image_dsc_t *icon = page->normal_icons[i];

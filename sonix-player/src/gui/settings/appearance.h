@@ -5,8 +5,8 @@
 
 #include "lvgl/lvgl.h"
 
-// The Appearance page: theme (Dark, Light or Tokyo Night) as immediate
-// Adwaita-style segmented buttons rather than a row that silently flips, plus
+// The Appearance page: theme (Dark, Light, Tokyo Night or Amber on Black) as
+// immediate Adwaita-style segmented buttons rather than a row that silently flips, plus
 // the boot screen the next power-on opens with, the accent colour, the clock
 // position, the battery percentage, the text size and the face the whole
 // interface is drawn with -- MiSans, the others the image carries, and the

@@ -1000,7 +1000,7 @@ static void set_over_cover(bool on) {
 		if (on) {
 			lv_obj_set_style_image_recolor(icon_objs[i], lv_color_white(), 0);
 			lv_obj_set_style_image_recolor_opa(icon_objs[i], LV_OPA_COVER, 0);
-		} else if (theme_is_tokyo_night()) {
+		} else if (theme_uses_function_glyphs()) {
 			lv_obj_set_style_image_recolor(icon_objs[i], theme_semantic_color(THEME_SEMANTIC_CYAN), 0);
 			lv_obj_set_style_image_recolor_opa(icon_objs[i], LV_OPA_COVER, 0);
 		} else {
@@ -3428,12 +3428,14 @@ static void update_fav_button(void) {
 	// overwritten.
 	//
 	// An empty star is drawn in the disc's own ink so that it reads on it; a
-	// filled one keeps the yellow, which is the same on every page of the
-	// player and is what says "favourite" rather than "here is the album's
-	// colour again".
+	// filled one keeps the yellow on existing themes; Amber on Black uses its
+	// signal amber so the palette stays monochrome. It says "favourite" rather
+	// than "here is the album's colour again".
 	if (starred) {
 		lv_image_set_src(fav_btn_icon, &icon_star_filled);
-		lv_obj_set_style_image_recolor(fav_btn_icon, lv_color_make(246, 211, 45), 0); // Adwaita yellow
+		lv_obj_set_style_image_recolor(fav_btn_icon,
+									   theme_is_amber_on_black() ? theme()->accent : lv_color_make(246, 211, 45),
+								   0); // Adwaita yellow outside Amber on Black
 	} else {
 		lv_image_set_src(fav_btn_icon, &icon_star);
 		lv_obj_set_style_image_recolor(fav_btn_icon, layout_alt_now ? alt_ink() : lv_color_make(150, 150, 150), 0);

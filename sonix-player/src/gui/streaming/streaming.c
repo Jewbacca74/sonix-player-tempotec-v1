@@ -47,7 +47,7 @@ static void streaming_list_build(gui_config_t *cfg) {
 }
 
 static void streaming_refresh_theme(void) {
-	bool tokyo_v1 = bp_is_tempotec_v1() && theme_is_tokyo_night();
+	bool tokyo_v1 = bp_is_tempotec_v1() && theme_uses_function_glyphs();
 	if (streaming_grid) {
 		lv_obj_set_hidden(streaming_grid, tokyo_v1);
 	}

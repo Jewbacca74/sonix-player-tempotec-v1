@@ -1305,7 +1305,7 @@ static void tokyo_continue_panel_build(gui_config_t *cfg) {
 }
 
 static void section_refresh_theme(void) {
-	bool tokyo = bp_is_tempotec_v1() && theme_is_tokyo_night();
+	bool tokyo = bp_is_tempotec_v1() && theme_uses_function_glyphs();
 	if (tokyo && tokyo_books_panel) {
 		lv_obj_set_hidden(section_grid, true);
 		lv_obj_set_hidden(section_empty, true);

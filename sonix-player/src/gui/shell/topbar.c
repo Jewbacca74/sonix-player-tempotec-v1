@@ -174,7 +174,7 @@ static void update_battery_indicator(int percent, bool charging) {
 	lv_label_set_text_fmt(bat_label, "%d%%", percent);
 
 	lv_obj_set_style_image_recolor(bat_shell,
-								   theme_is_tokyo_night() ? theme_semantic_color(THEME_SEMANTIC_GREEN) : theme()->text_primary, 0);
+								   theme_uses_function_glyphs() ? theme_semantic_color(THEME_SEMANTIC_GREEN) : theme()->text_primary, 0);
 
 	if (charging) {
 		lv_obj_set_hidden(bat_fill, true);
@@ -191,7 +191,7 @@ static void update_battery_indicator(int percent, bool charging) {
 	lv_obj_set_size(bat_fill, width, cavity_h);
 
 	lv_color_t color;
-	if (theme_is_tokyo_night()) {
+	if (theme_uses_function_glyphs()) {
 		color = (percent <= BATTERY_LOW_PERCENT) ? theme_semantic_color(THEME_SEMANTIC_RED)
 														  : theme_semantic_color(THEME_SEMANTIC_GREEN);
 	} else {
@@ -321,7 +321,7 @@ static void refresh_headphone_icon(bool force) {
 	// whatever is plugged into them.
 	if (usb) {
 		lv_image_set_src(hp_icon, &icon_usbaudioout);
-		if (theme_is_tokyo_night()) {
+		if (theme_uses_function_glyphs()) {
 			lv_obj_set_style_image_recolor(hp_icon, theme_semantic_color(THEME_SEMANTIC_CYAN), 0);
 			lv_obj_set_style_image_recolor_opa(hp_icon, LV_OPA_COVER, 0);
 		} else {
@@ -340,10 +340,12 @@ static void refresh_headphone_icon(bool force) {
 
 	lv_obj_set_hidden(hp_icon, false);
 	if (state == JACK_BALANCED) {
-		// Gold marks the balanced output.
-		lv_obj_set_style_image_recolor(hp_icon, lv_color_make(212, 175, 55), 0);
+		// Gold marks the balanced output; in Amber on Black it uses the palette's
+		// signal amber rather than introducing a second gold.
+		lv_obj_set_style_image_recolor(hp_icon,
+									   theme_is_amber_on_black() ? theme()->accent : lv_color_make(212, 175, 55), 0);
 		lv_obj_set_style_image_recolor_opa(hp_icon, LV_OPA_COVER, 0);
-	} else if (theme_is_tokyo_night()) {
+	} else if (theme_uses_function_glyphs()) {
 		// Cyan marks the listening/output glyph in Tokyo Night.
 		lv_obj_set_style_image_recolor(hp_icon, theme_semantic_color(THEME_SEMANTIC_CYAN), 0);
 		lv_obj_set_style_image_recolor_opa(hp_icon, LV_OPA_COVER, 0);
@@ -455,7 +457,7 @@ void topbar_refresh_radios(void) {
 	}
 
 	if (wifi_icon) {
-		if (theme_is_tokyo_night()) {
+		if (theme_uses_function_glyphs()) {
 			lv_obj_set_style_image_recolor(wifi_icon, theme_semantic_color(THEME_SEMANTIC_CYAN), 0);
 			lv_obj_set_style_image_recolor_opa(wifi_icon, LV_OPA_COVER, 0);
 		} else {
@@ -482,10 +484,12 @@ void topbar_refresh_radios(void) {
 			char codec[BT_CODEC_MAX];
 			lv_color_t color;
 			bt_current_codec(codec, sizeof(codec));
-			if (codec[0] && bt_codec_color(codec, &color)) {
+			// Amber on Black stays monochrome even when codec metadata is known;
+			// Tokyo Night keeps its codec-family colors.
+			if (codec[0] && !theme_is_amber_on_black() && bt_codec_color(codec, &color)) {
 				lv_obj_set_style_image_recolor(bt_icon, color, 0);
 				lv_obj_set_style_image_recolor_opa(bt_icon, LV_OPA_COVER, 0);
-			} else if (theme_is_tokyo_night()) {
+			} else if (theme_uses_function_glyphs()) {
 				lv_obj_set_style_image_recolor(bt_icon, theme_semantic_color(THEME_SEMANTIC_BLUE), 0);
 				lv_obj_set_style_image_recolor_opa(bt_icon, LV_OPA_COVER, 0);
 			} else {
@@ -602,7 +606,7 @@ static void refresh_play_icon(const device_state_t *state) {
 	// means wireless, not active.
 	if (state->status == AUDIO_STATUS_PLAYING && bluetooth_audio_active()) {
 		lv_obj_set_style_image_recolor(play_icon,
-									   theme_is_tokyo_night() ? theme_semantic_color(THEME_SEMANTIC_BLUE)
+									   theme_uses_function_glyphs() ? theme_semantic_color(THEME_SEMANTIC_BLUE)
 														 : lv_color_make(0, 122, 255),
 									   0);
 	} else {
@@ -1034,7 +1038,10 @@ void topbar_init(gui_config_t *cfg) {
 	bat_fill = lv_obj_create(bat_widget);
 	lv_obj_set_pos(bat_fill, cavity_x, cavity_y);
 	lv_obj_set_size(bat_fill, cavity_w, cavity_h);
-	lv_obj_set_style_bg_color(bat_fill, lv_color_make(60, 190, 90), 0);
+	lv_obj_set_style_bg_color(bat_fill,
+								   theme_uses_function_glyphs() ? theme_semantic_color(THEME_SEMANTIC_GREEN)
+														 : lv_color_make(60, 190, 90),
+								   0);
 	lv_obj_set_style_bg_opa(bat_fill, LV_OPA_COVER, 0);
 	lv_obj_set_style_border_width(bat_fill, 0, 0);
 	lv_obj_set_style_radius(bat_fill, 1, 0);
@@ -1054,7 +1061,8 @@ void topbar_init(gui_config_t *cfg) {
 
 	bat_bolt = lv_image_create(bat_widget);
 	lv_image_set_src(bat_bolt, &icon_battery_charging_bolt);
-	lv_obj_set_style_image_recolor(bat_bolt, lv_color_make(245, 205, 60), 0);
+	lv_obj_set_style_image_recolor(bat_bolt,
+								   theme_is_amber_on_black() ? theme()->accent : lv_color_make(245, 205, 60), 0);
 	lv_obj_set_style_image_recolor_opa(bat_bolt, LV_OPA_COVER, 0);
 	if (topbar_compact) {
 		lv_image_set_scale(bat_bolt, (uint32_t)(LV_SCALE_NONE * battery_icon_size / BATTERY_ICON_SIZE));

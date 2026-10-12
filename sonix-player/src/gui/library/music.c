@@ -598,7 +598,7 @@ static void music_recent_refresh(void) {
 }
 
 static void music_update_visibility(void) {
-	bool tokyo_v1 = bp_is_tempotec_v1() && theme_is_tokyo_night();
+	bool tokyo_v1 = bp_is_tempotec_v1() && theme_uses_function_glyphs();
 	bool empty_library = !library_scan_running() && library_track_count() == 0;
 	if (tokyo_v1 && tokyo_music_panel) {
 		lv_obj_set_hidden(tile_grid, true);

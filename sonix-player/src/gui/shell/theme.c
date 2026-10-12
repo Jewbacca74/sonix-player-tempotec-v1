@@ -52,7 +52,7 @@ static theme_palette_t palette_light = {
 };
 
 // Tokyo Night, matching the approved V1 mockup. There are no extra font or
-// bitmap packs: the six main-menu glyphs reuse the existing generated icons.
+// bitmap packs: the menu glyphs reuse the existing generated icons.
 static theme_palette_t palette_tokyo = {
 	.screen_bg = LV_COLOR_MAKE(26, 27, 38),       // #1a1b26
 	.surface = LV_COLOR_MAKE(36, 40, 59),         // #24283b
@@ -65,8 +65,23 @@ static theme_palette_t palette_tokyo = {
 	.dark = true,
 };
 
+// Amber on Black follows the same V1 screen layouts as Tokyo Night, but keeps
+// every interface role in one warm amber family. The colors are the mockup's
+// native-screen values, not a run-time screenshot filter.
+static theme_palette_t palette_amber = {
+	.screen_bg = LV_COLOR_MAKE(10, 9, 7),          // #0a0907
+	.surface = LV_COLOR_MAKE(25, 19, 10),          // #19130a
+	.surface_pressed = LV_COLOR_MAKE(37, 25, 7),   // #251907
+	.panel = LV_COLOR_MAKE(5, 5, 5),               // #050505
+	.cover_bg = LV_COLOR_MAKE(5, 5, 5),
+	.text_primary = LV_COLOR_MAKE(244, 188, 93),   // #f4bc5d
+	.text_secondary = LV_COLOR_MAKE(198, 131, 42), // #c6832a
+	.accent = LV_COLOR_MAKE(255, 173, 46),         // #ffad2e
+	.dark = true,
+};
+
 // The selected preset is kept apart from `active` because dynamic tint points
-// `active` at a derived copy rather than at any of the three presets.
+// `active` at a derived copy rather than at any of the four presets.
 static theme_kind_t selected_kind = THEME_KIND_DARK;
 
 static theme_palette_t *selected_palette(void) {
@@ -75,6 +90,8 @@ static theme_palette_t *selected_palette(void) {
 		return &palette_light;
 	case THEME_KIND_TOKYO_NIGHT:
 		return &palette_tokyo;
+	case THEME_KIND_AMBER_ON_BLACK:
+		return &palette_amber;
 	case THEME_KIND_DARK:
 	default:
 		return &palette_dark;
@@ -113,6 +130,19 @@ static const lv_color_t ACCENT_COLORS[THEME_ACCENT_COUNT] = {
 };
 static int accent_index;
 
+static lv_color_t default_accent(theme_kind_t kind) {
+	switch (kind) {
+	case THEME_KIND_TOKYO_NIGHT:
+		return lv_color_make(122, 162, 247); // Tokyo Night blue
+	case THEME_KIND_AMBER_ON_BLACK:
+		return lv_color_make(255, 173, 46); // Amber on Black signal
+	case THEME_KIND_DARK:
+	case THEME_KIND_LIGHT:
+	default:
+		return ACCENT_COLORS[0];
+	}
+}
+
 // Where the six presets of the old palette sit in this one: a config written
 // by an older firmware names an old slot, so the first boot on this build
 // moves the choice to the matching new slot and leaves the marker that the
@@ -123,12 +153,9 @@ lv_color_t theme_accent_preset(int index) {
 	if (index < 0 || index >= THEME_ACCENT_COUNT) {
 		index = 0;
 	}
-	// Tokyo Night's default is its native blue. An explicitly saved non-default
-	// accent still carries across themes just as it did between Dark and Light.
-	if (selected_kind == THEME_KIND_TOKYO_NIGHT && index == 0) {
-		return lv_color_make(122, 162, 247);
-	}
-	return ACCENT_COLORS[index];
+	// The two added palettes have their own defaults. An explicitly saved
+	// non-default accent still carries across themes like Dark and Light.
+	return index == 0 ? default_accent(selected_kind) : ACCENT_COLORS[index];
 }
 
 int theme_get_accent(void) { return accent_index; }
@@ -294,13 +321,15 @@ void theme_init(void) {
 	lv_style_set_bg_opa(&theme_style_slider_track, LV_OPA_40);
 	lv_style_set_radius(&theme_style_slider_track, LV_RADIUS_CIRCLE);
 
-	// Read the new three-way choice when present; configs from older builds
-	// have only `dark_theme`, so they keep their original Dark/Light setting.
+	// Read the named theme choice when present; configs from older builds have
+	// only `dark_theme`, so they keep their original Dark/Light setting.
 	const char *saved_theme = config_get("ui", "theme", NULL);
 	if (saved_theme && strcmp(saved_theme, "light") == 0) {
 		selected_kind = THEME_KIND_LIGHT;
 	} else if (saved_theme && strcmp(saved_theme, "tokyo-night") == 0) {
 		selected_kind = THEME_KIND_TOKYO_NIGHT;
+	} else if (saved_theme && strcmp(saved_theme, "amber-on-black") == 0) {
+		selected_kind = THEME_KIND_AMBER_ON_BLACK;
 	} else if (saved_theme && strcmp(saved_theme, "dark") == 0) {
 		selected_kind = THEME_KIND_DARK;
 	} else {
@@ -308,11 +337,12 @@ void theme_init(void) {
 	}
 
 	// The marker the boot script reads has to agree with the setting too, not
-	// only with the theme. Tokyo Night is a dark appearance for that legacy
-	// light/dark boot-logo switch.
+	// only with the theme. Both added palettes use the dark variant of that
+	// legacy light/dark boot-logo switch.
 	bootlogo_set(theme_boot_screen(), selected_palette()->dark);
 
-	// The accent as it was left; both palettes carry the same one.
+	// The accent slot is shared across themes; slot zero resolves to each new
+	// palette's native accent while the other slots retain their shared colors.
 	accent_index = (int)config_get_int("ui", "accent", 0);
 	if (accent_index < 0 || accent_index >= THEME_ACCENT_COUNT) {
 		accent_index = 0;
@@ -330,7 +360,8 @@ void theme_init(void) {
 	}
 	palette_dark.accent = ACCENT_COLORS[accent_index];
 	palette_light.accent = ACCENT_COLORS[accent_index];
-	palette_tokyo.accent = (accent_index == 0) ? lv_color_make(122, 162, 247) : ACCENT_COLORS[accent_index];
+	palette_tokyo.accent = accent_index == 0 ? default_accent(THEME_KIND_TOKYO_NIGHT) : ACCENT_COLORS[accent_index];
+	palette_amber.accent = accent_index == 0 ? default_accent(THEME_KIND_AMBER_ON_BLACK) : ACCENT_COLORS[accent_index];
 
 	dynamic_tint = config_get_bool("ui", "dynamic_tint", false);
 
@@ -378,12 +409,20 @@ bool theme_is_dark(void) { return active->dark; }
 
 bool theme_is_tokyo_night(void) { return selected_kind == THEME_KIND_TOKYO_NIGHT; }
 
+bool theme_is_amber_on_black(void) { return selected_kind == THEME_KIND_AMBER_ON_BLACK; }
+
+bool theme_uses_function_glyphs(void) {
+	return selected_kind == THEME_KIND_TOKYO_NIGHT || selected_kind == THEME_KIND_AMBER_ON_BLACK;
+}
+
 theme_kind_t theme_get_kind(void) { return selected_kind; }
 
 lv_color_t theme_semantic_color(theme_semantic_t role) {
 	if (role == THEME_SEMANTIC_MUTED) {
 		return active->text_secondary;
 	}
+	// Amber on Black is intentionally monochrome: blue, cyan, purple, green,
+	// amber and red roles all resolve to its chosen amber accent.
 	if (selected_kind != THEME_KIND_TOKYO_NIGHT) {
 		return active->accent;
 	}
@@ -504,6 +543,8 @@ static const char *theme_config_value(theme_kind_t kind) {
 		return "light";
 	case THEME_KIND_TOKYO_NIGHT:
 		return "tokyo-night";
+	case THEME_KIND_AMBER_ON_BLACK:
+		return "amber-on-black";
 	case THEME_KIND_DARK:
 	default:
 		return "dark";
@@ -511,12 +552,13 @@ static const char *theme_config_value(theme_kind_t kind) {
 }
 
 void theme_set_kind(theme_kind_t kind) {
-	if (kind < THEME_KIND_DARK || kind > THEME_KIND_TOKYO_NIGHT || selected_kind == kind) {
+	if (kind < THEME_KIND_DARK || kind > THEME_KIND_AMBER_ON_BLACK || selected_kind == kind) {
 		return;
 	}
 
 	selected_kind = kind;
-	palette_tokyo.accent = (accent_index == 0) ? lv_color_make(122, 162, 247) : ACCENT_COLORS[accent_index];
+	palette_tokyo.accent = accent_index == 0 ? default_accent(THEME_KIND_TOKYO_NIGHT) : ACCENT_COLORS[accent_index];
+	palette_amber.accent = accent_index == 0 ? default_accent(THEME_KIND_AMBER_ON_BLACK) : ACCENT_COLORS[accent_index];
 	rebuild_active();
 	apply_palette();
 
@@ -526,8 +568,8 @@ void theme_set_kind(theme_kind_t kind) {
 	config_set_bool("ui", "dark_theme", active->dark);
 	config_save();
 
-	// The boot script understands only light and dark; Tokyo Night uses its
-	// dark image and marker.
+	// The boot script understands only light and dark; both added palettes use
+	// the dark image and marker.
 	bootlogo_set(theme_boot_screen(), active->dark);
 	refresh_all();
 }
@@ -541,7 +583,8 @@ void theme_set_accent(int index) {
 	accent_index = index;
 	palette_dark.accent = ACCENT_COLORS[index];
 	palette_light.accent = ACCENT_COLORS[index];
-	palette_tokyo.accent = (index == 0) ? lv_color_make(122, 162, 247) : ACCENT_COLORS[index];
+	palette_tokyo.accent = index == 0 ? default_accent(THEME_KIND_TOKYO_NIGHT) : ACCENT_COLORS[index];
+	palette_amber.accent = index == 0 ? default_accent(THEME_KIND_AMBER_ON_BLACK) : ACCENT_COLORS[index];
 	rebuild_active(); // the tint is drawn from the accent, so it moves with it
 	apply_palette();
 

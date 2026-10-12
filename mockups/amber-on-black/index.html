@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#080807">
+  <title>Amber on Black — Sonix Player V1 theme concept</title>
+  <link rel="stylesheet" href="./style.css">
+  <script defer src="./app.js"></script>
+</head>
+<body>
+  <div class="ambient ambient-one" aria-hidden="true"></div>
+  <div class="ambient ambient-two" aria-hidden="true"></div>
+
+  <header class="site-header">
+    <a class="brand" href="#top" aria-label="Sonix Player theme preview home">
+      <span class="brand-mark" aria-hidden="true">
+        <i></i><i></i><i></i><i></i>
+      </span>
+      <span class="brand-name">SONIX<span>PLAYER</span></span>
+    </a>
+    <div class="header-right">
+      <span class="preview-tag"><span class="live-dot"></span> INTERACTIVE MOCKUP</span>
+      <span class="device-tag">TEMPOTEC V1 <span>·</span> 240 × 320</span>
+    </div>
+  </header>
+
+  <main id="top" class="page-shell">
+    <section class="intro" aria-labelledby="page-title">
+      <div class="eyebrow"><span class="eyebrow-mark">01</span> THEME STUDY <span class="eyebrow-separator">/</span> TEMPOTEC VARIATIONS V1</div>
+      <h1 id="page-title">Amber <span>on black.</span></h1>
+      <p class="intro-copy">A warm signal against a near-black screen. The familiar V1 layout stays put; only the colour mood changes.</p>
+    </section>
+
+    <section class="workspace" aria-label="Interactive theme mockup">
+      <div class="device-column">
+        <div class="device-stage">
+          <div class="device-body" aria-label="Illustrative TempoTec V1 player">
+            <div class="device-topline">
+              <span class="device-brand">TEMPOTEC</span>
+              <span class="device-model">VARIATIONS <b>V1</b></span>
+            </div>
+            <div class="screen-bezel">
+              <div class="screen-window" id="screen-window">
+                <canvas id="device-screen" width="240" height="320" tabindex="0" aria-label="Sonix Player screen mockup. Tap the home tiles to navigate."></canvas>
+                <div class="screen-off" id="screen-off" hidden>
+                  <span class="off-indicator"></span>
+                  <b>DISPLAY SLEEP</b>
+                  <small>Press POWER to wake</small>
+                </div>
+                <div class="screen-loading" id="screen-loading">Loading V1 captures…</div>
+              </div>
+            </div>
+            <div class="device-footline">
+              <span>SONIX PLAYER</span>
+              <span class="screen-spec">2.0″ · QVGA</span>
+            </div>
+            <div class="side-keys" aria-label="Simulated hardware buttons">
+              <button class="side-key key-power" type="button" data-key="power" aria-label="Power: toggle screen" title="Power · toggle screen"><span></span></button>
+              <button class="side-key key-volume-up" type="button" data-key="volume-up" aria-label="Volume up" title="Volume up"><span>+</span></button>
+              <button class="side-key key-volume-down" type="button" data-key="volume-down" aria-label="Volume down" title="Volume down"><span>−</span></button>
+              <button class="side-key key-play" type="button" data-key="play" aria-label="Play or pause" title="Play / pause"><span class="mini-play-icon"></span></button>
+              <button class="side-key key-skip" type="button" data-key="next" aria-label="Next track" title="Next track"><span class="mini-next-icon"></span></button>
+            </div>
+          </div>
+          <div class="device-shadow" aria-hidden="true"></div>
+          <div class="device-caption"><span class="caption-line"></span><span>V1 FRONT PANEL · ILLUSTRATIVE</span><span class="caption-line"></span></div>
+        </div>
+
+        <div class="simulation-strip" aria-label="Simulated device state">
+          <div class="state-block">
+            <span class="state-label">PLAYBACK</span>
+            <span class="state-value"><span class="state-dot" id="play-dot"></span><b id="play-state">PLAYING</b></span>
+          </div>
+          <div class="state-divider"></div>
+          <div class="volume-block">
+            <div class="volume-copy"><span class="state-label">VOLUME</span><b id="volume-value">61</b></div>
+            <div class="volume-meter" aria-hidden="true"><span id="volume-fill"></span></div>
+          </div>
+        </div>
+        <p class="hardware-hint"><span class="hint-key">TIP</span> Use the side keys or tap the screen. <kbd>Space</kbd> toggles play; <kbd>←</kbd> goes back.</p>
+      </div>
+
+      <aside class="inspector" aria-label="Theme preview controls and palette">
+        <section class="inspector-card screen-card">
+          <div class="card-heading">
+            <div>
+              <div class="section-kicker">DEVICE SCREEN</div>
+              <h2 id="active-screen-title">Home</h2>
+            </div>
+            <span class="screen-index" id="screen-index">01 <i>/</i> 08</span>
+          </div>
+          <p class="screen-description" id="screen-description">Six destinations, a compact status bar and the live mini-player strip.</p>
+          <div class="screen-nav" id="screen-nav" role="group" aria-label="Choose a V1 screen">
+            <button class="screen-nav-button is-active" type="button" data-screen="home" aria-pressed="true">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg><span>Home</span>
+            </button>
+            <button class="screen-nav-button" type="button" data-screen="music" aria-pressed="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><span>Music</span>
+            </button>
+            <button class="screen-nav-button" type="button" data-screen="nowPlaying" aria-pressed="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 5 12 7-12 7z"/></svg><span>Now playing</span>
+            </button>
+            <button class="screen-nav-button" type="button" data-screen="files" aria-pressed="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>Files</span>
+            </button>
+            <button class="screen-nav-button" type="button" data-screen="streaming" aria-pressed="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 15h.01M11 15h.01M15 15h.01M7 9h10"/></svg><span>Streaming</span>
+            </button>
+            <button class="screen-nav-button" type="button" data-screen="wireless" aria-pressed="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9a11 11 0 0 1 14 0M8 12a6.5 6.5 0 0 1 8 0m-5 4a2 2 0 0 1 2 0m-1 4h.01"/></svg><span>Wireless</span>
+            </button>
+            <button class="screen-nav-button" type="button" data-screen="more" aria-pressed="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg><span>More</span>
+            </button>
+            <button class="screen-nav-button" type="button" data-screen="settings" aria-pressed="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1 1.4 1.1-1.4 2.4-1.7-.7a8 8 0 0 1-1.7 1l-.3 1.8h-2.8l-.3-1.8a8 8 0 0 1-1.7-1l-1.7.7-1.4-2.4L7.3 15a8 8 0 0 1 0-2l-1.4-1.1 1.4-2.4 1.7.7a8 8 0 0 1 1.7-1L11 7.4h2.8l.3 1.8a8 8 0 0 1 1.7 1l1.7-.7 1.4 2.4-1.4 1.1a8 8 0 0 1-.1 2z" transform="translate(0 -1)"/></svg><span>Settings</span>
+            </button>
+          </div>
+        </section>
+
+        <section class="inspector-card palette-card" aria-labelledby="palette-title">
+          <div class="card-heading palette-heading">
+            <div>
+              <div class="section-kicker">COLOR LANGUAGE</div>
+              <h2 id="palette-title">Amber / OLED black</h2>
+            </div>
+            <span class="palette-badge">PALETTE</span>
+          </div>
+          <div class="swatch-grid" aria-label="Theme palette">
+            <div class="swatch-item"><span class="swatch swatch-black"></span><span class="swatch-copy"><b>Black</b><small>#050505</small></span></div>
+            <div class="swatch-item"><span class="swatch swatch-surface"></span><span class="swatch-copy"><b>Surface</b><small>#17120A</small></span></div>
+            <div class="swatch-item"><span class="swatch swatch-pressed"></span><span class="swatch-copy"><b>Pressed</b><small>#251907</small></span></div>
+            <div class="swatch-item"><span class="swatch swatch-muted"></span><span class="swatch-copy"><b>Dim amber</b><small>#C6832A</small></span></div>
+            <div class="swatch-item"><span class="swatch swatch-accent"></span><span class="swatch-copy"><b>Signal</b><small>#FFAD2E</small></span></div>
+            <div class="swatch-item"><span class="swatch swatch-text"></span><span class="swatch-copy"><b>Text</b><small>#F4BC5D</small></span></div>
+          </div>
+          <div class="palette-footnote"><span class="palette-check">✓</span> High-contrast amber UI; album covers stay in their original colours.</div>
+        </section>
+
+        <section class="inspector-card options-card" aria-label="Preview options">
+          <div class="card-heading options-heading">
+            <div>
+              <div class="section-kicker">PREVIEW OPTIONS</div>
+              <h2>Fine details</h2>
+            </div>
+            <span class="options-icon" aria-hidden="true">⌘</span>
+          </div>
+          <label class="toggle-row" for="preserve-art">
+            <span class="toggle-copy"><b>Keep album art in colour</b><small>Artwork is not part of the UI palette.</small></span>
+            <span class="switch"><input id="preserve-art" type="checkbox" checked><span class="switch-track"></span></span>
+          </label>
+          <div class="inspector-note"><span class="note-glyph">↳</span><span>Tap a home tile to jump between screens. Back arrows return to the previous view.</span></div>
+        </section>
+
+        <div class="accuracy-note">
+          <span class="accuracy-icon">i</span>
+          <p><b>Preview, not firmware.</b> Screen layouts come from the repository’s real V1 captures at native 240 × 320. This browser mockup remaps the UI colours to amber; it does not install or change your player.</p>
+        </div>
+      </aside>
+    </section>
+
+    <footer class="site-footer">
+      <span>SONIX PLAYER <i>×</i> TEMPOTEC VARIATIONS V1</span>
+      <span>CONCEPT THEME <b>AMBER ON BLACK</b></span>
+    </footer>
+  </main>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
