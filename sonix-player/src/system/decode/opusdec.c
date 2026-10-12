@@ -31,11 +31,8 @@ static int channels_of(const OggOpusFile *of) {
 	return (ch >= 1 && ch <= 8) ? ch : 0;
 }
 
-opusdec_t *opusdec_open(const char *filepath) {
-	int err = 0;
-	OggOpusFile *of = op_open_file(filepath, &err);
+static opusdec_t *open_source(OggOpusFile *of, const char *filepath) {
 	if (!of) {
-		fprintf(stderr, "opus: %s does not open (error %d)\n", filepath, err);
 		return NULL;
 	}
 
@@ -63,6 +60,28 @@ opusdec_t *opusdec_open(const char *filepath) {
 	printf("opus: %s -- 48000 Hz, %d ch%s, %llu frame\n", filepath, o->channels,
 		   o->force_stereo ? " (downmixed from multichannel)" : "", (unsigned long long)o->frames);
 	return o;
+}
+
+opusdec_t *opusdec_open(const char *filepath) {
+	int err = 0;
+	OggOpusFile *of = op_open_file(filepath, &err);
+	if (!of) {
+		fprintf(stderr, "opus: %s does not open (error %d)\n", filepath, err);
+	}
+	return open_source(of, filepath);
+}
+
+opusdec_t *opusdec_open_stream(void *source, int (*read)(void *, unsigned char *, int)) {
+	if (!source || !read) {
+		return NULL;
+	}
+	OpusFileCallbacks callbacks = {.read = read}; // no seek, tell or close
+	int err = 0;
+	OggOpusFile *of = op_open_callbacks(source, &callbacks, NULL, 0, &err);
+	if (!of) {
+		fprintf(stderr, "opus: buffered stream does not open (error %d)\n", err);
+	}
+	return open_source(of, "buffered stream");
 }
 
 void opusdec_close(opusdec_t *o) {

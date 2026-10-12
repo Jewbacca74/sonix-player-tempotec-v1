@@ -939,6 +939,21 @@ bool playlist_current_path(char *out, size_t out_size) {
 
 bool playlist_at_end(void) { return entry_count == 0 || pos + 1 >= entry_count; }
 
+bool playlist_peek_auto(char *out, size_t out_size) {
+	if (!entry_count || !out || !out_size) {
+		return false;
+	}
+	size_t next = pos + 1;
+	if (!ordered_queue && mode == PLAYBACK_MODE_REPEAT_ONE) {
+		next = pos;
+	} else if (!ordered_queue && mode == PLAYBACK_MODE_REPEAT_ALL) {
+		next %= entry_count;
+	} else if (next >= entry_count) {
+		return false;
+	}
+	return playlist_path_at((int)next, out, out_size);
+}
+
 bool playlist_advance_auto(char *out, size_t out_size) {
 	if (entry_count == 0)
 		return false;

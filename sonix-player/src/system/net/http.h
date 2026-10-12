@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 // A very small HTTP/1.1 client.
 //
@@ -109,6 +110,10 @@ typedef struct {
 	// never NULL, so the caller always frees the same way.
 	bool allow_empty_body;
 
+	// Authenticated APIs must never send their credentials through a redirect
+	// from HTTPS down to plaintext HTTP. Defaults false for legacy radio URLs.
+	bool no_https_downgrade;
+
 } http_req_t;
 
 // Like http_get_ex(), but with the method and body chosen by the caller.
@@ -139,7 +144,8 @@ typedef struct {
 
 	// Content-Length, or 0 when the server does not send it -- always the case
 	// for a radio station, and almost never for a downloaded file.
-	long content_length;
+	long content_length; // legacy native-long size, saturated at LONG_MAX
+	uint64_t content_length64; // exact finite size, including >2 GiB on MIPS
 
 	// Body bytes already read while parsing the headers. The first read has
 	// to hand these back before touching the socket again.
@@ -153,6 +159,16 @@ typedef struct {
 	char lead[HTTP_HEADER_BUFFER];
 	int lead_len;
 	int lead_pos;
+
+	// A reverse proxy may chunk even an HTTP/1.0 request. These bytes are
+	// transport framing, never codec data or ICY metadata.
+	bool chunked;
+	bool chunk_finished;
+	bool chunk_failed;
+	size_t chunk_remaining;
+	int chunk_phase;
+	size_t chunk_line_len, chunk_trailer_bytes;
+	char chunk_line[256]; // retains partial framing across recv timeouts
 
 	// Where the ICY metadata counter is within the current block. Only
 	// meaningful when icy_metaint > 0.
@@ -169,6 +185,22 @@ typedef struct {
 // https://, the host does not resolve, the connection or the TLS handshake
 // fails, or the status is not 200.
 bool http_stream_open(http_stream_t *st, const char *url, int timeout_secs);
+
+// Called on the opening worker when a socket is created, during a pending TCP
+// connect, and with -1 BEFORE closing a failed/redirected socket. Return false
+// to cancel setup. An observer can publish fd under its own mutex so another
+// thread can shutdown (never close) it during TCP/TLS/header setup, not just
+// once the first body bytes arrive. On success the caller must unpublish fd
+// before http_stream_close. DNS itself remains the system resolver's call.
+typedef bool (*http_socket_cb)(void *user, int fd);
+typedef struct {
+	http_socket_cb socket_cb;
+	void *socket_user;
+	bool no_icy; // finite file, not an internet radio station
+	bool no_https_downgrade;
+} http_stream_options_t;
+bool http_stream_open_ex(http_stream_t *st, const char *url, int timeout_secs,
+						 const http_stream_options_t *options);
 
 // Reads up to `len` bytes of *audio* into buf: any ICY metadata blocks in the
 // way are consumed and parsed out, never handed to the caller. Returns the

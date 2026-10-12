@@ -58,6 +58,9 @@ typedef struct {
 // Parses `text`. False on malformed JSON, out of memory, or nesting past the
 // limit. On success the caller must call json_free().
 bool json_parse(const char *text, json_doc_t *doc);
+// Optional token cap for unpaginated endpoints on memory-limited devices.
+// Same ownership/failure contract, with at most max_tokens token objects.
+bool json_parse_limited(const char *text, json_doc_t *doc, int max_tokens);
 void json_free(json_doc_t *doc);
 
 // The root token, or -1 when the document is empty.
@@ -90,6 +93,9 @@ int json_path(const json_doc_t *doc, int from, const char *path);
 // \uXXXX, surrogate pairs included, converted to UTF-8). Truncates to `size`.
 // False when the token is not a string, leaving `out` empty.
 bool json_str(const json_doc_t *doc, int tok, char *out, size_t size);
+// Identity/credential extraction: reject truncation, embedded NUL or unpaired
+// Unicode surrogates, leaving out empty. The lenient display API is unchanged.
+bool json_str_exact(const json_doc_t *doc, int tok, char *out, size_t size);
 
 long json_long(const json_doc_t *doc, int tok, long fallback);
 

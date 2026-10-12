@@ -25,6 +25,9 @@ typedef struct opusdec opusdec_t;
 // NULL when the file does not open or is not valid Opus; the reason goes to the
 // log.
 opusdec_t *opusdec_open(const char *filepath);
+// Forward-only local byte source; opusfile handles pre-skip/end trim without
+// seeking or counting the entire HTTP stream on open. Source owned by caller.
+opusdec_t *opusdec_open_stream(void *source, int (*read)(void *, unsigned char *, int));
 void opusdec_close(opusdec_t *o);
 
 int opusdec_channels(const opusdec_t *o);

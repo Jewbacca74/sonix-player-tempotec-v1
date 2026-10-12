@@ -3,6 +3,7 @@
 #include "src/system/bluetooth/bluetooth.h"
 #include "src/system/decode/decode.h"
 #include "src/system/decode/growfile.h"
+#include "src/system/streaming/subsonicstream.h"
 #include "src/system/decode/sndfile.h"
 #include "src/system/audio/replaygain.h"
 #include "src/system/audio/speed.h"
@@ -3057,9 +3058,11 @@ static int bluetooth_decimation(int sample_rate, int channels, int out_bits, boo
 	return sink_rate ? decimate_factor_for(sample_rate, (int)sink_rate) : 1;
 }
 
+static bool playback_reader_should_abort(void);
+
 static void play_decoded_file(const char *filepath, decode_format_t format) {
 	decoder_t *dec = decoder_open(filepath, format);
-	if (!dec) {
+	if (!dec && !subsonicstream_owns(filepath)) {
 		// A busy card (a cover decoding, the library scanning) can make the
 		// first open fail transiently; one more try costs nothing and saves
 		// the track.
@@ -3095,8 +3098,12 @@ static void play_decoded_file(const char *filepath, decode_format_t format) {
 	if (!dec) {
 		fprintf(stderr, "Audio: Failed to open decoder for: %s\n", filepath);
 		pthread_mutex_lock(&audio_mutex);
-		audio_command = AUDIO_CMD_STOP;
-		playback_status = AUDIO_STATUS_STOPPED;
+		// A canceled buffered open belongs to the OLD request. Never overwrite
+		// the replacement which woke it; the playback thread will take it next.
+		if (!play_request) {
+			audio_command = AUDIO_CMD_STOP;
+			playback_status = AUDIO_STATUS_STOPPED;
+		}
 		pthread_mutex_unlock(&audio_mutex);
 		return;
 	}
@@ -3535,6 +3542,14 @@ static void play_decoded_file(const char *filepath, decode_format_t format) {
 			rebuffer_if_starved(dec, sample_rate, bytes_played / (uint64_t)frame_bytes);
 		}
 
+		// A RAM stream is replenished only by its producer. Rebuffer before
+		// entering a codec, so pause/stop can interrupt without faking codec EOF.
+		// Failed/canceled sources still reach the zero-read branch below: never
+		// spin at RT priority on a source which has no more bytes coming.
+		if (!decoder_wait_buffered(dec, playback_reader_should_abort) && playback_reader_should_abort()) {
+			continue;
+		}
+
 		// How many frames came out (what goes to the card) and how many went
 		// in (what the position in the track advances by). The two are the
 		// same at normal speed, and deliberately not at any other.
@@ -3673,12 +3688,17 @@ static void play_decoded_file(const char *filepath, decode_format_t format) {
 			// not downloaded yet -- is truncated in turn.
 			uint64_t declared = decoder_total_pcm_frames(dec);
 			uint64_t reached = (uint64_t)(bytes_played / frame_bytes);
-			bool cut_short = declared > 0 && sample_rate > 0 && reached + (uint64_t)sample_rate < declared;
+			bool cut_short = decoder_buffered_failed(dec) ||
+				(declared > 0 && sample_rate > 0 && reached + (uint64_t)sample_rate < declared);
 
 			pthread_mutex_lock(&audio_mutex);
 			bool natural_end = audio_command != AUDIO_CMD_STOP && !play_request && !cut_short;
-			audio_command = AUDIO_CMD_STOP;
-			playback_status = AUDIO_STATUS_STOPPED;
+			// A replacement can interrupt a RAM read with zero frames. Preserve
+			// its PLAY command/status; only the outgoing track has ended.
+			if (!play_request) {
+				audio_command = AUDIO_CMD_STOP;
+				playback_status = AUDIO_STATUS_STOPPED;
+			}
 			track_completed = natural_end;
 			pthread_mutex_unlock(&audio_mutex);
 			played_to_the_end = natural_end;
@@ -4009,12 +4029,23 @@ static bool playback_reader_should_abort(void) {
 	return out;
 }
 
+// Inside a codec read, pause must NOT look like EOF. The block-boundary
+// wait above uses the full command predicate; this one only discards a decoder
+// which is going to be closed anyway. No audio_mutex is held by the bridge.
+static bool playback_stream_should_abort(void) {
+	pthread_mutex_lock(&audio_mutex);
+	bool out = audio_command == AUDIO_CMD_STOP || play_request || stop_thread;
+	pthread_mutex_unlock(&audio_mutex);
+	return out;
+}
+
 int audio_init(void) {
 	static bool initialized = false;
 	if (initialized)
 		return 0;
 
 	growfile_set_reader_abort_cb(playback_reader_should_abort);
+	streambridge_set_reader_abort(playback_stream_should_abort);
 
 	set_volume_percent(40); // a sane, audible default on the new dB taper
 	auto_set_output();
@@ -4038,6 +4069,9 @@ int audio_init(void) {
 }
 
 int audio_play(const char *filepath) {
+	if (!subsonicstream_owns(filepath)) {
+		subsonicstream_cancel();
+	}
 	fprintf(stderr, "audio[%ld]: play requested '%s'\n", log_ms(), filepath);
 
 	// NO route write here: this runs on the UI thread while the previous
@@ -4333,6 +4367,7 @@ void audio_stop(void) {
 	seek_target_secs = -1.0;
 	track_completed = false; // deliberate stop is not a natural completion
 	pthread_mutex_unlock(&audio_mutex);
+	subsonicstream_cancel();
 }
 
 audio_status_t audio_get_status(void) {
