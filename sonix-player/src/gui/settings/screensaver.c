@@ -47,7 +47,7 @@ static int strip_h;
 // is built to order rather than borrowed, so there is nothing to measure. Amber
 // uses this same stable height for its translucent black metadata field.
 #define DEFAULT_STRIP_H bp_pick(132, 250)
-#define AMBER_STRIP_OPA LV_OPA_40 // black panel at 60% transparency
+#define AMBER_STRIP_OPA LV_OPA_50 // black panel at 50% transparency
 
 // ---------------------------------------------------------------------------
 // Pictures from the card
