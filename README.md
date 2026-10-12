@@ -251,48 +251,6 @@ No application API key is needed. Prefer HTTPS; credentials stay in memory unles
 
 See [setup, design, limitations and the V1 validation checklist](docs/subsonic.md), and [host integration tests](sonix-player/tests/README.md).
 
-## Build from source
-
-The GitHub Actions workflow is the easiest option because it also obtains the official stock image and assembles the final package. For a local Debian/Ubuntu build, install the toolchain and firmware utilities first:
-
-```sh
-sudo apt-get update
-sudo apt-get install -y \
-  build-essential git pkg-config wget curl ca-certificates \
-  texinfo bison flex gawk gperf patch xz-utils bzip2 gzip \
-  autoconf automake libtool libtool-bin \
-  libgmp-dev libmpfr-dev libmpc-dev \
-  p7zip-full squashfs-tools genisoimage python3
-```
-
-Then build the V1 target binaries. On a first build, Make downloads LVGL and builds the MIPS cross-toolchain and target libraries; this can take a while and requires network access.
-
-```sh
-make -C sonix-player target -j"$(nproc)"
-```
-
-To package them, download the official V1 `v1.upt` (or the folder/archive containing it), then run:
-
-```sh
-chmod +x sonix-packer/*.sh
-sonix-packer/prepare_v1_stock.sh /path/to/official-v1-firmware sonix-packer
-install -m 0755 sonix-player/sonix_player sonix-packer/sonix_player
-install -m 0755 sonix-player/sonix_launch sonix-packer/sonix_launch
-sonix-packer/sonix_firmware_packer.sh
-```
-
-The generated files are `sonix-packer/v1.upt` and `sonix-packer/v1_md5.txt`. To validate the generated package and confirm that its kernel hash matches the stock package:
-
-```sh
-set -euo pipefail
-stock_kernel_sha256="$(sonix-packer/verify_upt.sh sonix-packer/v1_original.upt \
-  | sed -n 's/^Kernel SHA-256: //p')"
-sonix-packer/verify_upt.sh sonix-packer/v1.upt \
-  --sonix-v1 --kernel-sha256 "$stock_kernel_sha256"
-```
-
-The packer also checks the V1 model identity and builds the root filesystem's update checksum chain. These automated checks do not install or test each generated image on the physical player.
-
 ## Project files and documentation
 
 - `sonix-player/` — player sources, LVGL configuration, launcher and build system.
