@@ -467,18 +467,12 @@ static void add_tile(lv_obj_t *grid, const grid_entry_t *entry, int width, int h
 		int source_w = (int)entry->icon->header.w;
 		int source_h = (int)entry->icon->header.h;
 		int max_side = LV_MAX(source_w, source_h);
-		// The cap is a share of the tile rather than a constant, because a
-		// page with more rows than three has shorter tiles on the V1 than the
-		// ones this number was chosen for: an icon that leaves room for its
-		// caption inside 74 pixels does not leave room inside 54. Three rows
-		// still get COMPACT_TILE_ICON_MAX, which is where the number came from.
-		int cap = LV_MIN(COMPACT_TILE_ICON_MAX, height - 26);
-		if (max_side > cap) {
-			int icon_w = LV_MAX(1, source_w * cap / max_side);
-			int icon_h = LV_MAX(1, source_h * cap / max_side);
+		if (max_side > COMPACT_TILE_ICON_MAX) {
+			int icon_w = LV_MAX(1, source_w * COMPACT_TILE_ICON_MAX / max_side);
+			int icon_h = LV_MAX(1, source_h * COMPACT_TILE_ICON_MAX / max_side);
 			lv_obj_set_size(icon, icon_w, icon_h);
 			lv_image_set_inner_align(icon, LV_IMAGE_ALIGN_CENTER);
-			lv_image_set_scale(icon, (uint32_t)(LV_SCALE_NONE * cap / max_side));
+			lv_image_set_scale(icon, (uint32_t)(LV_SCALE_NONE * COMPACT_TILE_ICON_MAX / max_side));
 		}
 	}
 
