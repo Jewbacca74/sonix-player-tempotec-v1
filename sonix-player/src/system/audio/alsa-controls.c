@@ -551,7 +551,32 @@ static long with_dsd_gain(long raw) {
 // reaching the amplifier as the route or its supply changes.
 static bool suspend_muted;
 static bool poweroff_muted;
+// The playback thread's own, held across a stop of a live stream (see
+// alsa_track_mute). Kept separate from the two above so that a track change
+// never lifts a shutdown mute and a suspend never leaves this one forgotten.
+static bool track_muted;
 static pthread_mutex_t dac_volume_lock = PTHREAD_MUTEX_INITIALIZER;
+
+// How long the codec is given to ramp its "Playback Volume" to silence before
+// the stream feeding it is dropped. A single write of 255 is the mute, but the
+// CS43198/CS43131 ramps to it, and a mute that is not waited out is a mute
+// heard as the click it was meant to stop. Generous on purpose -- once per
+// track, not per buffer -- and overridable for a board that still clicks:
+//
+//   [audio]
+//   dac_mute_settle_ms = 90
+//
+#define DAC_MUTE_SETTLE_MS_DEFAULT 60
+static long dac_mute_settle_ms(void) {
+	long ms = config_get_int("audio", "dac_mute_settle_ms", DAC_MUTE_SETTLE_MS_DEFAULT);
+	if (ms < 0) {
+		ms = 0;
+	}
+	if (ms > 500) {
+		ms = 500; // past this it is not a settle window, it is a stalled player
+	}
+	return ms;
+}
 
 // The two channel controls, from the index in force. Its own function because
 // three things reach it: a volume change, a gain change, and entering or
@@ -563,7 +588,7 @@ static pthread_mutex_t dac_volume_lock = PTHREAD_MUTEX_INITIALIZER;
 static void write_dac_attenuation(void) {
 	pthread_mutex_lock(&dac_volume_lock);
 	long attenuation = with_dsd_gain(percent_to_raw(current_percent));
-	current_volume = (suspend_muted || poweroff_muted) ? 255 : attenuation;
+	current_volume = (suspend_muted || poweroff_muted || track_muted) ? 255 : attenuation;
 	alsa_set_control("Right Playback Volume", current_volume);
 	alsa_set_control("Left Playback Volume", current_volume);
 	pthread_mutex_unlock(&dac_volume_lock);
@@ -587,7 +612,7 @@ void alsa_suspend_mute(void) {
 #endif
 	pthread_mutex_unlock(&dac_volume_lock);
 #ifndef HOST_BUILD
-	usleep(30 * 1000); // let the codec's own volume ramp reach silence
+	usleep((useconds_t)dac_mute_settle_ms() * 1000); // let the codec's own volume ramp reach silence
 #endif
 	fprintf(stderr, "alsa: DAC temporarily muted\n");
 }
@@ -611,9 +636,60 @@ void alsa_poweroff_mute(void) {
 #endif
 	pthread_mutex_unlock(&dac_volume_lock);
 #ifndef HOST_BUILD
-	usleep(30 * 1000);
+	usleep((useconds_t)dac_mute_settle_ms() * 1000);
 #endif
 	fprintf(stderr, "alsa: DAC muted for power-off\n");
+}
+
+// See alsa-controls.h. Called by the playback thread immediately before it
+// drops a running stream; alsa_track_unmute() is called from the next stream's
+// first write, or from the thread when it goes idle.
+void alsa_track_mute(void) {
+	if (alsa_board_is_cs43131()) {
+		return; // one DAC, no HBC3000, and nothing to keep silent
+	}
+	pthread_mutex_lock(&dac_volume_lock);
+	if (track_muted || suspend_muted || poweroff_muted) {
+		// Already silent, or a suspend/power-off owns the mute: a write here
+		// would race the ramp they are waiting on.
+		pthread_mutex_unlock(&dac_volume_lock);
+		return;
+	}
+	track_muted = true;
+#ifndef HOST_BUILD
+	alsa_set_control("Right Playback Volume", 255);
+	alsa_set_control("Left Playback Volume", 255);
+#endif
+	pthread_mutex_unlock(&dac_volume_lock);
+#ifndef HOST_BUILD
+	usleep((useconds_t)dac_mute_settle_ms() * 1000);
+#endif
+}
+
+void alsa_track_unmute(void) {
+	pthread_mutex_lock(&dac_volume_lock);
+	if (!track_muted) {
+		pthread_mutex_unlock(&dac_volume_lock);
+		return; // nothing was muted: the common case, free
+	}
+	track_muted = false;
+	bool keep_silent = suspend_muted || poweroff_muted;
+	pthread_mutex_unlock(&dac_volume_lock);
+	if (keep_silent) {
+		fprintf(stderr, "alsa: track mute ended; DAC remains muted for the power transition\n");
+		return;
+	}
+#ifndef HOST_BUILD
+	// Line out is a fixed level; restoring the ordinary user index here would
+	// briefly hand that level to an amplifier. Same rule as alsa_suspend_restore.
+	if (lineout_on) {
+		apply_volume_hw(LINEOUT_VOLUME_INDEX);
+	} else {
+		write_dac_attenuation();
+	}
+	usleep((useconds_t)dac_mute_settle_ms() * 1000);
+#endif
+	fprintf(stderr, "alsa: DAC level restored after the stream stop\n");
 }
 
 void alsa_suspend_restore(void) {
@@ -637,7 +713,7 @@ void alsa_suspend_restore(void) {
 	} else {
 		write_dac_attenuation();
 	}
-	usleep(30 * 1000);
+	usleep((useconds_t)dac_mute_settle_ms() * 1000);
 #endif
 	fprintf(stderr, "alsa: DAC level restored\n");
 }

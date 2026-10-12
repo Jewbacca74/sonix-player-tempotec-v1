@@ -72,8 +72,10 @@ bool audio_playback_context_active(void);
 // powers the HBC3000 back up) instead of skipping it as "no change". Without
 // it the first play after standby reboots the device.
 void audio_force_output_reinit_after_resume(void);
-// Moves the route to the unused socket so the driver mutes the one in use
-// before suspend or shutdown removes power from the HBC3000 output stage.
+// Parks the output on route 0 (the machine driver's "output off", both sockets
+// disconnected) so the amplifier is driving nothing when suspend or shutdown
+// removes power from the HBC3000 output stage. The wake re-init puts route 2
+// back. Requires the PCM closed: audio_suspend_freeze() must have run.
 void audio_park_output_before_suspend(void);
 
 // True while the playback thread holds an open PCM handle. The suspend path

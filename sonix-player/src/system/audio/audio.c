@@ -95,6 +95,9 @@ static int64_t pause_stop_stream(snd_pcm_t *pcm, int frame_bytes) {
 		queued = 0; // buffered amount unknown: resume a touch late
 	}
 
+	// Silent before the stream is dropped: a running DAC taken away mid-sample
+	// is the click. See alsa_track_mute().
+	alsa_track_mute();
 	snd_pcm_drop(pcm);
 
 	fprintf(stderr, "audio[%ld]: paused (stream dropped, %ld frames unplayed)\n", log_ms(), (long)queued);
@@ -343,19 +346,24 @@ void audio_force_output_reinit_after_resume(void) {
 // The HBC3000's final power transition: both suspend-to-RAM and shutdown can
 // remove its supply with the output stage still switched on to a socket, and
 // the amplifier losing power with headphones connected is the thump. The mixer
-// offers no separate mute for that stage -- the card's controls are
-// the route, the balanced line-out flag and DOP_EN, the codec's are before the
-// amplifier -- but a route change is the machine driver's own orderly sequence
-// (mute the old port, reconfigure, unmute the new one), and it is silent: the
-// re-init above runs one at every wake and nobody hears it.
+// offers no separate mute for that stage -- the card's controls are the route,
+// the balanced line-out flag and DOP_EN, the codec's are before the amplifier.
 //
-// Before the power transition the route is moved to the other socket, the
-// empty one. The port in use is muted by the driver, and suspend carries an
-// amplifier driving nothing into mem. On wake, the re-init writes the partner
-// and then the real route, a real change from the parked one that powers the
-// HBC3000 back. On shutdown, the route stays parked until power is removed.
+// What the mixer does offer is route 0: the machine driver's own "output off",
+// which disconnects BOTH sockets. Parking there before the power goes leaves the
+// amplifier driving nothing, whichever jack the listener is on, and it is the
+// one value that does not depend on telling the two sockets apart -- which this
+// board cannot do (there is no balance switch node, so detect_output() is always
+// 2, and parking on "the other socket" would have parked on the 4.4 mm one even
+// when that was the socket in use).
 //
-// Called with the PCM closed: audio_suspend_freeze() has run.
+// On wake the re-init writes the partner and then the real route, a real change
+// from the parked 0 that powers the HBC3000 back and leaves the output on route
+// 2. On shutdown the route stays parked until power is removed.
+//
+// Called with the PCM closed: audio_suspend_freeze() has run. That is not
+// optional -- writing a route under a live stream stalls the DMA on this driver,
+// and route 0 powers the codec down, which under a running stream is a reboot.
 void audio_park_output_before_suspend(void) {
 	if (alsa_board_is_cs43131()) {
 		return; // no HBC3000, and no thump to take away
@@ -364,21 +372,18 @@ void audio_park_output_before_suspend(void) {
 	if (x < 1 || x > 3) {
 		return; // not one of the analogue sockets
 	}
-	int y = output_reinit_partner(x);
 	// The DAC first: the route change mutes the old port, but the DAC feeding
 	// it would still be live when its supply goes. It stays muted through
 	// suspend; shutdown never restores it.
 	alsa_suspend_mute();
-	// The balanced line-out flag with it: on the 4.4 mm socket headphone and
-	// line out are the same route, and a report of a pop has to say which.
-	fprintf(stderr, "audio: output parked on %d before power-down (was %d, balanced line out %d)\n", y, x,
+	fprintf(stderr, "audio: output parked on 0 (off) before power-down (was %d, balanced line out %d)\n", x,
 			alsa_output_key() & 1);
 #ifndef HOST_BUILD
-	alsa_set_control("Output Port Switch", y);
+	alsa_set_control("Output Port Switch", 0);
 	usleep(120 * 1000); // the driver's mute and route change, before the power goes
 	// Written by hand like the re-init: the cache follows, so a suspend that
 	// fails after this puts the real route back at the next play.
-	alsa_controls_note_output(y);
+	alsa_controls_note_output(0);
 #endif
 }
 
@@ -997,6 +1002,8 @@ static void gapless_release(void) {
 	fprintf(stderr, "audio[%ld]: gapless: closing the held PCM\n", log_ms());
 	if (from_skip) {
 		// A skip already dropped the old track's queue: there is no tail to hear.
+		// Silence the codec first and wait out its ramp, or the drop is a click.
+		alsa_track_mute();
 		snd_pcm_drop(pcm);
 	} else {
 		if (snd_pcm_state(pcm) == SND_PCM_STATE_PREPARED) {
@@ -1006,6 +1013,10 @@ static void gapless_release(void) {
 		// that just ended, and it has to be heard. With a deadline, because a
 		// handle that will never drain must not take the thread with it.
 		pcm_drain_bounded(pcm);
+		// The tail is played; mute before the close so the codec's power-down
+		// happens at silence. Lifted by the next stream's first write, or by the
+		// caller when it is going idle.
+		alsa_track_mute();
 	}
 	snd_pcm_close(pcm);
 	pcm_device_open = false;
@@ -1043,12 +1054,17 @@ static void gapless_hold(snd_pcm_t *pcm, int channels, int rate, int bits, snd_p
 // early, and the old queue must not be heard. The card is still not closed for
 // it: the queue is dropped, the handle is prepared again and held, and the next
 // track takes it through gapless_take() like any other hand-over. What the skip
-// saves is the device open, the route check and the DAC mute, which is most of
-// the gap. The decode of the next track still comes first.
+// saves is the device open and the route check, which is most of the gap. The
+// decode of the next track still comes first.
 //
 // Returns false with the handle untouched if the prepare fails; the caller
 // then closes it the usual way.
 static bool gapless_hold_after_skip(snd_pcm_t *pcm, int channels, int rate, int bits, snd_pcm_uframes_t period) {
+	// The queue is dropped from a running stream, so the DAC is silenced and its
+	// ramp waited out first -- otherwise the DMA stopping under a live signal is
+	// the click heard at every skip. The mute is lifted by the next track's first
+	// write (see alsa_track_unmute), so the hand-over stays gapless in sound.
+	alsa_track_mute();
 	snd_pcm_drop(pcm);
 	if (snd_pcm_prepare(pcm) < 0) {
 		return false;
@@ -2600,6 +2616,8 @@ static void play_wav_file(const char *filepath) {
 	int64_t read_pos = 0; // bytes of the data chunk already read, ahead of bytes_played by what is queued
 	bool is_paused = false;
 	bool played_to_the_end = false;
+	// Lifted once this track's first samples are in the card; see the write loop.
+	bool gap_unmuted = false;
 	int route_check = 0;
 	int track_route = alsa_output_key(); // the output auto_set_output just applied
 
@@ -2656,6 +2674,9 @@ static void play_wav_file(const char *filepath) {
 			pthread_mutex_unlock(&audio_mutex);
 
 			if (entering) {
+				// pause_stop_stream() mutes the DAC before the drop; the mute is
+				// lifted by the unpause's first write.
+				gap_unmuted = false;
 				int64_t rewind_bytes = pause_stop_stream(pcm_handle, src_frame_bytes);
 				if (rewind_bytes > 0) {
 					// What was still in the buffer was never heard: wind the
@@ -2924,6 +2945,14 @@ static void play_wav_file(const char *filepath) {
 			break;
 		}
 
+		// The mute left by whatever stopped the last stream has done its work: the
+		// amplifier is running and this track's first samples are in the card, so
+		// lift it and the level comes back up with the music rather than before it.
+		if (!gap_unmuted) {
+			alsa_track_unmute();
+			gap_unmuted = true;
+		}
+
 		bt_seek_probe_report(pcm_handle);
 		bt_start_probe_note(pcm_handle, written, info.sample_rate);
 
@@ -2976,7 +3005,9 @@ static void play_wav_file(const char *filepath) {
 				snd_pcm_start(pcm_handle);
 			}
 			pcm_drain_bounded(pcm_handle);
+			alsa_track_mute(); // the tail is out; close from silence
 		} else {
+			alsa_track_mute(); // silence a running stream before the drop
 			snd_pcm_drop(pcm_handle);
 			}
 		snd_pcm_close(pcm_handle);
@@ -3222,6 +3253,8 @@ static void play_decoded_file(const char *filepath, decode_format_t format) {
 	int64_t bytes_played = 0;
 	bool is_paused = false;
 	bool played_to_the_end = false;
+	// Lifted once this track's first samples are in the card; see the write loop.
+	bool gap_unmuted = false;
 	int route_check = 0;
 	int track_route = alsa_output_key(); // the output auto_set_output just applied
 
@@ -3351,6 +3384,9 @@ static void play_decoded_file(const char *filepath, decode_format_t format) {
 			pthread_mutex_unlock(&audio_mutex);
 
 			if (entering) {
+				// pause_stop_stream() mutes the DAC before the drop; the mute is
+				// lifted by the unpause's first write.
+				gap_unmuted = false;
 				int64_t rewind_bytes = pause_stop_stream(pcm_handle, frame_bytes) * decim_factor;
 				if (rewind_bytes > 0) {
 					// The frames still queued were never heard: put the decoder
@@ -3703,6 +3739,14 @@ static void play_decoded_file(const char *filepath, decode_format_t format) {
 			break;
 		}
 
+		// The mute left by whatever stopped the last stream has done its work: the
+		// amplifier is running and this track's first samples are in the card, so
+		// lift it and the level comes back up with the music rather than before it.
+		if (!gap_unmuted) {
+			alsa_track_unmute();
+			gap_unmuted = true;
+		}
+
 		bt_seek_probe_report(pcm_handle);
 		bt_start_probe_note(pcm_handle, written, out_rate);
 
@@ -3765,7 +3809,9 @@ static void play_decoded_file(const char *filepath, decode_format_t format) {
 				snd_pcm_start(pcm_handle);
 			}
 			pcm_drain_bounded(pcm_handle);
+			alsa_track_mute(); // the tail is out; close from silence
 		} else {
+			alsa_track_mute(); // silence a running stream before the drop
 			snd_pcm_drop(pcm_handle);
 			}
 		snd_pcm_close(pcm_handle);
@@ -3890,6 +3936,7 @@ static void *playback_thread_func(void *arg) {
 				hold_flush_request = false;
 				pthread_mutex_unlock(&audio_mutex);
 				gapless_release();
+				alsa_track_unmute(); // the release muted for its close; the sleep mutes separately
 				pthread_mutex_lock(&audio_mutex);
 				continue;
 			}
@@ -3912,6 +3959,7 @@ static void *playback_thread_func(void *arg) {
 				// card to finish, and the interface must not queue behind that.
 				pthread_mutex_unlock(&audio_mutex);
 				gapless_release();
+				alsa_track_unmute(); // nothing is queued: do not leave the DAC down
 				pthread_mutex_lock(&audio_mutex);
 			}
 		}
@@ -3935,7 +3983,16 @@ static void *playback_thread_func(void *arg) {
 
 		pthread_mutex_lock(&audio_mutex);
 		playback_context_active = false;
+		bool replacing = play_request;
 		pthread_mutex_unlock(&audio_mutex);
+
+		// A stop leaves the track mute set with nothing queued to lift it: the
+		// next stream's first write does it for a skip, but a stop has no next
+		// stream. Lifted here so the DAC is not left down over a silent player. A
+		// skip keeps it held across the open, which is the point of it.
+		if (!replacing) {
+			alsa_track_unmute();
+		}
 	}
 	return NULL;
 }
@@ -4516,6 +4573,10 @@ bool audio_external_begin_latency(int sample_rate, int channels, int bits, int b
 	// their own on the same device, and without this they find it busy right
 	// after a track has ended on its own.
 	gapless_release();
+	// ...and that release muted the DAC for the stream it closed. This path never
+	// goes through the track-change write loop that would lift it, so do it here
+	// or the emulator plays out of a muted DAC.
+	alsa_track_unmute();
 
 	pthread_mutex_lock(&external_lock);
 

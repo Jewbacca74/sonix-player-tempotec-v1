@@ -114,6 +114,25 @@ void alsa_suspend_restore(void);
 // but none may restore the DAC after this is set.
 void alsa_poweroff_mute(void);
 
+// The playback thread's own mute, held across any stop of a live stream -- a
+// pause, a skip, a seek, or the close at the end of a track.
+//
+// Every one of those calls snd_pcm_drop() on a stream that is at that moment
+// feeding the amplifier a real signal; the DMA stopping mid-sample is a step to
+// zero, which is the click. Writing the codec's own "Playback Volume" to mute
+// first -- and waiting out its ramp while the queued audio is still playing --
+// means the stream is dropped from silence, not from music.
+//
+// Paired by the playback thread itself: muted as the stream stops, lifted by
+// the first write of whatever comes next (or when the thread goes idle with
+// nothing queued). Kept apart from the suspend and power-off mutes so a track
+// change never lifts a shutdown mute and a suspend never leaves a gap mute
+// forgotten.
+//
+// No-op on the R1 CS43131 path, like the suspend mute.
+void alsa_track_mute(void);
+void alsa_track_unmute(void);
+
 
 // The hardware control is an attenuation: 0 is loudest, 255 is silent. Nothing
 // outside this file should have to know that, so the UI and the key handlers
