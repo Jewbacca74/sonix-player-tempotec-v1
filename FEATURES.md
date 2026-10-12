@@ -152,9 +152,11 @@ certificate checking, and HLS.
   The gap between obstacles is always the same distance, so what speeds up is the
   time you get to see them coming.
 - 2048, Snake and Dino are drawn with the interface's own pieces: they add no art
-  to the image and no space on the card. They do share the picture the More menu
-  uses for games, since the icon set has nothing else for them - the word under the
-  tile is what tells them apart.
+  to the image and no space on the card. Each has a glyph of its own in the icon
+  set, so the More menu shows the animal the dino game draws, the body of the
+  snake, and a board with one merge in it - cut on the same 24 grid, with the same
+  line and the same single colour as everything else there, which is what lets the
+  theme tint them the way it tints the gamepad they replaced.
 
 ## Game Boy
 

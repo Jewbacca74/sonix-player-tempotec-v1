@@ -52,13 +52,13 @@ static bool more_tokyo_icon(const char *label, const lv_image_dsc_t **icon, them
 		*icon = &icon_bird;
 		*tone = THEME_SEMANTIC_PURPLE;
 	} else if (strcmp(label, "2048") == 0) {
-		*icon = &icon_files_game;
+		*icon = &icon_game_2048;
 		*tone = THEME_SEMANTIC_BLUE;
 	} else if (strcmp(label, "snake") == 0) {
-		*icon = &icon_files_game;
+		*icon = &icon_game_snake;
 		*tone = THEME_SEMANTIC_GREEN;
 	} else if (strcmp(label, "dino") == 0) {
-		*icon = &icon_files_game;
+		*icon = &icon_game_dino;
 		*tone = THEME_SEMANTIC_AMBER;
 	} else {
 		return false;
@@ -132,12 +132,12 @@ void morepage_init(gui_config_t *cfg) {
 		// An action for each of these three as well, for the same reason as the
 		// shelf and the browser: a run is read back from the config on the way
 		// in, so 2048 picks up where the board was left and the other two at
-		// least agree with the best score on the card. The game glyph is shared,
-		// because a game that is not the Game Boy has no picture of its own in
-		// the resource tree, and the caption is what says which one it is.
-		{"2048", &icon_files_game, NULL, game2048_open},
-		{"snake", &icon_files_game, NULL, snake_open},
-		{"dino", &icon_files_game, NULL, dino_open},
+		// least agree with the best score on the card. Each has a drawing of what
+		// that game is about, so the picture says which one it is before the
+		// caption does.
+		{"2048", &icon_game_2048, NULL, game2048_open},
+		{"snake", &icon_game_snake, NULL, snake_open},
+		{"dino", &icon_game_dino, NULL, dino_open},
 	};
 
 	// Dark and Light retain the established two-column grid. Tokyo Night uses a
