@@ -21,16 +21,19 @@
 
 lv_obj_t *appearance_screen;
 
-static lv_obj_t *theme_buttons[3];
+static lv_obj_t *theme_buttons[4];
 static lv_obj_t *btn_boot[4]; // Stock / Retrospace / Space / Travelling in space
 static lv_obj_t *btn_clock[4]; // left / centre / right / hidden
 static lv_obj_t *btn_accent[THEME_ACCENT_COUNT]; // the coloured circles
 static lv_obj_t *tint_toggle;
 static lv_obj_t *battery_percent_toggle;
 static lv_obj_t *text_size_pill[FONTS_TEXT_COUNT]; // normal / large / small
-static lv_obj_t *tokyo_palette_card;
-static lv_obj_t *tokyo_glyph_card;
-static lv_obj_t *tokyo_glyph_icons[4];
+static lv_obj_t *theme_palette_card;
+static lv_obj_t *theme_palette_title;
+static lv_obj_t *theme_palette_swatches[8];
+static lv_obj_t *function_glyph_card;
+static lv_obj_t *function_glyph_icons[4];
+static void appearance_preview_refresh(void);
 // The status bar draws the battery either way; this setting is only about the
 // number beside it, and is on by default.
 static void battery_percent_cb(lv_event_t *e) {
@@ -160,18 +163,19 @@ static void font_pills_reload_cb(lv_event_t *e) {
 }
 
 // Paints the active theme choice. Dark and Light keep their original filled
-// accent treatment; Tokyo Night gets the quieter selected pill from the
-// approved compact mockup.
+// accent treatment; the two blue-/amber-black palettes use the quieter outlined
+// selected pill that suits their compact V1 appearance card.
 static void refresh_buttons(void) {
 	theme_kind_t active_kind = theme_get_kind();
-	for (int i = 0; i < 3; i++) {
+	for (int i = 0; i < 4; i++) {
 		lv_obj_t *button = theme_buttons[i];
 		if (!button) {
 			continue;
 		}
 		lv_obj_t *label = lv_obj_get_child(button, 0);
 		bool active = i == (int)active_kind;
-		if (active && active_kind == THEME_KIND_TOKYO_NIGHT) {
+		bool outlined = active_kind == THEME_KIND_TOKYO_NIGHT || active_kind == THEME_KIND_AMBER_ON_BLACK;
+		if (active && outlined) {
 			lv_obj_set_style_bg_color(button, lv_color_mix(theme()->accent, theme()->surface, (lv_opa_t)64), 0);
 			lv_obj_set_style_text_color(label, theme()->text_primary, 0);
 			lv_obj_set_style_border_width(button, 1, 0);
@@ -271,6 +275,7 @@ static void theme_pick_cb(lv_event_t *e) {
 	theme_kind_t kind = (theme_kind_t)(intptr_t)lv_event_get_user_data(e);
 	theme_set_kind(kind);
 	refresh_buttons();
+	appearance_preview_refresh();
 }
 
 // ---------------------------------------------------------------------------
@@ -325,12 +330,14 @@ static lv_obj_t *make_boot_choice(lv_obj_t *parent, const char *text, int choice
 
 static lv_obj_t *make_theme_choice(lv_obj_t *parent, const char *text, theme_kind_t kind, bool compact) {
 	lv_obj_t *btn = lv_btn_create(parent);
-	lv_obj_set_size(btn, LV_SIZE_CONTENT, compact ? 34 : 64);
-	lv_obj_set_style_pad_hor(btn, compact ? 4 : 34, 0);
+	lv_obj_set_size(btn, compact ? lv_pct(48) : LV_SIZE_CONTENT, compact ? 34 : 64);
+	lv_obj_set_style_pad_hor(btn, compact ? 5 : 34, 0);
 	lv_obj_set_style_radius(btn, compact ? 7 : LV_RADIUS_CIRCLE, 0);
 	lv_obj_set_style_shadow_width(btn, 0, 0);
 	lv_obj_set_style_border_width(btn, 0, 0);
-	lv_obj_set_flex_grow(btn, compact ? (kind == THEME_KIND_TOKYO_NIGHT ? 2 : 1) : 0);
+	// Two compact columns leave enough width for each full theme label and
+	// avoid flex items painting over one another on the 240 px V1 panel.
+	lv_obj_set_flex_grow(btn, 0);
 	lv_obj_add_event_cb(btn, theme_pick_cb, LV_EVENT_CLICKED, (void *)(intptr_t)kind);
 
 	lv_obj_t *label = lv_label_create(btn);
@@ -341,7 +348,7 @@ static lv_obj_t *make_theme_choice(lv_obj_t *parent, const char *text, theme_kin
 	return btn;
 }
 
-static lv_obj_t *tokyo_preview_card(lv_obj_t *parent, const char *title, bool compact) {
+static lv_obj_t *theme_preview_card(lv_obj_t *parent, const char *title, bool compact) {
 	lv_obj_t *card = lv_obj_create(parent);
 	lv_obj_set_width(card, lv_pct(100));
 	lv_obj_set_height(card, LV_SIZE_CONTENT);
@@ -364,32 +371,78 @@ static lv_obj_t *tokyo_preview_card(lv_obj_t *parent, const char *title, bool co
 }
 
 static void appearance_preview_refresh(void) {
-	bool show = bp_is_tempotec_v1() && theme_is_tokyo_night();
-	if (tokyo_palette_card) {
-		lv_obj_set_hidden(tokyo_palette_card, !show);
+	bool tokyo = theme_is_tokyo_night();
+	bool amber = theme_is_amber_on_black();
+	bool show = bp_is_tempotec_v1() && (tokyo || amber);
+	if (theme_palette_card) {
+		lv_obj_set_hidden(theme_palette_card, !show);
 	}
-	if (tokyo_glyph_card) {
-		lv_obj_set_hidden(tokyo_glyph_card, !show);
+	if (theme_palette_title) {
+		lv_label_set_text(theme_palette_title, tr(amber ? "appearance_amber_palette" : "appearance_tokyo_palette"));
 	}
+	if (function_glyph_card) {
+		lv_obj_set_hidden(function_glyph_card, !show);
+	}
+
+	// Tokyo Night keeps its semantic hues. Amber on Black shows the distinct
+	// dark track, subdued star, playback, artist and cream-title colors from
+	// the reference screen instead of looking like the Tokyo palette.
+	lv_color_t swatches[8];
+	if (amber) {
+		swatches[0] = theme()->screen_bg;
+		swatches[1] = theme()->surface;
+		swatches[2] = theme()->surface_pressed;
+		swatches[3] = theme_player_chrome_color(THEME_PLAYER_CHROME_PROGRESS_REST);
+		swatches[4] = theme_player_chrome_color(THEME_PLAYER_CHROME_MUTED);
+		swatches[5] = theme_player_chrome_color(THEME_PLAYER_CHROME_PLAYBACK);
+		swatches[6] = theme_player_chrome_color(THEME_PLAYER_CHROME_SECONDARY);
+		swatches[7] = theme_player_chrome_color(THEME_PLAYER_CHROME_PRIMARY);
+	} else {
+		swatches[0] = theme()->screen_bg;
+		swatches[1] = theme()->surface;
+		swatches[2] = theme()->text_primary;
+		swatches[3] = theme()->accent;
+		swatches[4] = theme_semantic_color(THEME_SEMANTIC_CYAN);
+		swatches[5] = theme_semantic_color(THEME_SEMANTIC_PURPLE);
+		swatches[6] = theme_semantic_color(THEME_SEMANTIC_GREEN);
+		swatches[7] = theme_semantic_color(THEME_SEMANTIC_RED);
+	}
+	for (int i = 0; i < 8; i++) {
+		if (!theme_palette_swatches[i]) {
+			continue;
+		}
+		lv_obj_set_style_bg_color(theme_palette_swatches[i], swatches[i], 0);
+		if (amber) {
+			// The four near-black swatches otherwise disappear into the card and
+			// look like unpainted boxes on the low-contrast V1 panel.
+			lv_obj_set_style_border_width(theme_palette_swatches[i], 1, 0);
+			lv_obj_set_style_border_color(theme_palette_swatches[i], theme()->text_secondary, 0);
+			lv_obj_set_style_border_opa(theme_palette_swatches[i], LV_OPA_50, 0);
+		} else {
+			lv_obj_set_style_border_width(theme_palette_swatches[i], 0, 0);
+		}
+	}
+
 	static const theme_semantic_t tones[4] = {
 		THEME_SEMANTIC_CYAN, THEME_SEMANTIC_BLUE, THEME_SEMANTIC_BLUE, THEME_SEMANTIC_PURPLE,
 	};
 	for (int i = 0; i < 4; i++) {
-		if (!tokyo_glyph_icons[i]) {
+		if (!function_glyph_icons[i]) {
 			continue;
 		}
-		lv_obj_set_style_image_recolor(tokyo_glyph_icons[i], theme_semantic_color(tones[i]), 0);
-		lv_obj_set_style_image_recolor_opa(tokyo_glyph_icons[i], LV_OPA_COVER, 0);
+		lv_obj_set_style_image_recolor(function_glyph_icons[i], theme_semantic_color(tones[i]), 0);
+		lv_obj_set_style_image_recolor_opa(function_glyph_icons[i], LV_OPA_COVER, 0);
 	}
 }
 
-static void build_tokyo_previews(lv_obj_t *container, bool compact) {
+static void build_theme_previews(lv_obj_t *container, bool compact) {
 	if (!compact) {
 		return;
 	}
 
-	tokyo_palette_card = tokyo_preview_card(container, "appearance_tokyo_palette", compact);
-	lv_obj_t *palette = lv_obj_create(tokyo_palette_card);
+	theme_palette_card = theme_preview_card(container, "appearance_tokyo_palette", compact);
+	theme_palette_title = lv_obj_get_child(theme_palette_card, 0);
+	lv_obj_t *palette = lv_obj_create(theme_palette_card);
 	lv_obj_set_size(palette, lv_pct(100), 13);
 	lv_obj_set_style_bg_opa(palette, LV_OPA_TRANSP, 0);
 	lv_obj_set_style_border_width(palette, 0, 0);
@@ -397,23 +450,18 @@ static void build_tokyo_previews(lv_obj_t *container, bool compact) {
 	lv_obj_set_style_pad_column(palette, 3, 0);
 	lv_obj_set_flex_flow(palette, LV_FLEX_FLOW_ROW);
 	lv_obj_set_flex_align(palette, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-	static const lv_color_t swatches[] = {
-		LV_COLOR_MAKE(26, 27, 38), LV_COLOR_MAKE(36, 40, 59), LV_COLOR_MAKE(192, 202, 245),
-		LV_COLOR_MAKE(122, 162, 247), LV_COLOR_MAKE(125, 207, 255), LV_COLOR_MAKE(187, 154, 247),
-		LV_COLOR_MAKE(158, 206, 106), LV_COLOR_MAKE(247, 118, 142),
-	};
-	for (unsigned int i = 0; i < sizeof(swatches) / sizeof(swatches[0]); i++) {
+	for (int i = 0; i < 8; i++) {
 		lv_obj_t *swatch = lv_obj_create(palette);
 		lv_obj_set_height(swatch, 12);
 		lv_obj_set_flex_grow(swatch, 1);
-		lv_obj_set_style_bg_color(swatch, swatches[i], 0);
 		lv_obj_set_style_bg_opa(swatch, LV_OPA_COVER, 0);
 		lv_obj_set_style_border_width(swatch, 0, 0);
 		lv_obj_set_style_radius(swatch, 3, 0);
+		theme_palette_swatches[i] = swatch;
 	}
 
-	tokyo_glyph_card = tokyo_preview_card(container, "appearance_function_glyphs", compact);
-	lv_obj_t *glyph_row = lv_obj_create(tokyo_glyph_card);
+	function_glyph_card = theme_preview_card(container, "appearance_function_glyphs", compact);
+	lv_obj_t *glyph_row = lv_obj_create(function_glyph_card);
 	lv_obj_set_size(glyph_row, lv_pct(100), 24);
 	lv_obj_set_style_bg_opa(glyph_row, LV_OPA_TRANSP, 0);
 	lv_obj_set_style_border_width(glyph_row, 0, 0);
@@ -430,7 +478,7 @@ static void build_tokyo_previews(lv_obj_t *container, bool compact) {
 		lv_image_set_inner_align(icon, LV_IMAGE_ALIGN_CENTER);
 		lv_image_set_scale(icon, (uint32_t)(LV_SCALE_NONE * 18 / LV_MAX((int)glyphs[i]->header.w,
 																(int)glyphs[i]->header.h)));
-		tokyo_glyph_icons[i] = icon;
+		function_glyph_icons[i] = icon;
 	}
 	appearance_preview_refresh();
 }
@@ -467,25 +515,20 @@ void appearance_init(gui_config_t *cfg) {
 	lv_obj_set_style_pad_gap(row, compact ? 4 : 14, 0);
 	lv_obj_set_scrollable(row, false);
 	lv_obj_set_event_bubble(row, true);
-	lv_obj_set_flex_flow(row, compact ? LV_FLEX_FLOW_ROW : LV_FLEX_FLOW_ROW_WRAP);
+	lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW_WRAP);
 	lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START);
 
 	theme_buttons[THEME_KIND_DARK] = make_theme_choice(row, "appearance_dark", THEME_KIND_DARK, compact);
 	theme_buttons[THEME_KIND_LIGHT] = make_theme_choice(row, "appearance_light", THEME_KIND_LIGHT, compact);
 	theme_buttons[THEME_KIND_TOKYO_NIGHT] =
 		make_theme_choice(row, "appearance_tokyo_night", THEME_KIND_TOKYO_NIGHT, compact);
+	theme_buttons[THEME_KIND_AMBER_ON_BLACK] = make_theme_choice(row,
+		compact ? "appearance_amber_short" : "appearance_amber_on_black", THEME_KIND_AMBER_ON_BLACK, compact);
 
-	lv_obj_t *theme_note = lv_label_create(card);
-	lv_label_set_long_mode(theme_note, LV_LABEL_LONG_WRAP);
-	lv_obj_set_width(theme_note, lv_pct(100));
-	lv_obj_add_style(theme_note, &theme_style_text_dim, 0);
-	lv_obj_set_style_text_font(theme_note, compact ? &font_ui_14 : &font_ui_18, 0);
-	lv_label_set_text(theme_note, tr("appearance_theme_note"));
-
-	// Compact Tokyo Night palette and glyph examples, immediately after the
-	// theme switch. Hidden for Dark/Light so their existing Appearance page
-	// remains unchanged; all of the real controls below stay in place.
-	build_tokyo_previews(container, compact);
+	// Compact palette and function-glyph examples for Tokyo Night and Amber on
+	// Black, immediately after the theme switch. Hidden for Dark/Light so their
+	// existing Appearance page remains unchanged.
+	build_theme_previews(container, compact);
 
 	// A second card: which picture the next power-on shows. Unlike every
 	// other choice on this page it is not only a config value -- it also

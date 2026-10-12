@@ -5,16 +5,18 @@
 
 #include "lvgl/lvgl.h"
 
-// The three built-in appearances. Dark and Light keep their existing palettes;
-// Tokyo Night is an additional blue-black palette designed for the V1 panel.
+// The built-in appearances. Dark and Light keep their existing palettes;
+// Tokyo Night and Amber on Black add two dark palettes designed for the V1.
 typedef enum {
 	THEME_KIND_DARK = 0,
 	THEME_KIND_LIGHT = 1,
 	THEME_KIND_TOKYO_NIGHT = 2,
+	THEME_KIND_AMBER_ON_BLACK = 3,
 } theme_kind_t;
 
-// Fixed semantic accents used by Tokyo Night's function-matched glyphs. The
-// ordinary Dark and Light themes continue to use their existing single accent.
+// Fixed semantic accents used by Tokyo Night's function-matched glyphs.
+// Amber on Black maps every icon role to its signal amber; Dark and Light
+// continue to use their existing single accent.
 typedef enum {
 	THEME_SEMANTIC_BLUE,
 	THEME_SEMANTIC_CYAN,
@@ -25,9 +27,23 @@ typedef enum {
 	THEME_SEMANTIC_MUTED,
 } theme_semantic_t;
 
+// Role-specific colors from the reference Now Playing screen. The Amber theme
+// uses the exact cream, amber and dark-orange steps; other themes map these to
+// their ordinary text/accent colors.
+typedef enum {
+	THEME_PLAYER_CHROME_PRIMARY,
+	THEME_PLAYER_CHROME_SECONDARY,
+	THEME_PLAYER_CHROME_MUTED,
+	THEME_PLAYER_CHROME_PLAYBACK,
+	THEME_PLAYER_CHROME_PROGRESS_REST,
+	THEME_PLAYER_CHROME_CHEVRON,
+	THEME_PLAYER_CHROME_SHUFFLE_IDLE,
+	THEME_PLAYER_CHROME_OVERFLOW,
+} theme_player_chrome_t;
+
 // The handful of colours the whole UI is built from. Everything on screen
-// pulls from the active one; Tokyo Night remains a dark palette for the
-// existing dark/light-specific layout decisions elsewhere in the player.
+// pulls from the active one; Tokyo Night and Amber on Black remain dark
+// palettes for the existing dark/light-specific layout decisions.
 typedef struct {
 	lv_color_t screen_bg;	   // page background
 	lv_color_t surface;		   // list rows, cards
@@ -36,7 +52,7 @@ typedef struct {
 	lv_color_t cover_bg;	   // behind the artwork, when a track has none
 	lv_color_t text_primary;
 	lv_color_t text_secondary;
-	lv_color_t accent;		   // the blue used for active things
+	lv_color_t accent;		   // the selected theme's active colour
 	bool dark;
 } theme_palette_t;
 
@@ -86,35 +102,42 @@ void theme_init(void);
 void theme_notify_screen_shown(lv_obj_t *screen);
 
 const theme_palette_t *theme(void);
-// The subtle accent-tinted surface shared by the Tokyo Night home mini-player
+// The subtle accent-tinted surface shared by the dark themes' mini-player
 // and Music browse tiles.
 lv_color_t theme_now_playing_fill(void);
 bool theme_is_dark(void);
 bool theme_is_tokyo_night(void);
+bool theme_is_amber_on_black(void);
+// Both Tokyo Night and Amber on Black use the same function-matched icon and
+// compact V1 layouts. Their palettes and semantic hues remain distinct.
+bool theme_uses_function_glyphs(void);
 theme_kind_t theme_get_kind(void);
 
-// Tokyo Night's blue, cyan, violet, green, amber and red roles. In Dark/Light
-// these resolve to the chosen accent (or the secondary text colour for muted).
+// Tokyo Night's blue, cyan, violet, green, amber, red and muted roles. Amber
+// on Black maps every icon role to its accent; in Dark/Light they resolve to
+// the chosen accent (or secondary text for muted).
 lv_color_t theme_semantic_color(theme_semantic_t role);
+lv_color_t theme_player_chrome_color(theme_player_chrome_t role);
 
-// Switches between Dark and Light, and repaints the UI. Tokyo Night is treated
-// as dark by the legacy toggle, so one toggle from it goes to Light.
+// Switches between Dark and Light, and repaints the UI. Both added palettes
+// are treated as dark by the legacy toggle, so one toggle from either goes to Light.
 void theme_toggle(void);
 
 // The accent colour, chosen from a fixed set of presets (Appearance > Accent
 // colour): 0 blue (default), 1 red, 2 orange, 3 yellow, 4 lime, 5 green,
 // 6 cyan, 7 indigo, 8 purple, 9 pink, 10 brown, 11 slate. Dark and Light
-// retain the same presets; Tokyo Night uses its own blue (#7aa2f7) for the
-// default and honors any explicitly selected non-default accent.
+// retain the same presets; Tokyo Night defaults to its own blue (#7aa2f7),
+// Amber on Black to amber (#ffad2e), and both honor any explicitly selected
+// non-default accent.
 // Persists in the config.
 #define THEME_ACCENT_COUNT 12
 lv_color_t theme_accent_preset(int index);
 int theme_get_accent(void);
 void theme_set_accent(int index);
 
-// Picks the legacy Dark or Light preset rather than flipping. In particular,
-// asking for Dark while Tokyo Night is selected switches back to the original
-// Dark palette rather than treating Tokyo Night as Dark.
+// Picks the legacy Dark or Light preset rather than flipping. Asking for Dark
+// while either added palette is selected switches back to the original Dark
+// palette rather than treating the dark palette as Dark.
 void theme_set_dark(bool dark);
 
 // Picks a specific built-in theme, saves it, and repaints the visible UI.

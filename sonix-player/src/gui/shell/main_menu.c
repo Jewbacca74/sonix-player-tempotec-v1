@@ -107,7 +107,7 @@ static void set_label_if_changed(lv_obj_t *label, const char *text) {
 // inside the card, including after a font-size or theme change.
 static void main_menu_layout_tokyo_home(bool force) {
 	if (!menu_grid || !menu_cfg || !mini_player || !mini_player_copy ||
-			!bp_is_tempotec_v1() || !theme_is_tokyo_night()) {
+			!bp_is_tempotec_v1() || !theme_uses_function_glyphs()) {
 		return;
 	}
 
@@ -214,7 +214,7 @@ static void main_menu_refresh_theme(void) {
 	}
 
 	bool compact = bp_is_tempotec_v1();
-	bool tokyo = theme_is_tokyo_night();
+	bool tokyo = theme_uses_function_glyphs();
 	bool prototype_layout = compact && tokyo;
 
 	for (int i = 0; i < 6; i++) {

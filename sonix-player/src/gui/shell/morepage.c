@@ -90,7 +90,7 @@ static void more_list_build(gui_config_t *cfg, const grid_entry_t *entries, int 
 }
 
 static void more_refresh_theme(void) {
-	bool tokyo_v1 = bp_is_tempotec_v1() && theme_is_tokyo_night();
+	bool tokyo_v1 = bp_is_tempotec_v1() && theme_uses_function_glyphs();
 	if (more_grid) {
 		lv_obj_set_hidden(more_grid, tokyo_v1);
 	}

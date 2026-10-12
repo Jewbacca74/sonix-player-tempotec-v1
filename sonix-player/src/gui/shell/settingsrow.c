@@ -343,11 +343,11 @@ static void fit_row(lv_obj_t *row) {
 	// throughout the settings UI. Its width is reserved only while the theme is
 	// enabled, so Dark and Light retain their original label position.
 	lv_obj_t *leading = settingsrow_leading_icon(row);
-	int32_t leading_width = theme_is_tokyo_night() && leading ? lv_obj_get_width(leading) + ROW_LABEL_GAP : 0;
+	int32_t leading_width = theme_uses_function_glyphs() && leading ? lv_obj_get_width(leading) + ROW_LABEL_GAP : 0;
 	avail -= leading_width;
 
 	lv_obj_t *caption = settingsrow_caption(row);
-	bool captioned = caption && compact_rows() && theme_is_tokyo_night();
+	bool captioned = caption && compact_rows() && theme_uses_function_glyphs();
 	if (caption) {
 		lv_obj_set_hidden(caption, !captioned);
 	}
@@ -483,7 +483,7 @@ static void settingsrow_refresh_theme(void) {
 		theme_apply_slider_knob(built_sliders[i]);
 	}
 
-	bool tokyo = theme_is_tokyo_night();
+	bool tokyo = theme_uses_function_glyphs();
 	bool flat_rows = compact_rows() && tokyo;
 	for (int i = 0; i < leading_icon_count; i++) {
 		lv_obj_t *row = leading_icons[i].row;
@@ -825,9 +825,10 @@ void settingsrow_chevron_active(lv_obj_t *row, bool active) {
 		return;
 	}
 	if (active) {
-		// Adwaita green, the "this one is on" colour, at full strength so it
-		// stands out against the muted grey of every other row.
-		lv_obj_set_style_image_recolor(chev, lv_color_make(46, 194, 126), 0);
+		// Adwaita green marks an active row, except Amber on Black uses its
+		// signal amber so the palette remains monochrome.
+		lv_obj_set_style_image_recolor(chev,
+									   theme_is_amber_on_black() ? theme()->accent : lv_color_make(46, 194, 126), 0);
 		lv_obj_set_style_image_recolor_opa(chev, LV_OPA_COVER, 0);
 		lv_obj_set_style_image_opa(chev, LV_OPA_COVER, 0);
 	} else {
