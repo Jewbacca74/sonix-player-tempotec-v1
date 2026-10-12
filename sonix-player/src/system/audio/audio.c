@@ -2517,6 +2517,11 @@ static void seek_flush(snd_pcm_t *pcm, bool already_dropped) {
 	if (pcm_is_bluetooth(pcm) && !already_dropped) {
 		return;
 	}
+	// A seek drops a running stream, so the DAC is silenced and its ramp waited
+	// out first -- the same move as every other stream drop, and for the same
+	// reason: the DMA stopping mid-sample is the click. Lifted by the first write
+	// at the new position (see alsa_track_unmute).
+	alsa_track_mute();
 	snd_pcm_drop(pcm);
 	snd_pcm_prepare(pcm);
 }
@@ -2658,6 +2663,9 @@ static void play_wav_file(const char *filepath) {
 				seek_flush(pcm_handle, false);
 				is_paused = false;
 				bt_seek_probe_arm(pcm_handle);
+				// The seek muted the DAC for its drop; the first write at the new
+				// position lifts it again.
+				gap_unmuted = false;
 			}
 
 			bytes_played = target_byte_pos;
@@ -2714,6 +2722,7 @@ static void play_wav_file(const char *filepath) {
 				paused_at_ms = log_ms();
 			}
 			if (pcm_handle && (log_ms() - paused_at_ms) >= paused_device_close_ms()) {
+				alsa_track_mute(); // silent before the codec powers down with the stream
 				snd_pcm_close(pcm_handle);
 				pcm_handle = NULL;
 				pcm_device_open = false;
@@ -2748,6 +2757,7 @@ static void play_wav_file(const char *filepath) {
 				// milliseconds of open, inaudible under a finger that has just
 				// pressed play.
 				if (pcm_handle) {
+					alsa_track_mute(); // silent before the codec is torn down for the reopen
 					snd_pcm_close(pcm_handle);
 					pcm_handle = NULL;
 					pcm_device_open = false;
@@ -3308,6 +3318,7 @@ static void play_decoded_file(const char *filepath, decode_format_t format) {
 				// Silence while waiting, when there is a stream to silence: a
 				// seek can arrive with the device handed back.
 				if (pcm_handle) {
+					alsa_track_mute(); // silence before the stream is dropped to wait
 					snd_pcm_drop(pcm_handle);
 					dropped_while_waiting = true;
 				}
@@ -3374,6 +3385,9 @@ static void play_decoded_file(const char *filepath, decode_format_t format) {
 				seek_flush(pcm_handle, dropped_while_waiting);
 				is_paused = false;
 				bt_seek_probe_arm(pcm_handle);
+				// The seek muted the DAC for its drop; the first write at the new
+				// position lifts it again.
+				gap_unmuted = false;
 			}
 
 			bytes_played = (int64_t)(target_frame * frame_bytes);
@@ -3430,6 +3444,7 @@ static void play_decoded_file(const char *filepath, decode_format_t format) {
 				paused_at_ms = log_ms();
 			}
 			if (pcm_handle && (log_ms() - paused_at_ms) >= paused_device_close_ms()) {
+				alsa_track_mute(); // silent before the codec powers down with the stream
 				snd_pcm_close(pcm_handle);
 				pcm_handle = NULL;
 				pcm_device_open = false;
@@ -3457,6 +3472,7 @@ static void play_decoded_file(const char *filepath, decode_format_t format) {
 				// real-time audio thread never yields the CPU. Open-then-write
 				// is the path every track start takes.
 				if (pcm_handle) {
+					alsa_track_mute(); // silent before the codec is torn down for the reopen
 					snd_pcm_close(pcm_handle);
 					pcm_handle = NULL;
 					pcm_device_open = false;
