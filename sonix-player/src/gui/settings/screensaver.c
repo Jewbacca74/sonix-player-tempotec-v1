@@ -85,10 +85,10 @@ static bool next_pending; // a request is out with the loader
 // than the blurred block would show a black bar above it and another below.
 // The height is therefore taken from the picture, leaving nothing to paint.
 //
-// Over an album cover the picture's box stops where the strip starts. Over a
-// photograph from the folder it is the whole screen: there the strip is drawn
-// ON TOP of a picture that fills the panel, which is what "the blurred part
-// hides the bottom of the image" means.
+// In the regular themes an album cover stops where its blurred strip starts.
+// A folder photograph already fills the screen. Amber uses that same full-image
+// arrangement for album art too, so its black-transparent panel really overlays
+// the cover rather than a plain black area below it.
 //
 // Cheap, and a no-op unless something has actually changed.
 static int cover_box_h;
@@ -102,7 +102,8 @@ static void set_strip_height(int height) {
 		lv_obj_set_height(info_strip, strip_h);
 		lv_obj_align(info_strip, LV_ALIGN_BOTTOM_MID, 0, 0);
 	}
-	int want = source == SCREENSAVER_SOURCE_IMAGES ? screen_h : screen_h - strip_h;
+	bool panel_over_art = source == SCREENSAVER_SOURCE_IMAGES || theme_is_amber_on_black();
+	int want = panel_over_art ? screen_h : screen_h - strip_h;
 	if (want != cover_box_h) {
 		cover_box_h = want;
 		lv_obj_set_height(cover_box, cover_box_h);
@@ -418,8 +419,9 @@ static void refresh_content(void) {
 		return;
 	}
 
-	// The strip first: the artwork below is scaled to whatever is left above
-	// it, so its height has to be settled before that sum is done.
+	// The strip first: in the regular themes the artwork is scaled into the
+	// area above it. Amber settles the same panel height, but overlays it on a
+	// full-screen cover so the transparent black still shows the sleeve below.
 	const lv_image_dsc_t *backdrop = player_backdrop_image();
 	// The player's blurred copy is as tall as whatever shows it, and one
 	// arrangement shows it behind the whole screen: a strip that tall is the
@@ -431,11 +433,12 @@ static void refresh_content(void) {
 	const lv_image_dsc_t *cover = shown_cover;
 	if (cover) {
 		lv_image_set_src(cover_img, cover);
-		// Fill the whole area above the strip, cropping the overflow: a
-		// letterboxed cover with black bars would look like a bug, not a
-		// screensaver.
+		// Fill the available artwork area, cropping the overflow: a letterboxed
+		// cover with black bars would look like a bug, not a screensaver. Amber
+		// deliberately fills the whole screen, including the transparent panel.
+		int image_h = theme_is_amber_on_black() ? screen_h : screen_h - strip_h;
 		int32_t zoom_w = (256 * screen_w) / (int32_t)cover->header.w;
-		int32_t zoom_h = (256 * (screen_h - strip_h)) / (int32_t)cover->header.h;
+		int32_t zoom_h = (256 * image_h) / (int32_t)cover->header.h;
 		lv_image_set_scale(cover_img, zoom_w > zoom_h ? zoom_w : zoom_h);
 		lv_obj_set_hidden(cover_img, false);
 		lv_obj_set_hidden(cover_placeholder, true);
