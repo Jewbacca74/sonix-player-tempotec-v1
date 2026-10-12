@@ -880,13 +880,22 @@ void timeset_init(gui_config_t *cfg) {
 	lv_obj_set_style_pad_ver(dst_card, compact() ? 8 : 14, 0);
 	lv_obj_set_style_pad_gap(dst_card, compact() ? 6 : 10, 0);
 	lv_obj_set_scrollable(dst_card, false);
-	lv_obj_set_flex_flow(dst_card, LV_FLEX_FLOW_ROW);
+	// Side by side on the 480 px panel, where half a card is room enough for
+	// either label. Stacked on the 240 px one: the labels are 131 and 141 px
+	// wide at this size and the card holds 212 px inside, so a pill squeezed
+	// to its half of the row carries a label that runs past its rounded ends
+	// and over the other pill's text.
+	lv_obj_set_flex_flow(dst_card, compact() ? LV_FLEX_FLOW_COLUMN : LV_FLEX_FLOW_ROW);
 	lv_obj_set_flex_align(dst_card, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
 	for (int i = 0; i < 2; i++) {
 		lv_obj_t *pill = lv_btn_create(dst_card);
-		lv_obj_set_size(pill, LV_SIZE_CONTENT, compact() ? 34 : 52);
-		lv_obj_set_flex_grow(pill, 1);
+		if (compact()) {
+			lv_obj_set_size(pill, lv_pct(100), 34);
+		} else {
+			lv_obj_set_size(pill, LV_SIZE_CONTENT, 52);
+			lv_obj_set_flex_grow(pill, 1);
+		}
 		lv_obj_set_style_pad_hor(pill, compact() ? 6 : 14, 0);
 		lv_obj_set_style_radius(pill, LV_RADIUS_CIRCLE, 0);
 		lv_obj_set_style_shadow_width(pill, 0, 0);
