@@ -1,4 +1,4 @@
-# Sonix Player for TempoTec Variations V1
+![Sonix Player for TempoTec Variations V1 with the Tokyo Night main menu](screenshots/readme-banner.png)
 
 This repository is a community port of the original **[Sonix Player](https://github.com/Jepl4r/sonix-player)** project by **[Jepl4r](https://github.com/Jepl4r)** — a replacement music player for the HiBy R3 Pro II and HiBy R1 — to the **TempoTec Variations V1**. The player and the firmware packer come from that project; this fork adds the V1 board profile, the V1 packaging path and the V1 documentation. See [Credits](#credits).
 
@@ -7,10 +7,92 @@ The firmware builder starts with an official V1 update package, replaces the sto
 This is not an official TempoTec or HiBy release. **The port has been tested on physical TempoTec Variations V1 hardware and works perfectly on the tested device.** It targets the **TempoTec Variations V1 only**; compatibility with the V1-A or other players in the Variations family is not established.
 
 
+## Screenshots
+
+Interface previews, rendered at the V1's native 240 × 320 resolution. Click any picture to open it full size. (This is not the default font neither the color)
+
+<table>
+  <tr>
+    <td align="center">
+      <a href="screenshots/main-menu.png"><img src="screenshots/main-menu.png" width="180" alt="Main menu"></a>
+      <br><sub><b>Main menu</b></sub>
+    </td>
+    <td align="center">
+      <a href="screenshots/music.png"><img src="screenshots/music.png" width="180" alt="Music"></a>
+      <br><sub><b>Music</b></sub>
+    </td>
+    <td align="center">
+      <a href="screenshots/more.png"><img src="screenshots/more.png" width="180" alt="More"></a>
+      <br><sub><b>More</b></sub>
+    </td>
+    <td align="center">
+      <a href="screenshots/wireless.png"><img src="screenshots/wireless.png" width="180" alt="Wireless"></a>
+      <br><sub><b>Wireless</b></sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <a href="screenshots/settings.png"><img src="screenshots/settings.png" width="180" alt="Settings"></a>
+      <br><sub><b>Settings</b></sub>
+    </td>
+    <td align="center">
+      <a href="screenshots/now-playing.png"><img src="screenshots/now-playing.png" width="180" alt="Now Playing"></a>
+      <br><sub><b>Now Playing</b></sub>
+    </td>
+    <td align="center">
+      <a href="screenshots/file-browser.png"><img src="screenshots/file-browser.png" width="180" alt="File Browser"></a>
+      <br><sub><b>File Browser</b></sub>
+    </td>
+    <td align="center">
+      <a href="screenshots/streaming.png"><img src="screenshots/streaming.png" width="180" alt="Streaming"></a>
+      <br><sub><b>Streaming</b></sub>
+    </td>
+  </tr>
+</table>
+
+### Tokyo Night theme
+
+The same screens in the added **Tokyo Night** appearance: a blue-black palette with function-matched icons, chosen in Settings → Appearance → Theme. It is available on the V1 alongside Dark and Light.
+
+<table>
+  <tr>
+    <td align="center">
+      <a href="screenshots/tokyonight/main-menu.png"><img src="screenshots/tokyonight/main-menu.png" width="180" alt="Tokyo Night main menu"></a>
+      <br><sub><b>Main menu</b></sub>
+    </td>
+    <td align="center">
+      <a href="screenshots/tokyonight/music.png"><img src="screenshots/tokyonight/music.png" width="180" alt="Tokyo Night music"></a>
+      <br><sub><b>Music</b></sub>
+    </td>
+    <td align="center">
+      <a href="screenshots/tokyonight/more.png"><img src="screenshots/tokyonight/more.png" width="180" alt="Tokyo Night more"></a>
+      <br><sub><b>More</b></sub>
+    </td>
+    <td align="center">
+      <a href="screenshots/tokyonight/wireless.png"><img src="screenshots/tokyonight/wireless.png" width="180" alt="Tokyo Night wireless"></a>
+      <br><sub><b>Wireless</b></sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <a href="screenshots/tokyonight/settings.png"><img src="screenshots/tokyonight/settings.png" width="180" alt="Tokyo Night settings"></a>
+      <br><sub><b>Settings</b></sub>
+    </td>
+    <td align="center">
+      <a href="screenshots/tokyonight/streaming.png"><img src="screenshots/tokyonight/streaming.png" width="180" alt="Tokyo Night streaming"></a>
+      <br><sub><b>Streaming</b></sub>
+    </td>
+    <td></td>
+    <td></td>
+  </tr>
+</table>
+
 ## Contents
 
 - [Target device](#target-device)
 - [Features](#features)
+- [Screenshots](#screenshots)
+  - [Tokyo Night theme](#tokyo-night-theme)
 - [Build a firmware image](#build-a-firmware-image)
 - [Install or restore firmware](#install-or-restore-firmware)
 - [Streaming credentials](#streaming-credentials)
@@ -42,7 +124,7 @@ The project includes a local music library and file browser, album artwork, play
 
 Local audio decoder inputs include WAV, FLAC, MP3, Ogg Vorbis, Opus, M4A/M4B/MP4, AAC, ALAC, WavPack, APE, AIFF/AIFC, CAF and DSD (DSF/DFF) files. DSP features include a 10-band graphic equalizer, parametric EQ, MSEB, crossfeed, channel balance and ReplayGain.
 
-The interface font is a setting (Settings → Appearance → Font): MiSans, Neon 80s, Roboto Mono, Roboto Condensed, Inter and Barlow Semi Condensed, plus any `.ttf`/`.otf` file put in the `Fonts` folder on the card. Whatever a face is missing — Cyrillic, Greek, Hangul, kanji, Arabic — is drawn by MiSans behind it, so the whole interface stays legible in every language. The four added families are under the SIL Open Font License; see [`sonix-player/assets/fonts/FONT-LICENSES.txt`](sonix-player/assets/fonts/FONT-LICENSES.txt) for the copyright notices and the exact files.
+The interface font is a setting (Settings → Appearance → Font): MiSans, Neon 80s, Roboto, Roboto Condensed, Inter and Barlow Semi Condensed, plus any `.ttf`/`.otf` file put in the `Fonts` folder on the card. Whatever a face is missing — Cyrillic, Greek, Hangul, kanji, Arabic — is drawn by MiSans behind it, so the whole interface stays legible in every language. The four added families are under the SIL Open Font License; see [`sonix-player/assets/fonts/FONT-LICENSES.txt`](sonix-player/assets/fonts/FONT-LICENSES.txt) for the copyright notices and the exact files.
 
 The boot screen is a setting too (Settings → Appearance → Boot screen): **Retrospace**, the default, **Space**, **Travelling in space**, or **Stock**, the firmware's own light and dark pictures. The choice cannot live in the config — the script that draws the logo runs before any filesystem holding a config is mounted — so it is written to the same flash marker the theme uses, and appears from the next power-on.
 
@@ -94,6 +176,24 @@ api_key =
 api_secret =
 ```
 
+### Last.fm sign-in: TLS certificate error
+
+If sign-in shows **“No reply from Last.fm”** and the player log says the certificate is not signed by a known authority, this is a TLS trust-store problem, not a Last.fm password or API-key problem. The player loads its CA bundle at startup.
+
+On a Windows PC with ADB installed, connect the player by USB, enable **Developer options → ADB**, then run these commands in PowerShell. They download the current CA bundle from curl's official CA-bundle site and copy it to the microSD card:
+
+```powershell
+curl.exe -fL "https://curl.se/ca/cacert.pem" -o "$HOME\Downloads\cacert.pem"
+Get-Item "$HOME\Downloads\cacert.pem"
+adb shell mkdir -p /mnt/sd_0/.local
+adb push "$HOME\Downloads\cacert.pem" /mnt/sd_0/.local/cacert.pem
+adb shell ls -l /mnt/sd_0/.local/cacert.pem
+```
+
+`Get-Item` should show that the downloaded file exists and has a non-zero length; the final `ls` checks the copy on the card. If the file was downloaded somewhere other than `Downloads`, use its actual path in the `adb push` command.
+
+If `[network] ca_bundle` is set in `/usr/data/device_config.ini`, that configured file takes priority: update that file instead. Otherwise, the player checks `/mnt/sd_0/.local/cacert.pem` before its firmware CA bundle. After copying, restart the player normally so it reloads the certificates; do not interrupt an update that is still in progress. If the TLS error persists, try a different trusted Wi-Fi network and see [how to collect a log](docs/collecting-logs.md). Never share `streaming-keys.ini`, API secrets, or your Last.fm password.
+
 For a private development build, `sonix-player/tools/seal_streamkeys.py` can place a sealed credentials file in the assets before compilation. This format is **obfuscation, not secure encryption**: the key is compiled into the player binary and can be recovered by someone who analyzes it. Never publish a binary containing credentials you do not intend to disclose.
 
 ## Build from source
@@ -142,11 +242,13 @@ The packer also checks the V1 model identity and builds the root filesystem's up
 
 - `sonix-player/` — player sources, LVGL configuration, launcher and build system.
 - `sonix-packer/` — stock-image preparation, firmware packaging and validation scripts.
+- `docs/collecting-logs.md` — which logs to send with a bug report, and how to take them.
+- `sonix-player/tools/sonix-bugreport.sh` — one-file diagnostic bundle, run on the device over ADB.
 - `FEATURES.md` — detailed feature notes.
 - `PATCHES.md` — device-porting and implementation notes.
 - `LICENSE` — GNU General Public License, version 3. Third-party components retain their own licenses.
 
-For bug reports, include the exact model, the firmware build/commit and relevant logs. Remove personal data and **never attach streaming credentials**.
+For bug reports, include the exact model, the firmware build/commit and relevant logs — see [Collecting logs for a bug report](docs/collecting-logs.md) for what to turn on and where the files are. Remove personal data and **never attach streaming credentials**.
 
 ## Credits
 

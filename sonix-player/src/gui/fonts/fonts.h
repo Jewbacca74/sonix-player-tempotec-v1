@@ -24,7 +24,7 @@
 //
 // MiSans is the face the interface was designed with, and the one it falls
 // back to. Settable families are the others in the directory: Neon 80s on the
-// V1, and Roboto Mono, Roboto Condensed, Inter and Barlow Semi Condensed
+// V1, and Roboto, Roboto Condensed, Inter and Barlow Semi Condensed
 // (their files are optional -- a family the firmware does not carry is simply
 // not offered). MiSans stays at the end of every chain, so a face with no
 // Cyrillic, no kanji or no Hangul still draws the whole interface.

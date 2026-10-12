@@ -34,7 +34,7 @@
 - **Crossfeed** - level, cutoff and delay, all adjustable.
 - **ReplayGain** - off, track or album, read from the tags.
 - **Fade** - one to twelve seconds at the track boundary.
-- **Gapless** - the PCM device stays open between tracks of the same shape.
+- **Gapless** - on by default; the PCM device stays open between tracks of the same shape. A track that ends on its own hands over its queue. A manual skip (next, previous, or a track picked from a list) drops the old queue and keeps the device open, so the next track skips the device open and the DAC mute. A saved `audio.gapless = 0` turns it off.
 - **DSD** - DoP by default, with nothing in the chain allowed to touch the
   samples; or converted here to 176.4 kHz PCM. DoP falls back to conversion by
   itself when the device refuses the rate.
@@ -134,6 +134,13 @@ certificate checking, and HLS.
   databases.
 - Save states, battery RAM, five palettes, shaders and GBC color
   correction.
+- On the V1 the picture fills the panel width at 240x216 with crisp
+  nearest-neighbour scaling, leaving a compact touch D-pad and A/B buttons
+  below. The physical Play/Pause button acts as Game Boy Start, and the skip
+  buttons act as Select, so neither needs an on-screen button. The shader
+  overlays (the pixel grid of the real LCD panels) are drawn inside the 3x
+  upscale the 480-px HiBy panels use and are not offered on the V1; palettes
+  and GBC color correction apply on every board.
 
 ## Settings
 

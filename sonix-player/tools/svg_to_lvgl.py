@@ -117,6 +117,9 @@ ICONS = [
     # not there: they ride inside the 72 px thumbnail box on a library row and
     # the 56 px one on a search hit.
     ("music-2.svg", "music2", 32),
+    ("bird.svg", "bird", 32),  # Flappy Bird's monochrome Tokyo Night glyph
+    ("tidal-mark.svg", "tidal_mark", 32),  # Tokyo Night's letter-only streaming mark
+    ("qobuz-mark.svg", "qobuz_mark", 32),
     ("artist.svg", "artist", 32),
     ("podcast-list.svg", "podcast_list", 40), # 40 px for the 60 px podcast rows
     ("artist-album.svg", "artist_album", 32),
@@ -175,6 +178,10 @@ ICONS = [
     # Dialog glyphs: a pairing in flight, and "the volume is over there".
     ("bluetooth-connecting.svg", "bluetooth_connecting", 56),
     ("headphones.svg", "headphones_big", 56),
+    # Settings categories on the compact V1: display controls and hidden
+    # developer tools, drawn in the same Lucide outline style as the rest.
+    ("monitor.svg", "monitor", 30),
+    ("terminal.svg", "terminal", 30),
     ("sun.svg", "sun", 30),
     # Keyboard. Shift and caps lock share one key, so they share a size.
     ("shift.svg", "shift", 30),

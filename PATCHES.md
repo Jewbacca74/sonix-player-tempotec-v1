@@ -34,10 +34,33 @@ Music landing page keeps Settings plus one overflow menu in the title row;
 Playlists/Browse, Favourites and Search remain available inside that menu
 without allowing four actions to reduce the heading to `Musi…`.
 
+The Game Boy / Game Boy Color emulator had its own geometry, written for the
+480-wide panels only: the picture was the panel's full width (160×144 at 3×,
+480×432), the D-pad was 220 px a side and the in-game menu was a 360 px card,
+all of which ran off a 240 px screen. The V1 now fits the picture to **240×216**
+with nearest-neighbour sampling: it fills the panel width at 1.5× while keeping
+the Game Boy aspect ratio, trading uniform pixel-square sizes for a much larger
+playing area. A compact 102 px D-pad and 46 px A/B buttons sit in the 104 rows
+below it. The physical Play/Pause key supplies Game Boy Start; the previous and
+next skip keys supply Select, so those two controls no longer take touchscreen
+space. The in-game menu is the 200 px card this interface uses for modals on the
+V1 instead of a scaled 360. The zone that opens that menu is the middle 96×72
+of the picture, still where a playing hand never rests. Every touch rectangle
+stays inside the panel, and no two of them overlap (the emulator's reader takes
+the first zone a finger is in, so an overlap between two buttons would silently
+prefer one of them). The shader choices (the pixel grid of the real panels) are
+left out on this board; palettes, GBC colour correction and save states are
+unaffected. See the layout comment at the top of
+`src/gui/gearboy/gearboyplay.c` and the scale note in
+`src/system/gearboy/gearboy.h`.
+
 Now Playing on the V1 shows the blurred artwork behind the **whole screen**, as
-Studio does on every player, with a centred square sleeve (about 154×154 px,
-soft-clipped corners) floating on it; the source badges and alternative-layout
-pills travel on the sleeve itself. The cover panel and the control deck are
+Studio does on every player, with a horizontally centred square sleeve (about
+150×150 px in the standard arrangement, its top aligned with the visible back
+chevron and at least 18 px of air before the track-info row; a little taller
+while the alternative arrangement keeps the deck to the waveform, clocks and
+transport, soft-clipped corners throughout) floating on it; the source badges
+and alternative-layout pills travel on the sleeve itself. The cover panel and the control deck are
 both transparent on this board, so there is no horizontal edge under the
 sleeve where the panel colour used to meet the deck's own blurred block. The
 deck is not a fixed height: `compact_deck_height()` adds up the four rows --

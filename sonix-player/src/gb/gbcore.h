@@ -13,15 +13,15 @@
 // and samples, take the keys, save the battery RAM.
 //
 // The core already produces RGB565, the framebuffer format of this device:
-// between the emulator and the panel there is no conversion, only the 3x
-// upscale.
+// the player only scales the frame to the size selected for its panel.
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-// The Game Boy screen size. Times 3 it is 480x432, exactly the panel width and
-// 432 of its 720 rows.
+// The Game Boy screen size. Times 3 it is 480x432, exactly the width of the
+// 480-wide HiBy panels; the V1 fits it into 240x216 using the output-size
+// scaler in src/system/gearboy/gearboy.h.
 #define GB_WIDTH 160
 #define GB_HEIGHT 144
 

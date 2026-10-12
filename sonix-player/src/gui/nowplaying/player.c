@@ -116,8 +116,6 @@ static bool progress_running;
 // the previous/next buttons instead of making adjacent targets overlap.
 #define CORNER_BTN_EXT_CLICK 20
 #define COMPACT_CORNER_BTN_EXT_CLICK 6
-#define COMPACT_PROGRESS_EXTRA_INSET 12
-#define COMPACT_CONTROLS_EXTRA_INSET 4
 
 // How often the progress display is carried forward between polls.
 //
@@ -148,8 +146,19 @@ static int polls_since_stop = POLLS_FAST_AFTER_STOP;
 // line heights of the fonts in force (compact_deck_height()), so the four rows
 // -- names, bar, clocks, transport -- always fit one under the other with
 // these gaps between them and nothing lifted into the row above. The rest of
-// the 320 px goes to the sleeve, which keeps COMPACT_SLEEVE_MARGIN above and
-// below it and at least COMPACT_SLEEVE_SIDE_MARGIN off either bezel.
+// the 320 px goes to the sleeve. The standard sleeve shares the chevron's
+// top edge and keeps a generous gap off the names; the alternative sleeve
+// stays below the chevron row. Both keep the side margins when width-limited.
+
+// What every row of the V1's deck keeps to the panel's side edges: the names and
+// the format over them, the bar under them, the two clocks below it and the
+// transport at the bottom, all flush at one measure. The panel's own padding is
+// six, and a line of words at six sits wider than the bar under it, which reads
+// as text spilled over the controls rather than as rows of them; twelve is where
+// the layout this page is measured against puts the lot. It is also what the
+// corner buttons of the transport row need: they are pinned to the row's ends,
+// wider than the glyphs inside them, and no extra inset is asked for on top.
+#define COMPACT_DECK_SIDE 12
 #define COMPACT_DECK_PAD_TOP 4
 #define COMPACT_DECK_PAD_BOTTOM 4
 #define COMPACT_DECK_GAP 4
@@ -157,8 +166,18 @@ static int polls_since_stop = POLLS_FAST_AFTER_STOP;
 #define COMPACT_FAV_BTN_H 26
 #define COMPACT_PLAY_BTN 44
 #define COMPACT_SKIP_BTN 42
-#define COMPACT_SLEEVE_MARGIN 4
+#define COMPACT_SLEEVE_MARGIN 2
+#define COMPACT_STANDARD_SLEEVE_MARGIN 14
+// The visible stroke begins 8 px below the top of its 36 px touch slot.
+#define COMPACT_CHEVRON_INSET_TOP 8
 #define COMPACT_SLEEVE_SIDE_MARGIN 10
+// The alternative sleeve stays below the chevron row: it can grow much
+// wider than the standard sleeve because its names live on the artwork.
+#define COMPACT_SLEEVE_TOP 42
+
+// Raise the track-info row as a unit so the title and artist keep a little
+// extra room from the progress bar without shifting the controls below it.
+#define PLAYER_TRACK_INFO_LIFT 4
 
 // The controls block as the R3 Pro II has it, 720 - 480. A taller panel (the
 // R1's 800) spreads what it has over the rows rather than leaving it empty
@@ -980,6 +999,9 @@ static void set_over_cover(bool on) {
 		if (on) {
 			lv_obj_set_style_image_recolor(icon_objs[i], lv_color_white(), 0);
 			lv_obj_set_style_image_recolor_opa(icon_objs[i], LV_OPA_COVER, 0);
+		} else if (theme_is_tokyo_night()) {
+			lv_obj_set_style_image_recolor(icon_objs[i], theme_semantic_color(THEME_SEMANTIC_CYAN), 0);
+			lv_obj_set_style_image_recolor_opa(icon_objs[i], LV_OPA_COVER, 0);
 		} else {
 			lv_obj_remove_local_style_prop(icon_objs[i], LV_STYLE_IMAGE_RECOLOR, 0);
 			lv_obj_remove_local_style_prop(icon_objs[i], LV_STYLE_IMAGE_RECOLOR_OPA, 0);
@@ -1237,6 +1259,19 @@ static void slider_over_waveform(bool over) {
 // ---------------------------------------------------------------------------
 
 #define STUDIO_MARGIN 14 // what the sleeve keeps to the side edges
+// What the head of words and the line of format under the sleeve keep to the
+// side edges. The sleeve keeps STUDIO_MARGIN because it is a picture; the two
+// lines of words keep the padding every other row on the page is measured in --
+// 6 px on the V1, the inset the standard arrangement sets the names and the
+// bitrate back by -- so the same sentence does not start at one margin here and
+// another there. The wide panels have always taken the sleeve's number, and do.
+#define STUDIO_INFO_MARGIN bp_pick(6, STUDIO_MARGIN)
+// What each end of the head holds back for the button that sits there, gutter
+// included: the chevron's 36 px slot at the panel's padding on the left, the
+// ellipsis's 36 px at the head's own edge on the right, which on the V1 is the
+// same inset -- forty-two either way. The names are centred in what is left, so
+// a long title is cut before it reaches a button instead of drawn under one.
+#define STUDIO_HEAD_SIDE_ROOM bp_pick(42, 68)
 // The regular numbers are the wide panels'. The V1's head holds two lines of
 // 16 and 14 px faces -- forty-odd pixels of words -- and at 78, with the gaps
 // the wide panels keep, the head, the line under the sleeve and the controls
@@ -1871,8 +1906,8 @@ static void lyrics_layout(void) {
 	lv_obj_set_pos(lyrics_note, view_x, view_y + h / 2 - 20);
 
 	if (lyrics_head) {
-		lv_obj_set_pos(lyrics_head, STUDIO_MARGIN, lyrics_head_top());
-		lv_obj_set_size(lyrics_head, cover_box_w - 2 * STUDIO_MARGIN, STUDIO_HEAD_H);
+		lv_obj_set_pos(lyrics_head, STUDIO_INFO_MARGIN, lyrics_head_top());
+		lv_obj_set_size(lyrics_head, cover_box_w - 2 * STUDIO_INFO_MARGIN, STUDIO_HEAD_H);
 	}
 	lyrics_progress_apply(lyrics_now ? LYRICS_FULL : 0);
 }
@@ -2076,7 +2111,7 @@ static void lyrics_build(void) {
 
 	lv_obj_t *col = lv_obj_create(lyrics_head);
 	lv_obj_remove_style_all(col);
-	lv_obj_set_size(col, cover_box_w - 2 * STUDIO_MARGIN - 2 * 68, LV_SIZE_CONTENT);
+	lv_obj_set_size(col, cover_box_w - 2 * STUDIO_INFO_MARGIN - 2 * STUDIO_HEAD_SIDE_ROOM, LV_SIZE_CONTENT);
 	lv_obj_align(col, LV_ALIGN_CENTER, 0, 0);
 	lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
 	lv_obj_set_flex_align(col, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
@@ -2268,7 +2303,7 @@ static void studio_badges_move(lv_obj_t *parent, int y) {
 		if (parent) {
 			lv_obj_set_parent(marks[i], parent);
 		}
-		lv_obj_align(marks[i], LV_ALIGN_TOP_RIGHT, -STUDIO_MARGIN, y);
+		lv_obj_align(marks[i], LV_ALIGN_TOP_RIGHT, -STUDIO_INFO_MARGIN, y);
 	}
 }
 
@@ -2290,8 +2325,8 @@ static void studio_place(void) {
 
 	int cover_x = (screen_w - size) / 2;
 
-	lv_obj_set_pos(studio_head, STUDIO_MARGIN, head_top);
-	lv_obj_set_size(studio_head, screen_w - 2 * STUDIO_MARGIN, STUDIO_HEAD_H);
+	lv_obj_set_pos(studio_head, STUDIO_INFO_MARGIN, head_top);
+	lv_obj_set_size(studio_head, screen_w - 2 * STUDIO_INFO_MARGIN, STUDIO_HEAD_H);
 
 	studio_badges_move(NULL, head_top + STUDIO_HEAD_H + STUDIO_BADGE_GAP);
 
@@ -2308,8 +2343,8 @@ static void studio_place(void) {
 	// sleeve: on the V1 the sleeve is narrower than "24/176.4 FLAC", and a
 	// line laid out at the sleeve's width clipped the format and the mark.
 	// Centred, so the mark stays under the middle of the sleeve.
-	lv_obj_set_size(studio_quality, screen_w - 2 * STUDIO_MARGIN, STUDIO_QUALITY_H);
-	lv_obj_set_pos(studio_quality, STUDIO_MARGIN, cover_y + size + STUDIO_QUALITY_GAP);
+	lv_obj_set_size(studio_quality, screen_w - 2 * STUDIO_INFO_MARGIN, STUDIO_QUALITY_H);
+	lv_obj_set_pos(studio_quality, STUDIO_INFO_MARGIN, cover_y + size + STUDIO_QUALITY_GAP);
 
 	lyrics_layout();
 }
@@ -2576,21 +2611,29 @@ static void apply_layout(void) {
 		// The labels are a percentage of their parent in the standard layout,
 		// and a percentage of a parent that is itself sized by its contents is
 		// nothing at all. Here they size themselves -- so each pill ends where
-		// its own text ends -- up to what is left of the sleeve once the star's
-		// disc and the margins are taken off.
-		int room = cover_art_w - 2 * alt_pad - alt_fav_size - 2 * alt_pill_pad_h - bp_pick(8, 24);
-		if (room < 40) {
-			room = 40;
+		// its own text ends -- up to what is left of the sleeve once the
+		// margins are taken off. The two rows keep different limits: the title
+		// is the top row, clear of the star's disc, and may run the whole way
+		// across; the artist sits in the disc's own row and has to stop short
+		// of it. That is a short name's width on both, and only a long one
+		// still goes around.
+		int title_room = cover_art_w - 2 * alt_pad - 2 * alt_pill_pad_h - bp_pick(4, 12);
+		int artist_room = cover_art_w - 2 * alt_pad - alt_fav_size - 2 * alt_pill_pad_h - bp_pick(4, 12);
+		if (title_room < 40) {
+			title_room = 40;
+		}
+		if (artist_room < 40) {
+			artist_room = 40;
 		}
 		if (song_title_label) {
 			lv_obj_set_parent(song_title_label, alt_title_pill);
 			lv_obj_set_width(song_title_label, LV_SIZE_CONTENT);
-			lv_obj_set_style_max_width(song_title_label, room, 0);
+			lv_obj_set_style_max_width(song_title_label, title_room, 0);
 		}
 		if (song_artist_label) {
 			lv_obj_set_parent(song_artist_label, alt_artist_pill);
 			lv_obj_set_width(song_artist_label, LV_SIZE_CONTENT);
-			lv_obj_set_style_max_width(song_artist_label, room, 0);
+			lv_obj_set_style_max_width(song_artist_label, artist_room, 0);
 		}
 
 		if (fav_btn_obj && alt_fav_circle) {
@@ -4609,6 +4652,31 @@ void player_sheet_attach_drag(lv_obj_t *obj, bool opening) {
 	lv_obj_add_event_cb(obj, sheet_drag_cb, LV_EVENT_PRESS_LOST, (void *)(uintptr_t)opening);
 }
 
+// The standard sleeve starts at the visible top of the back chevron, not
+// below its touch slot. Derive it from the shell's player position so moving
+// the chevron cannot leave the artwork on a different top line.
+static int compact_sleeve_top(void) {
+	return layout_alt_now ? COMPACT_SLEEVE_TOP
+						  : back_btn_centre_y() - bp_header_button_size() / 2 + COMPACT_CHEVRON_INSET_TOP;
+}
+
+// As large as fits above the deck, with an even side for whole-pixel centring.
+// Raising the standard sleeve gives it a modest size increase while reserving
+// real breathing room above the names, rather than spending it all on artwork.
+static int compact_sleeve_side(void) {
+	int bottom = layout_alt_now ? COMPACT_SLEEVE_MARGIN : COMPACT_STANDARD_SLEEVE_MARGIN;
+	int side = LV_MIN(cover_box_w - 2 * COMPACT_SLEEVE_SIDE_MARGIN, cover_box_h - compact_sleeve_top() - bottom);
+	if (side < 64) {
+		side = LV_MIN(cover_box_w, cover_box_h);
+	}
+	return side & ~1;
+}
+
+// Both arrangements keep the sleeve centred side to side.
+static void compact_place_sleeve(void) {
+	lv_obj_align(cover_art_group, LV_ALIGN_TOP_MID, 0, compact_sleeve_top());
+}
+
 // The height of the V1's deck for the arrangement on show: its rows at the
 // fonts in force, the gaps between them and the padding either end, added up
 // rather than guessed. A deck this tall never has a row drawn over another,
@@ -4670,21 +4738,28 @@ static void placeholder_rescale(void) { placeholder_scale(cover_placeholder_icon
 // V1 sleeve.
 static void studio_empty_rescale(void) { placeholder_scale(studio_empty_icon, studio_cover_size); }
 
-// Where the placeholder mark sits in the sleeve. Centred, except in the
-// alternative arrangement, where the title and artist pills take the bottom
-// of the sleeve: the mark is centred in the space above them, so the two do
-// not sit one on the other.
+// Where the placeholder mark sits in the sleeve.
+//
+// The mark stands in for the sleeve, so it is centred on the sleeve. The wide
+// panels' sleeve is the panel itself, so that is the panel's middle. On the
+// V1 the sleeve is the square floating above the deck, not the whole panel,
+// so the mark must follow the sleeve's position rather than the panel's middle.
+//
+// In the alternative arrangement the title and artist pills take the bottom
+// of the sleeve: the mark is lifted out of their way, as it has always been.
 static void placeholder_place(void) {
 	if (!cover_placeholder_icon) {
 		return;
 	}
-	int lift = 0;
+	int dy = 0;
 	if (layout_alt_now) {
 		int pills = lv_font_get_line_height(bp_title_font()) + lv_font_get_line_height(bp_artist_font()) +
 					4 * alt_pill_pad_v + 6;
-		lift = (pills + alt_pad) / 2;
+		dy = -(pills + alt_pad) / 2;
+	} else if (bp_is_tempotec_v1()) {
+		dy = compact_sleeve_top() + cover_art_h / 2 - cover_box_h / 2;
 	}
-	lv_obj_align(cover_placeholder_icon, LV_ALIGN_CENTER, 0, -lift);
+	lv_obj_align(cover_placeholder_icon, LV_ALIGN_CENTER, 0, dy);
 }
 
 // Recomputes the panel split and the sleeve size for the arrangement on show
@@ -4709,13 +4784,7 @@ static void player_apply_geometry(void) {
 	}
 	cover_box_h = want_cover;
 
-	// The sleeve: as large as the panel allows with its margins kept, and an
-	// even number so it centres on whole pixels.
-	int side = LV_MIN(cover_box_w - 2 * COMPACT_SLEEVE_SIDE_MARGIN, cover_box_h - 2 * COMPACT_SLEEVE_MARGIN);
-	if (side < 64) {
-		side = LV_MIN(cover_box_w, cover_box_h);
-	}
-	side &= ~1;
+	int side = compact_sleeve_side();
 	cover_art_w = side;
 	cover_art_h = side;
 	backdrop_h = menu_height;
@@ -4723,7 +4792,7 @@ static void player_apply_geometry(void) {
 	lv_obj_set_size(player_menu, cover_box_w, menu_height);
 	lv_obj_set_size(cover_panel, cover_box_w, cover_box_h);
 	lv_obj_set_size(cover_art_group, cover_art_w, cover_art_h);
-	lv_obj_center(cover_art_group);
+	compact_place_sleeve();
 	lv_obj_center(cover_img);
 	placeholder_rescale();
 	placeholder_place();
@@ -4766,9 +4835,11 @@ void player_init(gui_config_t *cfg) {
 	// behind the whole screen rather than behind the deck alone.
 	const bool compact = bp_is_tempotec_v1();
 	backdrop_full = compact;
-	compact_progress_width = compact
-						 ? (int)cfg->screen_width - 2 * (cfg->padding + COMPACT_PROGRESS_EXTRA_INSET)
-						 : 0;
+	// The side inset every row of the deck is laid out at, and the width of a
+	// row that follows from it. Outside the V1 that is the panel's own padding,
+	// and the bar takes the row whole.
+	const int deck_side = compact ? COMPACT_DECK_SIDE : (int)cfg->padding;
+	compact_progress_width = compact ? (int)cfg->screen_width - 2 * deck_side : 0;
 	if (compact_progress_width < 1) {
 		compact_progress_width = 0;
 	}
@@ -4797,13 +4868,7 @@ void player_init(gui_config_t *cfg) {
 	alt_pill_pad_h = compact ? 10 : ALT_PILL_PAD_H;
 	alt_pill_pad_v = compact ? 5 : ALT_PILL_PAD_V;
 	if (compact) {
-		// The sleeve: as large as the panel allows with its margins kept, and
-		// an even number so it centres on whole pixels.
-		int side = LV_MIN(cover_box_w - 2 * COMPACT_SLEEVE_SIDE_MARGIN, cover_box_h - 2 * COMPACT_SLEEVE_MARGIN);
-		if (side < 64) {
-			side = LV_MIN(cover_box_w, cover_box_h);
-		}
-		side &= ~1;
+		int side = compact_sleeve_side();
 		cover_art_w = side;
 		cover_art_h = side;
 	}
@@ -4832,7 +4897,7 @@ void player_init(gui_config_t *cfg) {
 	lv_obj_set_flex_align(player_menu, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_style_border_width(player_menu, 0, 0);
 	lv_obj_set_style_radius(player_menu, 0, 0);
-	lv_obj_set_style_pad_hor(player_menu, cfg->padding, 0);
+	lv_obj_set_style_pad_hor(player_menu, deck_side, 0);
 	if (compact) {
 		// The rows start at the top of the deck rather than floating in the
 		// middle of it: the deck is the height they add up to, and what the
@@ -4861,7 +4926,13 @@ void player_init(gui_config_t *cfg) {
 	lv_obj_set_style_border_width(song_info, 0, 0);
 	lv_obj_set_style_radius(song_info, 0, 0);
 	lv_obj_set_style_pad_all(song_info, 0, 0);
-	lv_obj_set_style_pad_column(song_info, compact ? 4 : 10, 0);
+	// The gutter between the names and the star/format column is the panel's own
+	// padding rather than the deck's wider side inset: half of it, so the two
+	// halves of the line are held apart without the gap eating the row.
+	lv_obj_set_style_pad_column(song_info, compact ? (int)cfg->padding : 10, 0);
+	// Raise the complete row so the text stays aligned with the star and has
+	// a little more breathing room above the progress bar on every track.
+	lv_obj_set_style_translate_y(song_info, -PLAYER_TRACK_INFO_LIFT, 0);
 	lv_obj_set_flex_flow(song_info, LV_FLEX_FLOW_ROW);
 	lv_obj_set_flex_align(song_info, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_scrollable(song_info, false);
@@ -4913,6 +4984,18 @@ void player_init(gui_config_t *cfg) {
 	lv_obj_set_flex_flow(song_side, LV_FLEX_FLOW_COLUMN);
 	lv_obj_set_flex_align(song_side, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_scrollable(song_side, false);
+	// The star and the format make their column as wide as what they say, and
+	// LVGL's flex has no shrink: a row asked for more than it holds does not hand
+	// the two sides back a little each, it gives the fixed column everything and
+	// leaves the names a column of nothing at all, with the line running off the
+	// panel beside them. So the column is capped at half the row. Every string
+	// this player writes fits well inside that at these faces -- "16/44.1 FLAC"
+	// is seventy-odd pixels on the V1 against a hundred and fourteen -- and were
+	// one ever longer, what is lost is the end of the format line, cut at its own
+	// column's edge: the same price the row already charges for a title longer
+	// than its half. Neither of the two is then ever drawn over the other, in
+	// either direction, whatever the tags say.
+	lv_obj_set_style_max_width(song_side, ((int)cfg->screen_width - 2 * deck_side) / 2, 0);
 
 	lv_obj_t *fav_btn = lv_btn_create(song_side);
 	fav_btn_obj = fav_btn;
@@ -4947,7 +5030,7 @@ void player_init(gui_config_t *cfg) {
 	lv_obj_set_hidden(wave_box, true);
 
 	{
-		wave_w = (int)cfg->screen_width - 2 * cfg->padding;
+		wave_w = (int)cfg->screen_width - 2 * deck_side;
 		if (wave_w < WAVEFORM_BARS) {
 			wave_w = WAVEFORM_BARS;
 		}
@@ -5054,8 +5137,7 @@ void player_init(gui_config_t *cfg) {
 	// the left, out of the way of the transport controls.
 	lv_obj_t *player_controls_buttons = lv_obj_create(player_menu);
 	controls_row = player_controls_buttons;
-	int controls_width = (int)cfg->screen_width -
-					  2 * (cfg->padding + (compact ? COMPACT_CONTROLS_EXTRA_INSET : 0));
+	int controls_width = (int)cfg->screen_width - 2 * deck_side;
 	lv_obj_set_size(player_controls_buttons, compact ? controls_width : lv_pct(100), LV_SIZE_CONTENT);
 	lv_obj_set_style_bg_opa(player_controls_buttons, 0, 0);
 	lv_obj_set_style_border_width(player_controls_buttons, 0, 0);
@@ -5202,7 +5284,11 @@ void player_init(gui_config_t *cfg) {
 	cover_art_group = lv_obj_create(cover_panel);
 	lv_obj_remove_style_all(cover_art_group);
 	lv_obj_set_size(cover_art_group, cover_art_w, cover_art_h);
-	lv_obj_center(cover_art_group);
+	if (compact) {
+		compact_place_sleeve();
+	} else {
+		lv_obj_center(cover_art_group);
+	}
 	lv_obj_set_style_bg_opa(cover_art_group, LV_OPA_TRANSP, 0);
 	lv_obj_set_style_border_width(cover_art_group, 0, 0);
 	lv_obj_set_style_pad_all(cover_art_group, 0, 0);
@@ -5370,7 +5456,7 @@ void player_init(gui_config_t *cfg) {
 
 	studio_head = lv_obj_create(studio_box);
 	lv_obj_remove_style_all(studio_head);
-	lv_obj_set_size(studio_head, cover_box_w - 2 * STUDIO_MARGIN, STUDIO_HEAD_H);
+	lv_obj_set_size(studio_head, cover_box_w - 2 * STUDIO_INFO_MARGIN, STUDIO_HEAD_H);
 	lv_obj_set_scrollable(studio_head, false);
 	lv_obj_set_clickable(studio_head, false);
 
@@ -5380,7 +5466,7 @@ void player_init(gui_config_t *cfg) {
 	// against one of them.
 	studio_text_col = lv_obj_create(studio_head);
 	lv_obj_remove_style_all(studio_text_col);
-	lv_obj_set_size(studio_text_col, cover_box_w - 2 * STUDIO_MARGIN - 2 * 68, LV_SIZE_CONTENT);
+	lv_obj_set_size(studio_text_col, cover_box_w - 2 * STUDIO_INFO_MARGIN - 2 * STUDIO_HEAD_SIDE_ROOM, LV_SIZE_CONTENT);
 	lv_obj_align(studio_text_col, LV_ALIGN_CENTER, 0, 0);
 	lv_obj_set_flex_flow(studio_text_col, LV_FLEX_FLOW_COLUMN);
 	lv_obj_set_flex_align(studio_text_col, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);

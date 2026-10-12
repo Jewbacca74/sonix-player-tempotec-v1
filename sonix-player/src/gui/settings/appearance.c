@@ -6,8 +6,10 @@
 
 #include "lvgl/lvgl.h"
 
+#include "src/gui/board_profile.h"
 #include "src/gui/fonts/fonts.h"
 #include "src/gui/nowplaying/player.h"
+#include "src/gui/shell/icons.h"
 #include "src/gui/shell/settingsrow.h"
 #include "src/gui/shell/switcher.h"
 #include "src/gui/shell/theme.h"
@@ -19,14 +21,16 @@
 
 lv_obj_t *appearance_screen;
 
-static lv_obj_t *btn_dark;
-static lv_obj_t *btn_light;
+static lv_obj_t *theme_buttons[3];
 static lv_obj_t *btn_boot[4]; // Stock / Retrospace / Space / Travelling in space
 static lv_obj_t *btn_clock[4]; // left / centre / right / hidden
 static lv_obj_t *btn_accent[THEME_ACCENT_COUNT]; // the coloured circles
 static lv_obj_t *tint_toggle;
 static lv_obj_t *battery_percent_toggle;
 static lv_obj_t *text_size_pill[FONTS_TEXT_COUNT]; // normal / large / small
+static lv_obj_t *tokyo_palette_card;
+static lv_obj_t *tokyo_glyph_card;
+static lv_obj_t *tokyo_glyph_icons[4];
 // The status bar draws the battery either way; this setting is only about the
 // number beside it, and is on by default.
 static void battery_percent_cb(lv_event_t *e) {
@@ -155,19 +159,35 @@ static void font_pills_reload_cb(lv_event_t *e) {
 	font_pills_rebuild();
 }
 
-// Paints the pair: the active choice is the filled accent button, the other a
-// quiet neutral, like libadwaita's suggested-action beside a regular button.
+// Paints the active theme choice. Dark and Light keep their original filled
+// accent treatment; Tokyo Night gets the quieter selected pill from the
+// approved compact mockup.
 static void refresh_buttons(void) {
-	bool dark = theme_is_dark();
-
-	lv_obj_t *on = dark ? btn_dark : btn_light;
-	lv_obj_t *off = dark ? btn_light : btn_dark;
-
-	lv_obj_set_style_bg_color(on, theme()->accent, 0);
-	lv_obj_set_style_text_color(lv_obj_get_child(on, 0), lv_color_white(), 0);
-
-	lv_obj_set_style_bg_color(off, theme()->surface_pressed, 0);
-	lv_obj_set_style_text_color(lv_obj_get_child(off, 0), theme()->text_primary, 0);
+	theme_kind_t active_kind = theme_get_kind();
+	for (int i = 0; i < 3; i++) {
+		lv_obj_t *button = theme_buttons[i];
+		if (!button) {
+			continue;
+		}
+		lv_obj_t *label = lv_obj_get_child(button, 0);
+		bool active = i == (int)active_kind;
+		if (active && active_kind == THEME_KIND_TOKYO_NIGHT) {
+			lv_obj_set_style_bg_color(button, lv_color_mix(theme()->accent, theme()->surface, (lv_opa_t)64), 0);
+			lv_obj_set_style_text_color(label, theme()->text_primary, 0);
+			lv_obj_set_style_border_width(button, 1, 0);
+			lv_obj_set_style_border_color(button, theme()->accent, 0);
+			lv_obj_set_style_border_opa(button, LV_OPA_COVER, 0);
+		} else if (active) {
+			lv_obj_set_style_bg_color(button, theme()->accent, 0);
+			lv_obj_set_style_text_color(label, lv_color_white(), 0);
+			lv_obj_set_style_border_width(button, 0, 0);
+		} else {
+			lv_obj_set_style_bg_color(button, theme()->surface_pressed, 0);
+			lv_obj_set_style_text_color(label, theme()->text_primary, 0);
+			lv_obj_set_style_border_width(button, 0, 0);
+		}
+		lv_obj_set_style_bg_opa(button, LV_OPA_COVER, 0);
+	}
 }
 
 // The active circle wears a ring in the text colour; the rest sit flat.
@@ -247,9 +267,9 @@ static lv_obj_t *make_clock_choice(lv_obj_t *parent, const char *text, int pos, 
 	return btn;
 }
 
-static void pick_cb(lv_event_t *e) {
-	bool dark = (bool)(uintptr_t)lv_event_get_user_data(e);
-	theme_set_dark(dark);
+static void theme_pick_cb(lv_event_t *e) {
+	theme_kind_t kind = (theme_kind_t)(intptr_t)lv_event_get_user_data(e);
+	theme_set_kind(kind);
 	refresh_buttons();
 }
 
@@ -303,21 +323,116 @@ static lv_obj_t *make_boot_choice(lv_obj_t *parent, const char *text, int choice
 	return btn;
 }
 
-static lv_obj_t *make_choice(lv_obj_t *parent, const char *text, bool dark, bool compact) {
+static lv_obj_t *make_theme_choice(lv_obj_t *parent, const char *text, theme_kind_t kind, bool compact) {
 	lv_obj_t *btn = lv_btn_create(parent);
-	lv_obj_set_size(btn, LV_SIZE_CONTENT, compact ? 40 : 64);
-	lv_obj_set_style_pad_hor(btn, compact ? 14 : 34, 0);
-	lv_obj_set_style_radius(btn, LV_RADIUS_CIRCLE, 0); // Adwaita pill button
+	lv_obj_set_size(btn, LV_SIZE_CONTENT, compact ? 34 : 64);
+	lv_obj_set_style_pad_hor(btn, compact ? 4 : 34, 0);
+	lv_obj_set_style_radius(btn, compact ? 7 : LV_RADIUS_CIRCLE, 0);
 	lv_obj_set_style_shadow_width(btn, 0, 0);
 	lv_obj_set_style_border_width(btn, 0, 0);
-	lv_obj_add_event_cb(btn, pick_cb, LV_EVENT_CLICKED, (void *)(uintptr_t)dark);
+	lv_obj_set_flex_grow(btn, compact ? (kind == THEME_KIND_TOKYO_NIGHT ? 2 : 1) : 0);
+	lv_obj_add_event_cb(btn, theme_pick_cb, LV_EVENT_CLICKED, (void *)(intptr_t)kind);
 
 	lv_obj_t *label = lv_label_create(btn);
 	lv_label_set_text(label, tr(text));
-	lv_obj_set_style_text_font(label, compact ? &font_ui_18 : &font_ui_24, 0);
+	lv_obj_set_style_text_font(label, compact ? &font_ui_14 : &font_ui_24, 0);
 	lv_obj_center(label);
 
 	return btn;
+}
+
+static lv_obj_t *tokyo_preview_card(lv_obj_t *parent, const char *title, bool compact) {
+	lv_obj_t *card = lv_obj_create(parent);
+	lv_obj_set_width(card, lv_pct(100));
+	lv_obj_set_height(card, LV_SIZE_CONTENT);
+	lv_obj_add_style(card, &theme_style_card, 0);
+	lv_obj_set_style_radius(card, compact ? 10 : 12, 0);
+	lv_obj_set_style_border_width(card, 0, 0);
+	lv_obj_set_style_shadow_width(card, 0, 0);
+	lv_obj_set_style_pad_all(card, compact ? 8 : 20, 0);
+	lv_obj_set_style_pad_gap(card, compact ? 6 : 14, 0);
+	lv_obj_set_scrollable(card, false);
+	lv_obj_set_event_bubble(card, true);
+	lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_flex_align(card, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+
+	lv_obj_t *name = lv_label_create(card);
+	lv_label_set_text(name, tr(title));
+	lv_obj_add_style(name, &theme_style_text, 0);
+	lv_obj_set_style_text_font(name, compact ? &font_ui_16 : &font_ui_24, 0);
+	return card;
+}
+
+static void appearance_preview_refresh(void) {
+	bool show = bp_is_tempotec_v1() && theme_is_tokyo_night();
+	if (tokyo_palette_card) {
+		lv_obj_set_hidden(tokyo_palette_card, !show);
+	}
+	if (tokyo_glyph_card) {
+		lv_obj_set_hidden(tokyo_glyph_card, !show);
+	}
+	static const theme_semantic_t tones[4] = {
+		THEME_SEMANTIC_CYAN, THEME_SEMANTIC_BLUE, THEME_SEMANTIC_BLUE, THEME_SEMANTIC_PURPLE,
+	};
+	for (int i = 0; i < 4; i++) {
+		if (!tokyo_glyph_icons[i]) {
+			continue;
+		}
+		lv_obj_set_style_image_recolor(tokyo_glyph_icons[i], theme_semantic_color(tones[i]), 0);
+		lv_obj_set_style_image_recolor_opa(tokyo_glyph_icons[i], LV_OPA_COVER, 0);
+	}
+}
+
+static void build_tokyo_previews(lv_obj_t *container, bool compact) {
+	if (!compact) {
+		return;
+	}
+
+	tokyo_palette_card = tokyo_preview_card(container, "appearance_tokyo_palette", compact);
+	lv_obj_t *palette = lv_obj_create(tokyo_palette_card);
+	lv_obj_set_size(palette, lv_pct(100), 13);
+	lv_obj_set_style_bg_opa(palette, LV_OPA_TRANSP, 0);
+	lv_obj_set_style_border_width(palette, 0, 0);
+	lv_obj_set_style_pad_all(palette, 0, 0);
+	lv_obj_set_style_pad_column(palette, 3, 0);
+	lv_obj_set_flex_flow(palette, LV_FLEX_FLOW_ROW);
+	lv_obj_set_flex_align(palette, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	static const lv_color_t swatches[] = {
+		LV_COLOR_MAKE(26, 27, 38), LV_COLOR_MAKE(36, 40, 59), LV_COLOR_MAKE(192, 202, 245),
+		LV_COLOR_MAKE(122, 162, 247), LV_COLOR_MAKE(125, 207, 255), LV_COLOR_MAKE(187, 154, 247),
+		LV_COLOR_MAKE(158, 206, 106), LV_COLOR_MAKE(247, 118, 142),
+	};
+	for (unsigned int i = 0; i < sizeof(swatches) / sizeof(swatches[0]); i++) {
+		lv_obj_t *swatch = lv_obj_create(palette);
+		lv_obj_set_height(swatch, 12);
+		lv_obj_set_flex_grow(swatch, 1);
+		lv_obj_set_style_bg_color(swatch, swatches[i], 0);
+		lv_obj_set_style_bg_opa(swatch, LV_OPA_COVER, 0);
+		lv_obj_set_style_border_width(swatch, 0, 0);
+		lv_obj_set_style_radius(swatch, 3, 0);
+	}
+
+	tokyo_glyph_card = tokyo_preview_card(container, "appearance_function_glyphs", compact);
+	lv_obj_t *glyph_row = lv_obj_create(tokyo_glyph_card);
+	lv_obj_set_size(glyph_row, lv_pct(100), 24);
+	lv_obj_set_style_bg_opa(glyph_row, LV_OPA_TRANSP, 0);
+	lv_obj_set_style_border_width(glyph_row, 0, 0);
+	lv_obj_set_style_pad_all(glyph_row, 0, 0);
+	lv_obj_set_style_pad_column(glyph_row, 10, 0);
+	lv_obj_set_flex_flow(glyph_row, LV_FLEX_FLOW_ROW);
+	lv_obj_set_flex_align(glyph_row, LV_FLEX_ALIGN_SPACE_AROUND, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	static const lv_image_dsc_t *const glyphs[4] = {&icon_music2, &icon_play_status, &icon_wifi, &icon_equalizer};
+	for (int i = 0; i < 4; i++) {
+		lv_obj_t *icon = lv_image_create(glyph_row);
+		lv_image_set_src(icon, glyphs[i]);
+		lv_obj_add_style(icon, &theme_style_icon, 0);
+		lv_obj_set_size(icon, 18, 18);
+		lv_image_set_inner_align(icon, LV_IMAGE_ALIGN_CENTER);
+		lv_image_set_scale(icon, (uint32_t)(LV_SCALE_NONE * 18 / LV_MAX((int)glyphs[i]->header.w,
+																(int)glyphs[i]->header.h)));
+		tokyo_glyph_icons[i] = icon;
+	}
+	appearance_preview_refresh();
 }
 
 void appearance_init(gui_config_t *cfg) {
@@ -349,14 +464,28 @@ void appearance_init(gui_config_t *cfg) {
 	lv_obj_set_style_bg_opa(row, 0, 0);
 	lv_obj_set_style_border_width(row, 0, 0);
 	lv_obj_set_style_pad_all(row, 0, 0);
-	lv_obj_set_style_pad_gap(row, compact ? 6 : 14, 0);
+	lv_obj_set_style_pad_gap(row, compact ? 4 : 14, 0);
 	lv_obj_set_scrollable(row, false);
 	lv_obj_set_event_bubble(row, true);
-	lv_obj_set_flex_flow(row, compact ? LV_FLEX_FLOW_ROW_WRAP : LV_FLEX_FLOW_ROW);
+	lv_obj_set_flex_flow(row, compact ? LV_FLEX_FLOW_ROW : LV_FLEX_FLOW_ROW_WRAP);
 	lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START);
 
-	btn_dark = make_choice(row, "appearance_dark", true, compact);
-	btn_light = make_choice(row, "appearance_light", false, compact);
+	theme_buttons[THEME_KIND_DARK] = make_theme_choice(row, "appearance_dark", THEME_KIND_DARK, compact);
+	theme_buttons[THEME_KIND_LIGHT] = make_theme_choice(row, "appearance_light", THEME_KIND_LIGHT, compact);
+	theme_buttons[THEME_KIND_TOKYO_NIGHT] =
+		make_theme_choice(row, "appearance_tokyo_night", THEME_KIND_TOKYO_NIGHT, compact);
+
+	lv_obj_t *theme_note = lv_label_create(card);
+	lv_label_set_long_mode(theme_note, LV_LABEL_LONG_WRAP);
+	lv_obj_set_width(theme_note, lv_pct(100));
+	lv_obj_add_style(theme_note, &theme_style_text_dim, 0);
+	lv_obj_set_style_text_font(theme_note, compact ? &font_ui_14 : &font_ui_18, 0);
+	lv_label_set_text(theme_note, tr("appearance_theme_note"));
+
+	// Compact Tokyo Night palette and glyph examples, immediately after the
+	// theme switch. Hidden for Dark/Light so their existing Appearance page
+	// remains unchanged; all of the real controls below stay in place.
+	build_tokyo_previews(container, compact);
 
 	// A second card: which picture the next power-on shows. Unlike every
 	// other choice on this page it is not only a config value -- it also
@@ -545,6 +674,7 @@ void appearance_init(gui_config_t *cfg) {
 	theme_register_refresh(refresh_clock_buttons);
 	theme_register_refresh(refresh_accent_buttons);
 	theme_register_refresh(refresh_font_pills);
+	theme_register_refresh(appearance_preview_refresh);
 
 	// The card's fonts again on every visit: one copied over the USB cable
 	// while the player was running is offered the next time this page comes
