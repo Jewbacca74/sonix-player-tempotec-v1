@@ -15,8 +15,8 @@ typedef enum {
 } theme_kind_t;
 
 // Fixed semantic accents used by Tokyo Night's function-matched glyphs.
-// Amber on Black maps every colored role to its own amber accent; Dark and
-// Light continue to use their existing single accent.
+// Amber on Black maps every icon role to its signal amber; Dark and Light
+// continue to use their existing single accent.
 typedef enum {
 	THEME_SEMANTIC_BLUE,
 	THEME_SEMANTIC_CYAN,
@@ -26,6 +26,20 @@ typedef enum {
 	THEME_SEMANTIC_RED,
 	THEME_SEMANTIC_MUTED,
 } theme_semantic_t;
+
+// Role-specific colors from the reference Now Playing screen. The Amber theme
+// uses the exact cream, amber and dark-orange steps; other themes map these to
+// their ordinary text/accent colors.
+typedef enum {
+	THEME_PLAYER_CHROME_PRIMARY,
+	THEME_PLAYER_CHROME_SECONDARY,
+	THEME_PLAYER_CHROME_MUTED,
+	THEME_PLAYER_CHROME_PLAYBACK,
+	THEME_PLAYER_CHROME_PROGRESS_REST,
+	THEME_PLAYER_CHROME_CHEVRON,
+	THEME_PLAYER_CHROME_SHUFFLE_IDLE,
+	THEME_PLAYER_CHROME_OVERFLOW,
+} theme_player_chrome_t;
 
 // The handful of colours the whole UI is built from. Everything on screen
 // pulls from the active one; Tokyo Night and Amber on Black remain dark
@@ -103,6 +117,7 @@ theme_kind_t theme_get_kind(void);
 // on Black maps every icon role to its accent; in Dark/Light they resolve to
 // the chosen accent (or secondary text for muted).
 lv_color_t theme_semantic_color(theme_semantic_t role);
+lv_color_t theme_player_chrome_color(theme_player_chrome_t role);
 
 // Switches between Dark and Light, and repaints the UI. Both added palettes
 // are treated as dark by the legacy toggle, so one toggle from either goes to Light.

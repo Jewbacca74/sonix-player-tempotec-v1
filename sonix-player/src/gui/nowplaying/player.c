@@ -970,7 +970,6 @@ static void set_over_cover(bool on) {
 	chrome_over_cover = on;
 
 	bool amber = theme_is_amber_on_black();
-	lv_color_t amber_accent = theme()->accent;
 	lv_obj_t *const text_objs[] = {song_title_label, elapsed_label, remaining_label};
 	lv_obj_t *const dim_objs[] = {song_artist_label, format_label, queue_position_label};
 	lv_obj_t *const icon_objs[] = {prev_icon, next_icon};
@@ -980,7 +979,8 @@ static void set_over_cover(bool on) {
 			continue;
 		}
 		if (amber) {
-			lv_obj_set_style_text_color(text_objs[i], amber_accent, 0);
+			lv_obj_set_style_text_color(text_objs[i],
+									   theme_player_chrome_color(THEME_PLAYER_CHROME_PRIMARY), 0);
 		} else if (on) {
 			lv_obj_set_style_text_color(text_objs[i], lv_color_white(), 0);
 		} else {
@@ -992,7 +992,8 @@ static void set_over_cover(bool on) {
 			continue;
 		}
 		if (amber) {
-			lv_obj_set_style_text_color(dim_objs[i], amber_accent, 0);
+			lv_obj_set_style_text_color(dim_objs[i],
+									   theme_player_chrome_color(THEME_PLAYER_CHROME_SECONDARY), 0);
 		} else if (on) {
 			lv_obj_set_style_text_color(dim_objs[i], lv_color_make(200, 200, 200), 0);
 		} else {
@@ -1004,7 +1005,8 @@ static void set_over_cover(bool on) {
 			continue;
 		}
 		if (amber) {
-			lv_obj_set_style_image_recolor(icon_objs[i], amber_accent, 0);
+			lv_obj_set_style_image_recolor(icon_objs[i],
+									   theme_player_chrome_color(THEME_PLAYER_CHROME_PRIMARY), 0);
 			lv_obj_set_style_image_recolor_opa(icon_objs[i], LV_OPA_COVER, 0);
 		} else if (on) {
 			lv_obj_set_style_image_recolor(icon_objs[i], lv_color_white(), 0);
@@ -1087,11 +1089,16 @@ static lv_color_t tone_shaped(int sat, int want) {
 // what makes the two pages look like they belong to the same player.
 static lv_color_t alt_surface(void) { return tone_shaped(ALT_SURFACE_SAT, ALT_SURFACE_LUMA); }
 static lv_color_t alt_mark(void) {
-	return theme_is_amber_on_black() ? theme()->accent : tone_shaped(ALT_MARK_SAT, ALT_MARK_LUMA);
+	return theme_is_amber_on_black()
+			   ? theme_player_chrome_color(THEME_PLAYER_CHROME_PLAYBACK)
+			   : tone_shaped(ALT_MARK_SAT, ALT_MARK_LUMA);
 }
 
 static lv_color_t chrome_accent(void) {
-	return layout_wave_now && !theme_is_amber_on_black() ? alt_mark() : theme()->accent;
+	if (theme_is_amber_on_black()) {
+		return theme_player_chrome_color(THEME_PLAYER_CHROME_PLAYBACK);
+	}
+	return layout_wave_now ? alt_mark() : theme()->accent;
 }
 
 // The type on that surface. Worked out rather than fixed so that a change to
@@ -1157,18 +1164,24 @@ static void paint_alt_tint(void) {
 	}
 
 	lv_color_t surface = alt_surface();
-	lv_color_t ink = theme_is_amber_on_black() ? theme()->accent : alt_ink();
+	bool amber = theme_is_amber_on_black();
+	lv_color_t title_ink = amber
+						 ? theme_player_chrome_color(THEME_PLAYER_CHROME_PRIMARY)
+						 : alt_ink();
+	lv_color_t artist_ink = amber
+						  ? theme_player_chrome_color(THEME_PLAYER_CHROME_SECONDARY)
+						  : title_ink;
 
 	lv_obj_set_style_bg_color(alt_title_pill, surface, 0);
 	lv_obj_set_style_bg_color(alt_artist_pill, surface, 0);
 	lv_obj_set_style_bg_color(alt_fav_circle, surface, 0);
 
 	if (song_title_label) {
-		lv_obj_set_style_text_color(song_title_label, ink, 0);
+		lv_obj_set_style_text_color(song_title_label, title_ink, 0);
 	}
 	if (song_artist_label) {
-		lv_obj_set_style_text_color(song_artist_label, ink, 0);
-		lv_obj_set_style_text_opa(song_artist_label, theme_is_amber_on_black() ? LV_OPA_COVER : LV_OPA_80, 0);
+		lv_obj_set_style_text_color(song_artist_label, artist_ink, 0);
+		lv_obj_set_style_text_opa(song_artist_label, amber ? LV_OPA_COVER : LV_OPA_80, 0);
 	}
 	update_fav_button();
 	alt_pills_sync();
@@ -3161,6 +3174,16 @@ static void player_refresh_theme(void) {
 	if (!cover_panel)
 		return;
 
+	bool amber = theme_is_amber_on_black();
+	lv_color_t progress_rest = lv_color_make(255, 255, 255);
+	lv_color_t playback = theme()->accent;
+	lv_color_t overflow = lv_color_make(150, 150, 150);
+	if (amber) {
+		progress_rest = theme_player_chrome_color(THEME_PLAYER_CHROME_PROGRESS_REST);
+		playback = theme_player_chrome_color(THEME_PLAYER_CHROME_PLAYBACK);
+		overflow = theme_player_chrome_color(THEME_PLAYER_CHROME_OVERFLOW);
+	}
+
 	if (studio_box) {
 		lv_obj_set_style_bg_color(studio_box, theme()->screen_bg, 0);
 	}
@@ -3173,20 +3196,16 @@ static void player_refresh_theme(void) {
 	// The backdrop over a loaded cover is always the dark treatment -- same
 	// look in both themes; only the no-cover panel follows the theme.
 	cover_set_backdrop_light(false);
-	lv_obj_set_style_bg_color(progress_slider,
-								   theme_is_amber_on_black() ? theme()->text_secondary : lv_color_make(255, 255, 255),
-							   LV_PART_MAIN);
+	lv_obj_set_style_bg_color(progress_slider, progress_rest, LV_PART_MAIN);
 	if (!layout_wave_now) {
-		lv_obj_set_style_bg_opa(progress_slider,
-								 theme_is_amber_on_black() ? LV_OPA_COVER : LV_OPA_30, LV_PART_MAIN);
+		lv_obj_set_style_bg_opa(progress_slider, amber ? LV_OPA_COVER : LV_OPA_30, LV_PART_MAIN);
 	}
-	lv_obj_set_style_bg_color(progress_slider, theme()->accent, LV_PART_INDICATOR);
-	lv_obj_set_style_bg_color(progress_slider, theme()->accent, LV_PART_KNOB);
+	lv_obj_set_style_bg_color(progress_slider, playback, LV_PART_INDICATOR);
+	lv_obj_set_style_bg_color(progress_slider, playback, LV_PART_KNOB);
 	set_over_cover(chrome_over_cover); // recolours the player chrome for the new palette
 	update_fav_button();
 	if (more_btn_icon) {
-		lv_obj_set_style_image_recolor(more_btn_icon,
-									   theme_is_amber_on_black() ? theme()->text_secondary : lv_color_make(150, 150, 150), 0);
+		lv_obj_set_style_image_recolor(more_btn_icon, overflow, 0);
 	}
 	update_repeat_button();
 	update_speed_button();
@@ -3453,20 +3472,21 @@ static void update_fav_button(void) {
 	// last on every track change, so anything that tints the star elsewhere is
 	// overwritten.
 	//
-	// An empty star is drawn in the disc's own ink so that it reads on it; a
-	// filled one keeps the yellow on existing themes; Amber on Black uses its
-	// signal amber so the palette stays monochrome. It says "favourite" rather
-	// than "here is the album's colour again".
+	// Amber's star stays in the subdued brown sampled from the reference,
+	// instead of competing with the cream title and playback accent.
 	if (starred) {
 		lv_image_set_src(fav_btn_icon, &icon_star_filled);
 		lv_obj_set_style_image_recolor(fav_btn_icon,
-									   theme_is_amber_on_black() ? theme()->accent : lv_color_make(246, 211, 45),
+									   theme_is_amber_on_black()
+										   ? theme_player_chrome_color(THEME_PLAYER_CHROME_MUTED)
+										   : lv_color_make(246, 211, 45),
 								   0); // Adwaita yellow outside Amber on Black
 	} else {
 		lv_image_set_src(fav_btn_icon, &icon_star);
 		lv_obj_set_style_image_recolor(fav_btn_icon,
-									   theme_is_amber_on_black() ? theme()->accent
-															 : layout_alt_now ? alt_ink() : lv_color_make(150, 150, 150),
+									   theme_is_amber_on_black()
+										   ? theme_player_chrome_color(THEME_PLAYER_CHROME_MUTED)
+										   : layout_alt_now ? alt_ink() : lv_color_make(150, 150, 150),
 								   0);
 	}
 	lv_obj_set_style_image_recolor_opa(fav_btn_icon, LV_OPA_COVER, 0);
@@ -3685,8 +3705,13 @@ static void update_speed_button(void) {
 		return;
 	}
 	bool normal = speed_current_permille() == AUDIOBOOK_SPEED_NORMAL;
-	lv_color_t inactive = theme_is_amber_on_black() ? theme()->text_secondary : lv_color_make(100, 100, 100);
-	lv_obj_set_style_image_recolor(speed_btn_icon, normal ? inactive : theme()->accent, 0);
+	lv_color_t inactive = theme_is_amber_on_black()
+						  ? theme_player_chrome_color(THEME_PLAYER_CHROME_MUTED)
+						  : lv_color_make(100, 100, 100);
+	lv_color_t active = theme_is_amber_on_black()
+						? theme_player_chrome_color(THEME_PLAYER_CHROME_PLAYBACK)
+						: theme()->accent;
+	lv_obj_set_style_image_recolor(speed_btn_icon, normal ? inactive : active, 0);
 	lv_obj_set_style_image_recolor_opa(speed_btn_icon, LV_OPA_COVER, 0);
 }
 
@@ -3733,11 +3758,12 @@ static void speed_btn_event_cb(lv_event_t *e) {
 // The icons are the white ARGB bitmaps generated from assets/icons/*.svg;
 // recolouring them is what marks the mode as active or not.
 static void update_repeat_button(void) {
-	// The active mode wears the accent colour of the moment, read each time
-	// rather than frozen, so it follows a change of accent. Amber keeps the
-	// inactive mode in its secondary amber instead of introducing grey.
+	// Active playback modes use the reference's dark orange. Shuffle/repeat
+	// when inactive has its own deep-brown role rather than the artist color.
 	lv_color_t active = chrome_accent();
-	lv_color_t inactive = theme_is_amber_on_black() ? theme()->text_secondary : lv_color_make(100, 100, 100);
+	lv_color_t inactive = theme_is_amber_on_black()
+						  ? theme_player_chrome_color(THEME_PLAYER_CHROME_SHUFFLE_IDLE)
+						  : lv_color_make(100, 100, 100);
 
 	const lv_image_dsc_t *icon;
 	lv_color_t color;
@@ -4869,6 +4895,15 @@ void player_init(gui_config_t *cfg) {
 	// centred square sleeve in what is left above it, and the blurred artwork
 	// behind the whole screen rather than behind the deck alone.
 	const bool compact = bp_is_tempotec_v1();
+	const bool amber_theme = theme_is_amber_on_black();
+	lv_color_t progress_rest_color = lv_color_make(255, 255, 255);
+	lv_color_t playback_color = theme()->accent;
+	lv_color_t overflow_color = lv_color_make(150, 150, 150);
+	if (amber_theme) {
+		progress_rest_color = theme_player_chrome_color(THEME_PLAYER_CHROME_PROGRESS_REST);
+		playback_color = theme_player_chrome_color(THEME_PLAYER_CHROME_PLAYBACK);
+		overflow_color = theme_player_chrome_color(THEME_PLAYER_CHROME_OVERFLOW);
+	}
 	backdrop_full = compact;
 	// The side inset every row of the deck is laid out at, and the width of a
 	// row that follows from it. Outside the V1 that is the panel's own padding,
@@ -5089,17 +5124,14 @@ void player_init(gui_config_t *cfg) {
 	lv_slider_set_range(progress_slider, 0, 1000);
 
 	lv_obj_set_style_radius(progress_slider, LV_RADIUS_CIRCLE, LV_PART_MAIN);
-	lv_obj_set_style_bg_color(progress_slider,
-								   theme_is_amber_on_black() ? theme()->text_secondary : lv_color_make(255, 255, 255),
-							   LV_PART_MAIN);
-	lv_obj_set_style_bg_opa(progress_slider,
-								 theme_is_amber_on_black() ? LV_OPA_COVER : LV_OPA_30, LV_PART_MAIN);
+	lv_obj_set_style_bg_color(progress_slider, progress_rest_color, LV_PART_MAIN);
+	lv_obj_set_style_bg_opa(progress_slider, amber_theme ? LV_OPA_COVER : LV_OPA_30, LV_PART_MAIN);
 
 	lv_obj_set_style_radius(progress_slider, LV_RADIUS_CIRCLE, LV_PART_INDICATOR);
-	lv_obj_set_style_bg_color(progress_slider, theme()->accent, LV_PART_INDICATOR);
+	lv_obj_set_style_bg_color(progress_slider, playback_color, LV_PART_INDICATOR);
 
 	lv_obj_set_style_radius(progress_slider, LV_RADIUS_CIRCLE, LV_PART_KNOB);
-	lv_obj_set_style_bg_color(progress_slider, theme()->accent, LV_PART_KNOB);
+	lv_obj_set_style_bg_color(progress_slider, playback_color, LV_PART_KNOB);
 	lv_obj_set_style_border_color(progress_slider, lv_color_white(), LV_PART_KNOB);
 	lv_obj_set_style_border_opa(progress_slider, LV_OPA_COVER, LV_PART_KNOB);
 	lv_obj_set_style_border_width(progress_slider, compact ? 2 : PROGRESS_KNOB_RING, LV_PART_KNOB);
@@ -5247,8 +5279,7 @@ void player_init(gui_config_t *cfg) {
 	more_btn_icon = more_icon;
 	lv_image_set_src(more_icon, &icon_ellipsis_vertical);
 	lv_obj_add_style(more_icon, &theme_style_icon, 0);
-	lv_obj_set_style_image_recolor(more_icon,
-								   theme_is_amber_on_black() ? theme()->text_secondary : lv_color_make(150, 150, 150), 0);
+	lv_obj_set_style_image_recolor(more_icon, overflow_color, 0);
 	lv_obj_set_style_image_recolor_opa(more_icon, LV_OPA_COVER, 0);
 	lv_obj_center(more_icon);
 

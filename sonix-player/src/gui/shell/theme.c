@@ -65,17 +65,17 @@ static theme_palette_t palette_tokyo = {
 	.dark = true,
 };
 
-// Amber on Black follows the same V1 screen layouts as Tokyo Night, but keeps
-// every interface role in one warm amber family. The colors are the mockup's
-// native-screen values, not a run-time screenshot filter.
+// Amber on Black follows the same V1 screen layouts as Tokyo Night, with the
+// distinct cream, golden-amber and dark-orange roles sampled from the
+// reference Now Playing screen.
 static theme_palette_t palette_amber = {
 	.screen_bg = LV_COLOR_MAKE(10, 9, 7),          // #0a0907
 	.surface = LV_COLOR_MAKE(25, 19, 10),          // #19130a
 	.surface_pressed = LV_COLOR_MAKE(37, 25, 7),   // #251907
-	.panel = LV_COLOR_MAKE(5, 5, 5),               // #050505
+	.panel = LV_COLOR_MAKE(5, 5, 5),              // #050505
 	.cover_bg = LV_COLOR_MAKE(5, 5, 5),
-	.text_primary = LV_COLOR_MAKE(244, 188, 93),   // #f4bc5d
-	.text_secondary = LV_COLOR_MAKE(198, 131, 42), // #c6832a
+	.text_primary = LV_COLOR_MAKE(255, 242, 207),  // #fff2cf
+	.text_secondary = LV_COLOR_MAKE(243, 186, 92), // #f3ba5c
 	.accent = LV_COLOR_MAKE(255, 173, 46),         // #ffad2e
 	.dark = true,
 };
@@ -445,6 +445,44 @@ lv_color_t theme_semantic_color(theme_semantic_t role) {
 	case THEME_SEMANTIC_MUTED:
 	default:
 		return active->text_secondary;
+	}
+}
+
+lv_color_t theme_player_chrome_color(theme_player_chrome_t role) {
+	if (selected_kind == THEME_KIND_AMBER_ON_BLACK) {
+		switch (role) {
+		case THEME_PLAYER_CHROME_PRIMARY:
+			return lv_color_make(255, 242, 207); // #fff2cf
+		case THEME_PLAYER_CHROME_SECONDARY:
+			return lv_color_make(243, 186, 92); // #f3ba5c
+		case THEME_PLAYER_CHROME_MUTED:
+			return lv_color_make(185, 116, 36); // #b97424
+		case THEME_PLAYER_CHROME_PLAYBACK:
+			return lv_color_make(156, 90, 13); // #9c5a0d
+		case THEME_PLAYER_CHROME_PROGRESS_REST:
+			return lv_color_make(104, 64, 18); // #684012
+		case THEME_PLAYER_CHROME_CHEVRON:
+			return lv_color_make(208, 139, 53); // #d08b35
+		case THEME_PLAYER_CHROME_SHUFFLE_IDLE:
+			return lv_color_make(114, 70, 19); // #724613
+		case THEME_PLAYER_CHROME_OVERFLOW:
+			return lv_color_make(189, 118, 38); // #bd7626
+		}
+	}
+
+	switch (role) {
+	case THEME_PLAYER_CHROME_PRIMARY:
+	case THEME_PLAYER_CHROME_CHEVRON:
+		return active->text_primary;
+	case THEME_PLAYER_CHROME_SECONDARY:
+	case THEME_PLAYER_CHROME_MUTED:
+	case THEME_PLAYER_CHROME_PROGRESS_REST:
+	case THEME_PLAYER_CHROME_SHUFFLE_IDLE:
+	case THEME_PLAYER_CHROME_OVERFLOW:
+		return active->text_secondary;
+	case THEME_PLAYER_CHROME_PLAYBACK:
+	default:
+		return active->accent;
 	}
 }
 

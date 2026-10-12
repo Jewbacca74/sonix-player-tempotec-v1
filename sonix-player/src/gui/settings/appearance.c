@@ -384,18 +384,19 @@ static void appearance_preview_refresh(void) {
 		lv_obj_set_hidden(function_glyph_card, !show);
 	}
 
-	// Tokyo Night keeps its semantic hues. Amber on Black previews one warm
-	// amber ramp through the same swatches and monochrome function glyphs.
+	// Tokyo Night keeps its semantic hues. Amber on Black shows the distinct
+	// dark track, subdued star, playback, artist and cream-title colors from
+	// the reference screen instead of looking like the Tokyo palette.
 	lv_color_t swatches[8];
 	if (amber) {
 		swatches[0] = theme()->screen_bg;
 		swatches[1] = theme()->surface;
 		swatches[2] = theme()->surface_pressed;
-		swatches[3] = theme()->panel;
-		swatches[4] = theme_now_playing_fill();
-		swatches[5] = theme()->text_secondary;
-		swatches[6] = theme()->accent;
-		swatches[7] = theme()->text_primary;
+		swatches[3] = theme_player_chrome_color(THEME_PLAYER_CHROME_PROGRESS_REST);
+		swatches[4] = theme_player_chrome_color(THEME_PLAYER_CHROME_MUTED);
+		swatches[5] = theme_player_chrome_color(THEME_PLAYER_CHROME_PLAYBACK);
+		swatches[6] = theme_player_chrome_color(THEME_PLAYER_CHROME_SECONDARY);
+		swatches[7] = theme_player_chrome_color(THEME_PLAYER_CHROME_PRIMARY);
 	} else {
 		swatches[0] = theme()->screen_bg;
 		swatches[1] = theme()->surface;
@@ -523,13 +524,6 @@ void appearance_init(gui_config_t *cfg) {
 		make_theme_choice(row, "appearance_tokyo_night", THEME_KIND_TOKYO_NIGHT, compact);
 	theme_buttons[THEME_KIND_AMBER_ON_BLACK] = make_theme_choice(row,
 		compact ? "appearance_amber_short" : "appearance_amber_on_black", THEME_KIND_AMBER_ON_BLACK, compact);
-
-	lv_obj_t *theme_note = lv_label_create(card);
-	lv_label_set_long_mode(theme_note, LV_LABEL_LONG_WRAP);
-	lv_obj_set_width(theme_note, lv_pct(100));
-	lv_obj_add_style(theme_note, &theme_style_text_dim, 0);
-	lv_obj_set_style_text_font(theme_note, compact ? &font_ui_14 : &font_ui_18, 0);
-	lv_label_set_text(theme_note, tr("appearance_theme_note"));
 
 	// Compact palette and function-glyph examples for Tokyo Night and Amber on
 	// Black, immediately after the theme switch. Hidden for Dark/Light so their
