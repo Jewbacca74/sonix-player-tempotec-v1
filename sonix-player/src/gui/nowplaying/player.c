@@ -970,6 +970,7 @@ static void set_over_cover(bool on) {
 	chrome_over_cover = on;
 
 	bool amber = theme_is_amber_on_black();
+	bool tokyo = theme_is_tokyo_night();
 	lv_obj_t *const text_objs[] = {song_title_label, elapsed_label, remaining_label};
 	lv_obj_t *const dim_objs[] = {song_artist_label, format_label, queue_position_label};
 	lv_obj_t *const icon_objs[] = {prev_icon, next_icon};
@@ -981,6 +982,10 @@ static void set_over_cover(bool on) {
 		if (amber) {
 			lv_obj_set_style_text_color(text_objs[i],
 									   theme_player_chrome_color(THEME_PLAYER_CHROME_PRIMARY), 0);
+		} else if (tokyo && text_objs[i] == song_title_label) {
+			// The track name keeps the deck's violet over artwork and over the
+			// plain page alike; the two clocks beside it stay light.
+			lv_obj_set_style_text_color(text_objs[i], theme_player_chrome_color(THEME_PLAYER_CHROME_PRIMARY), 0);
 		} else if (on) {
 			lv_obj_set_style_text_color(text_objs[i], lv_color_white(), 0);
 		} else {
@@ -994,6 +999,10 @@ static void set_over_cover(bool on) {
 		if (amber) {
 			lv_obj_set_style_text_color(dim_objs[i],
 									   theme_player_chrome_color(THEME_PLAYER_CHROME_SECONDARY), 0);
+		} else if (tokyo && dim_objs[i] == song_artist_label) {
+			lv_obj_set_style_text_color(dim_objs[i], theme_semantic_color(THEME_SEMANTIC_CYAN), 0);
+		} else if (tokyo && dim_objs[i] == format_label) {
+			lv_obj_set_style_text_color(dim_objs[i], theme_player_chrome_color(THEME_PLAYER_CHROME_SECONDARY), 0);
 		} else if (on) {
 			lv_obj_set_style_text_color(dim_objs[i], lv_color_make(200, 200, 200), 0);
 		} else {
@@ -1007,6 +1016,11 @@ static void set_over_cover(bool on) {
 		if (amber) {
 			lv_obj_set_style_image_recolor(icon_objs[i],
 									   theme_player_chrome_color(THEME_PLAYER_CHROME_PRIMARY), 0);
+			lv_obj_set_style_image_recolor_opa(icon_objs[i], LV_OPA_COVER, 0);
+		} else if (tokyo) {
+			// The skip glyphs are cyan on this deck whether or not artwork is
+			// behind them: the blurred backdrop is dark in either case.
+			lv_obj_set_style_image_recolor(icon_objs[i], theme_semantic_color(THEME_SEMANTIC_CYAN), 0);
 			lv_obj_set_style_image_recolor_opa(icon_objs[i], LV_OPA_COVER, 0);
 		} else if (on) {
 			lv_obj_set_style_image_recolor(icon_objs[i], lv_color_white(), 0);
@@ -1096,6 +1110,12 @@ static lv_color_t alt_mark(void) {
 
 static lv_color_t chrome_accent(void) {
 	if (theme_is_amber_on_black()) {
+		return theme_player_chrome_color(THEME_PLAYER_CHROME_PLAYBACK);
+	}
+	// Tokyo Night's play/pause glyph, and whatever else lights up with it,
+	// wears the deck's violet rather than the theme accent: the accent stays
+	// with the progress bar, which is what the palette preview promises.
+	if (theme_is_tokyo_night()) {
 		return theme_player_chrome_color(THEME_PLAYER_CHROME_PLAYBACK);
 	}
 	return layout_wave_now ? alt_mark() : theme()->accent;
@@ -3182,6 +3202,10 @@ static void player_refresh_theme(void) {
 		progress_rest = theme_player_chrome_color(THEME_PLAYER_CHROME_PROGRESS_REST);
 		playback = theme_player_chrome_color(THEME_PLAYER_CHROME_PLAYBACK);
 		overflow = theme_player_chrome_color(THEME_PLAYER_CHROME_OVERFLOW);
+	} else if (theme_is_tokyo_night()) {
+		// The ellipsis takes the deck's muted grey-violet; the bar keeps the
+		// theme accent, and the play glyph is chrome_accent()'s violet.
+		overflow = theme_player_chrome_color(THEME_PLAYER_CHROME_OVERFLOW);
 	}
 
 	if (studio_box) {
@@ -3761,9 +3785,9 @@ static void update_repeat_button(void) {
 	// Active playback modes use the reference's dark orange. Shuffle/repeat
 	// when inactive has its own deep-brown role rather than the artist color.
 	lv_color_t active = chrome_accent();
-	lv_color_t inactive = theme_is_amber_on_black()
-						  ? theme_player_chrome_color(THEME_PLAYER_CHROME_SHUFFLE_IDLE)
-						  : lv_color_make(100, 100, 100);
+	lv_color_t inactive = (theme_is_amber_on_black() || theme_is_tokyo_night())
+							  ? theme_player_chrome_color(THEME_PLAYER_CHROME_SHUFFLE_IDLE)
+							  : lv_color_make(100, 100, 100);
 
 	const lv_image_dsc_t *icon;
 	lv_color_t color;
@@ -4902,6 +4926,8 @@ void player_init(gui_config_t *cfg) {
 	if (amber_theme) {
 		progress_rest_color = theme_player_chrome_color(THEME_PLAYER_CHROME_PROGRESS_REST);
 		playback_color = theme_player_chrome_color(THEME_PLAYER_CHROME_PLAYBACK);
+		overflow_color = theme_player_chrome_color(THEME_PLAYER_CHROME_OVERFLOW);
+	} else if (theme_is_tokyo_night()) {
 		overflow_color = theme_player_chrome_color(THEME_PLAYER_CHROME_OVERFLOW);
 	}
 	backdrop_full = compact;
