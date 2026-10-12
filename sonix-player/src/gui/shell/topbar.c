@@ -237,6 +237,23 @@ static void remember_timer_cb(lv_timer_t *timer) {
 	clock_remember();
 }
 
+// Amber on Black maps the battery's semantic colours to its signal orange.
+// Give these two status glyphs that same colour; in every other theme they
+// continue to inherit the regular icon style.
+static void refresh_status_icon_color(lv_obj_t *icon) {
+	if (!icon) {
+		return;
+	}
+
+	if (theme_is_amber_on_black()) {
+		lv_obj_set_style_image_recolor(icon, theme_semantic_color(THEME_SEMANTIC_GREEN), 0);
+		lv_obj_set_style_image_recolor_opa(icon, LV_OPA_COVER, 0);
+	} else {
+		lv_obj_remove_local_style_prop(icon, LV_STYLE_IMAGE_RECOLOR, 0);
+		lv_obj_remove_local_style_prop(icon, LV_STYLE_IMAGE_RECOLOR_OPA, 0);
+	}
+}
+
 // Volume, as a number with the glyph that matches its level.
 void topbar_refresh_volume(int percent) {
 	if (!vol_label) {
@@ -262,6 +279,7 @@ void topbar_refresh_volume(int percent) {
 		icon = &icon_volume_low;
 	}
 	lv_image_set_src(vol_icon, icon);
+	refresh_status_icon_color(vol_icon);
 }
 
 // Shows or hides the headphone glyph to match what is in the jacks. Four times
@@ -600,17 +618,19 @@ static void refresh_play_icon(const device_state_t *state) {
 		return;
 	}
 
-	// The play glyph turns blue while the sound is leaving over Bluetooth, so a
-	// glance at the bar says where the music is going, not just that it is
-	// going. A fixed Bluetooth blue rather than the accent colour, because it
-	// means wireless, not active.
-	if (state->status == AUDIO_STATUS_PLAYING && bluetooth_audio_active()) {
+	// Amber on Black keeps this status glyph in the battery's signal orange.
+	// Other themes retain the Bluetooth-blue route indicator while it plays.
+	if (theme_is_amber_on_black()) {
+		refresh_status_icon_color(play_icon);
+	} else if (state->status == AUDIO_STATUS_PLAYING && bluetooth_audio_active()) {
+		// Fixed Bluetooth blue rather than the accent: it means wireless, not active.
 		lv_obj_set_style_image_recolor(play_icon,
 									   theme_uses_function_glyphs() ? theme_semantic_color(THEME_SEMANTIC_BLUE)
 														 : lv_color_make(0, 122, 255),
 									   0);
 	} else {
 		lv_obj_remove_local_style_prop(play_icon, LV_STYLE_IMAGE_RECOLOR, 0);
+		lv_obj_remove_local_style_prop(play_icon, LV_STYLE_IMAGE_RECOLOR_OPA, 0);
 	}
 	lv_obj_set_hidden(play_icon, false);
 }
@@ -795,6 +815,7 @@ static void topbar_refresh_theme(void) {
 	// theme style, so repaint them in the same frame as the palette switch.
 	refresh_headphone_icon(true);
 	topbar_refresh_radios();
+	refresh_status_icon_color(vol_icon);
 	topbar_refresh_playback();
 }
 
@@ -933,6 +954,7 @@ void topbar_init(gui_config_t *cfg) {
 	lv_image_set_src(vol_icon, &icon_volume_high);
 	compact_status_icon(vol_icon, &icon_volume_high);
 	lv_obj_add_style(vol_icon, &theme_style_icon, 0);
+	refresh_status_icon_color(vol_icon);
 
 	vol_label = lv_label_create(container_left);
 	lv_label_set_text(vol_label, "--");
