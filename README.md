@@ -87,12 +87,56 @@ The same screens in the added **Tokyo Night** appearance: a blue-black palette w
   </tr>
 </table>
 
+### Ember theme
+
+The same screens in the **Ember** appearance: fiery orange accents on a pure black background, with warm amber artwork and glowing icons.
+
+<table>
+  <tr>
+    <td align="center">
+      <a href="screenshots/ember/main-menu.png"><img src="screenshots/ember/main-menu.png" width="180" alt="Ember Main menu"></a>
+      <br><sub><b>Main menu</b></sub>
+    </td>
+    <td align="center">
+      <a href="screenshots/ember/music.png"><img src="screenshots/ember/music.png" width="180" alt="Ember Music"></a>
+      <br><sub><b>Music</b></sub>
+    </td>
+    <td align="center">
+      <a href="screenshots/ember/more.png"><img src="screenshots/ember/more.png" width="180" alt="Ember More"></a>
+      <br><sub><b>More</b></sub>
+    </td>
+    <td align="center">
+      <a href="screenshots/ember/wireless.png"><img src="screenshots/ember/wireless.png" width="180" alt="Ember Wireless"></a>
+      <br><sub><b>Wireless</b></sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <a href="screenshots/ember/settings.png"><img src="screenshots/ember/settings.png" width="180" alt="Ember Settings"></a>
+      <br><sub><b>Settings</b></sub>
+    </td>
+    <td align="center">
+      <a href="screenshots/ember/now-playing.png"><img src="screenshots/ember/now-playing.png" width="180" alt="Ember Now Playing"></a>
+      <br><sub><b>Now Playing</b></sub>
+    </td>
+    <td align="center">
+      <a href="screenshots/ember/file-browser.png"><img src="screenshots/ember/file-browser.png" width="180" alt="Ember File Browser"></a>
+      <br><sub><b>File Browser</b></sub>
+    </td>
+    <td align="center">
+      <a href="screenshots/ember/streaming.png"><img src="screenshots/ember/streaming.png" width="180" alt="Ember Streaming"></a>
+      <br><sub><b>Streaming</b></sub>
+    </td>
+  </tr>
+</table>
+
 ## Contents
 
 - [Target device](#target-device)
 - [Features](#features)
 - [Screenshots](#screenshots)
   - [Tokyo Night theme](#tokyo-night-theme)
+  - [Ember theme](#ember-theme)
 - [Build a firmware image](#build-a-firmware-image)
 - [Install or restore firmware](#install-or-restore-firmware)
 - [Streaming credentials](#streaming-credentials)
