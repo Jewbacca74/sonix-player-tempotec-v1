@@ -8,6 +8,9 @@
 #include "src/gui/board_profile.h"
 #include "src/gui/ebook/ebookpage.h"
 #include "src/gui/flappybird/flappybird.h"
+#include "src/gui/games/dino.h"
+#include "src/gui/games/game2048.h"
+#include "src/gui/games/snake.h"
 #include "src/gui/gearboy/gearboypage.h"
 #include "src/gui/library/filespage.h"
 #include "src/gui/nowplaying/player.h"
@@ -48,6 +51,15 @@ static bool more_tokyo_icon(const char *label, const lv_image_dsc_t **icon, them
 	} else if (strcmp(label, "flappy_bird") == 0) {
 		*icon = &icon_bird;
 		*tone = THEME_SEMANTIC_PURPLE;
+	} else if (strcmp(label, "2048") == 0) {
+		*icon = &icon_game_2048;
+		*tone = THEME_SEMANTIC_BLUE;
+	} else if (strcmp(label, "snake") == 0) {
+		*icon = &icon_game_snake;
+		*tone = THEME_SEMANTIC_GREEN;
+	} else if (strcmp(label, "dino") == 0) {
+		*icon = &icon_game_dino;
+		*tone = THEME_SEMANTIC_AMBER;
 	} else {
 		return false;
 	}
@@ -117,11 +129,25 @@ void morepage_init(gui_config_t *cfg) {
 		{"file_explorer", &icon_menu_file_explorer, NULL, filespage_open},
 		// An action: the artwork is read from the resource tree on the way in.
 		{"flappy_bird", &icon_menu_flappy_bird, NULL, flappybird_open},
+		// An action for each of these three as well, for the same reason as the
+		// shelf and the browser: a run is read back from the config on the way
+		// in, so 2048 picks up where the board was left and the other two at
+		// least agree with the best score on the card. Each has a drawing of what
+		// that game is about, so the picture says which one it is before the
+		// caption does.
+		{"2048", &icon_game_2048, NULL, game2048_open},
+		{"snake", &icon_game_snake, NULL, snake_open},
+		{"dino", &icon_game_dino, NULL, dino_open},
 	};
 
 	// Dark and Light retain the established two-column grid. Tokyo Night uses a
 	// compact, single-column list whose rows share the Settings list styling.
-	more_grid = gridpage_build(morepage_screen, cfg, entries, (int)(sizeof(entries) / sizeof(entries[0])), 2, 3, true);
+	// Four rows rather than the three every other tiled page gets: with the
+	// emulator, Flappy Bird and the three games in src/gui/games, the More
+	// section is eight entries deep on a build that has the Game Boy in it, and
+	// seven on one that does not. The tiles are shorter for it, which is what
+	// gridpage_build's icon cap is there to absorb.
+	more_grid = gridpage_build(morepage_screen, cfg, entries, (int)(sizeof(entries) / sizeof(entries[0])), 2, 4, true);
 	if (bp_is_tempotec_v1()) {
 		more_list_build(cfg, entries, (int)(sizeof(entries) / sizeof(entries[0])));
 	} else {
