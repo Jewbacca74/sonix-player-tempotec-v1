@@ -33,6 +33,7 @@ static lv_obj_t *theme_palette_title;
 static lv_obj_t *theme_palette_swatches[8];
 static lv_obj_t *function_glyph_card;
 static lv_obj_t *function_glyph_icons[4];
+static void appearance_preview_refresh(void);
 // The status bar draws the battery either way; this setting is only about the
 // number beside it, and is on by default.
 static void battery_percent_cb(lv_event_t *e) {
@@ -274,6 +275,7 @@ static void theme_pick_cb(lv_event_t *e) {
 	theme_kind_t kind = (theme_kind_t)(intptr_t)lv_event_get_user_data(e);
 	theme_set_kind(kind);
 	refresh_buttons();
+	appearance_preview_refresh();
 }
 
 // ---------------------------------------------------------------------------
@@ -328,13 +330,14 @@ static lv_obj_t *make_boot_choice(lv_obj_t *parent, const char *text, int choice
 
 static lv_obj_t *make_theme_choice(lv_obj_t *parent, const char *text, theme_kind_t kind, bool compact) {
 	lv_obj_t *btn = lv_btn_create(parent);
-	lv_obj_set_size(btn, LV_SIZE_CONTENT, compact ? 34 : 64);
-	lv_obj_set_style_pad_hor(btn, compact ? 4 : 34, 0);
+	lv_obj_set_size(btn, compact ? lv_pct(48) : LV_SIZE_CONTENT, compact ? 34 : 64);
+	lv_obj_set_style_pad_hor(btn, compact ? 5 : 34, 0);
 	lv_obj_set_style_radius(btn, compact ? 7 : LV_RADIUS_CIRCLE, 0);
 	lv_obj_set_style_shadow_width(btn, 0, 0);
 	lv_obj_set_style_border_width(btn, 0, 0);
-	bool featured = kind == THEME_KIND_TOKYO_NIGHT || kind == THEME_KIND_AMBER_ON_BLACK;
-	lv_obj_set_flex_grow(btn, compact ? (featured ? 2 : 1) : 0);
+	// Two compact columns leave enough width for each full theme label and
+	// avoid flex items painting over one another on the 240 px V1 panel.
+	lv_obj_set_flex_grow(btn, 0);
 	lv_obj_add_event_cb(btn, theme_pick_cb, LV_EVENT_CLICKED, (void *)(intptr_t)kind);
 
 	lv_obj_t *label = lv_label_create(btn);
@@ -386,13 +389,13 @@ static void appearance_preview_refresh(void) {
 	lv_color_t swatches[8];
 	if (amber) {
 		swatches[0] = theme()->screen_bg;
-		swatches[1] = theme()->panel;
-		swatches[2] = theme()->surface;
-		swatches[3] = theme()->surface_pressed;
-		swatches[4] = theme()->text_secondary;
-		swatches[5] = theme()->accent;
-		swatches[6] = theme()->text_primary;
-		swatches[7] = theme()->cover_bg;
+		swatches[1] = theme()->surface;
+		swatches[2] = theme()->surface_pressed;
+		swatches[3] = theme()->panel;
+		swatches[4] = theme_now_playing_fill();
+		swatches[5] = theme()->text_secondary;
+		swatches[6] = theme()->accent;
+		swatches[7] = theme()->text_primary;
 	} else {
 		swatches[0] = theme()->screen_bg;
 		swatches[1] = theme()->surface;
@@ -404,8 +407,18 @@ static void appearance_preview_refresh(void) {
 		swatches[7] = theme_semantic_color(THEME_SEMANTIC_RED);
 	}
 	for (int i = 0; i < 8; i++) {
-		if (theme_palette_swatches[i]) {
-			lv_obj_set_style_bg_color(theme_palette_swatches[i], swatches[i], 0);
+		if (!theme_palette_swatches[i]) {
+			continue;
+		}
+		lv_obj_set_style_bg_color(theme_palette_swatches[i], swatches[i], 0);
+		if (amber) {
+			// The four near-black swatches otherwise disappear into the card and
+			// look like unpainted boxes on the low-contrast V1 panel.
+			lv_obj_set_style_border_width(theme_palette_swatches[i], 1, 0);
+			lv_obj_set_style_border_color(theme_palette_swatches[i], theme()->text_secondary, 0);
+			lv_obj_set_style_border_opa(theme_palette_swatches[i], LV_OPA_50, 0);
+		} else {
+			lv_obj_set_style_border_width(theme_palette_swatches[i], 0, 0);
 		}
 	}
 
@@ -501,7 +514,7 @@ void appearance_init(gui_config_t *cfg) {
 	lv_obj_set_style_pad_gap(row, compact ? 4 : 14, 0);
 	lv_obj_set_scrollable(row, false);
 	lv_obj_set_event_bubble(row, true);
-	lv_obj_set_flex_flow(row, compact ? LV_FLEX_FLOW_ROW : LV_FLEX_FLOW_ROW_WRAP);
+	lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW_WRAP);
 	lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START);
 
 	theme_buttons[THEME_KIND_DARK] = make_theme_choice(row, "appearance_dark", THEME_KIND_DARK, compact);

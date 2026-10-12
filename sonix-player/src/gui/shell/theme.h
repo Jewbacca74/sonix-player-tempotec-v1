@@ -99,9 +99,9 @@ bool theme_is_amber_on_black(void);
 bool theme_uses_function_glyphs(void);
 theme_kind_t theme_get_kind(void);
 
-// Tokyo Night's blue, cyan, violet, green, amber and red roles. Amber on Black
-// folds the colored roles into its amber accent; in Dark/Light they resolve to
-// the chosen accent (or the secondary text colour for muted).
+// Tokyo Night's blue, cyan, violet, green, amber, red and muted roles. Amber
+// on Black maps every icon role to its accent; in Dark/Light they resolve to
+// the chosen accent (or secondary text for muted).
 lv_color_t theme_semantic_color(theme_semantic_t role);
 
 // Switches between Dark and Light, and repaints the UI. Both added palettes

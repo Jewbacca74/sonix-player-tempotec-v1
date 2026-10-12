@@ -645,15 +645,18 @@ void switch_screen_cb(lv_event_t *e) {
 	switch_screen(target_screen);
 }
 
-// The chevron sits over the artwork when the player is open with a cover
-// loaded, and the artwork backdrop is always the dark treatment, so there it
-// must be light regardless of the theme. Both halves of that condition are
-// tracked, because either can change while the other holds.
+// Amber on Black keeps the back chevron on its signal accent like the player
+// chrome. Other themes retain the white, slightly translucent mark over cover
+// art and inherit their normal icon colour everywhere else.
 static void chevron_apply_color(void) {
 	if (!back_btn_icon) {
 		return;
 	}
-	if (chevron_in_player && chevron_over_cover) {
+	if (theme_is_amber_on_black()) {
+		lv_obj_set_style_image_recolor(back_btn_icon, theme()->accent, 0);
+		lv_obj_set_style_image_recolor_opa(back_btn_icon, LV_OPA_COVER, 0);
+		lv_obj_remove_local_style_prop(back_btn_icon, LV_STYLE_IMAGE_OPA, 0);
+	} else if (chevron_in_player && chevron_over_cover) {
 		lv_obj_set_style_image_recolor(back_btn_icon, lv_color_white(), 0);
 		lv_obj_set_style_image_recolor_opa(back_btn_icon, LV_OPA_COVER, 0);
 		// See-through over the artwork, so the sleeve shows behind the chevron.
@@ -760,4 +763,6 @@ void back_btn_init(gui_config_t *cfg) {
 	lv_image_set_src(back_btn_icon, &icon_chevron_left);
 	lv_obj_add_style(back_btn_icon, &theme_style_icon, 0);
 	lv_obj_center(back_btn_icon);
+	chevron_apply_color();
+	theme_register_refresh(chevron_apply_color);
 }

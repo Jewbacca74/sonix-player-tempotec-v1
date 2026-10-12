@@ -419,7 +419,9 @@ theme_kind_t theme_get_kind(void) { return selected_kind; }
 
 lv_color_t theme_semantic_color(theme_semantic_t role) {
 	if (role == THEME_SEMANTIC_MUTED) {
-		return active->text_secondary;
+		// Amber on Black's icons all share the same signal colour; reserve its
+		// secondary tone for labels and surfaces, not destination glyphs.
+		return selected_kind == THEME_KIND_AMBER_ON_BLACK ? active->accent : active->text_secondary;
 	}
 	// Amber on Black is intentionally monochrome: blue, cyan, purple, green,
 	// amber and red roles all resolve to its chosen amber accent.
