@@ -491,7 +491,8 @@ lv_color_t theme_player_chrome_color(theme_player_chrome_t role) {
 	// the track name, the format line and the playback glyph wear the violet,
 	// while the idle shuffle and the overflow button take the comment grey --
 	// quiet controls, the way the palette uses #565f89 elsewhere. The artist
-	// name and the skip glyphs ask for the cyan semantic role themselves.
+	// name, favourite star and skip glyphs ask for the cyan semantic role
+	// themselves.
 	if (selected_kind == THEME_KIND_TOKYO_NIGHT) {
 		switch (role) {
 		case THEME_PLAYER_CHROME_PRIMARY:
