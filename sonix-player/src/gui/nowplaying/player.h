@@ -29,30 +29,33 @@ void player_refresh_artist(void);
 bool player_queue_position(int *position, int *count);
 
 // ---------------------------------------------------------------------------
-// The three arrangements of the now-playing page
+// The four arrangements of the now-playing page
 //
 // Standard is the one this player has always had. Waveform moves the title and
 // the star onto the sleeve and turns the progress bar into the shape of the
 // track, all of it drawn in the sleeve's own colour. Studio centres the sleeve
 // with the title across the top and the format under it, over a blurred copy of
-// the same artwork filling the screen.
+// the same artwork filling the screen. Immersive asks for the artwork at the
+// shape of the screen and crops it to fill it edge to edge, with the controls
+// drawn on a fade over its lower part.
 //
 // The setting lives in Music > Display options; these are how that page reads
-// and writes it. The numbers are what goes in the config, so the first two keep
-// the values they have always had.
+// and writes it. The numbers are what goes in the config, so the first three
+// keep the values they have always had.
 //
 // Which one is actually in force also depends on what is playing: see the note
 // on layout_alternative in player.c. Waveform is for a file on the card; Studio
-// takes whatever is playing, a station included.
+// and Immersive take whatever is playing, a station included.
 //
 // The names below are the ones the code has always used; the pills say
-// Normale, Waveform and Alternativo. ALTERNATIVE is the one the pill calls
-// Waveform, and STUDIO the one it calls Alternativo.
+// Normale, Waveform, Alternativo and Immersiva. ALTERNATIVE is the one the pill
+// calls Waveform, and STUDIO the one it calls Alternativo.
 // ---------------------------------------------------------------------------
 typedef enum {
 	PLAYER_LAYOUT_STANDARD = 0,
 	PLAYER_LAYOUT_ALTERNATIVE = 1,
 	PLAYER_LAYOUT_STUDIO = 2,
+	PLAYER_LAYOUT_IMMERSIVE = 3, // the sleeve from edge to edge, the controls on a fade over it
 } player_layout_t;
 
 player_layout_t player_layout_get(void);

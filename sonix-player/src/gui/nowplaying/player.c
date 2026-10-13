@@ -251,9 +251,14 @@ static cover_image_t current_cover;	   // pixels currently referenced by cover_i
 static cover_image_t current_backdrop; // upside-down blurred copy behind the controls
 static int cover_box_w, cover_box_h;   // the full panel that owns lyrics and gestures
 static int cover_art_w, cover_art_h;   // the visible sleeve, inset on compact panels
+// How round the sleeve's corners are. One number for the frame and for the
+// picture inside it, so the two can never disagree -- and the one thing about
+// the sleeve's shape the geometry itself does not carry, which is why
+// Immersive, whose picture reaches the bezel, sets it aside and puts it back.
+static int sleeve_radius;
 
 // ---------------------------------------------------------------------------
-// The two arrangements
+// The arrangements
 //
 // Standard is sleeve on top, and under it a block with the title, the star, the
 // format, a bar and the transport.
@@ -264,7 +269,12 @@ static int cover_art_w, cover_art_h;   // the visible sleeve, inset on compact p
 // its colour from the sleeve rather than from the theme, which is why it only
 // looks like anything at all over artwork.
 //
-// One set of widgets, moved between parents, and not two pages: the title, the
+// Studio and Immersive each have a section of their own below, beside the one
+// set of widgets every arrangement shares, and each is put up and taken down by
+// a pair of functions named after it (studio_put/take_back, the same for
+// Immersive) from apply_layout().
+//
+// One set of widgets, moved between parents, and not four pages: the title, the
 // star and the transport all have behaviour behind them, and a second copy of
 // each would be a second place for that behaviour to be wrong.
 // ---------------------------------------------------------------------------
@@ -328,6 +338,7 @@ static int alt_pill_pad_v = ALT_PILL_PAD_V;
 static player_layout_t layout_choice; // the setting, saved in the config
 static bool layout_alt_now;		// and whether the current source can use it
 static bool layout_studio_now;	// likewise for the third arrangement
+static bool layout_immersive_now; // and for the fourth: the sleeve from edge to edge
 // The shape of the track and the sleeve's colour: up with the alternative
 // layout, and kept when the words are shown over it.
 static bool layout_wave_now;
@@ -337,6 +348,11 @@ static uint32_t album_tone; // the sleeve's colour, 0 when there is no sleeve
 static lv_obj_t *song_text_obj; // the title and artist, wherever they live now
 static lv_obj_t *song_side_obj; // the star and the format, likewise
 static void align_title_with_star(void);
+// Two pieces of the Immersive arrangement that other code asks for by name:
+// the block of controls made clear, and the two fades across the artwork, which
+// the artwork's own arrival turns on and off (cover_show).
+static void immersive_deck_clear(void);
+static void immersive_fades(bool over_art);
 static lv_obj_t *alt_text_col;	// the two pills, stacked at the foot of the sleeve
 static lv_obj_t *alt_title_pill;
 static lv_obj_t *alt_artist_pill;
@@ -368,6 +384,13 @@ static bool backdrop_is_studio;
 static bool backdrop_full;
 static bool backdrop_is_full;
 static lv_style_t compact_clear_style; // the two surfaces the full blur shows through
+
+// Immersive draws the sleeve at the shape of the whole screen rather than at
+// the square the other arrangements keep, so the picture on hand is the wrong
+// shape the moment the setting changes -- the same problem the blurred copy
+// has between the deck's shape and the screen's. `cover_shape_immersive` says
+// which of the two the picture on hand was asked for at.
+static bool cover_shape_immersive;
 
 static bool backdrop_fills_screen(void) { return layout_studio_now || backdrop_full; }
 
@@ -964,6 +987,12 @@ static void cover_show(bool have_cover) {
 	if (cover_art_group && backdrop_full) {
 		lv_obj_set_style_bg_opa(cover_art_group, !have_cover && !studio ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
 	}
+
+	// Immersive's two fades are what keeps the chrome readable ON a picture.
+	// With no picture there is nothing to read through: the page shows its own
+	// colour whole, and the words and the glyphs sit on it in the theme's own
+	// ink, exactly as they do in the standard arrangement.
+	immersive_fades(have_cover && layout_immersive_now);
 }
 
 static void set_over_cover(bool on) {
@@ -1372,6 +1401,47 @@ static int studio_cover_size;
 static int menu_height;
 
 // ---------------------------------------------------------------------------
+// Immersive: the sleeve from edge to edge
+//
+// The picture the page has already decoded, asked for at the shape of the
+// screen rather than at the square every other arrangement shows it in, and
+// cropped to fill it: a cover is square and the screen is not, so what the crop
+// takes is the two sides. Nothing else is laid out any differently -- the
+// title, the star, the format, the bar, the clocks and the transport stay
+// exactly where the standard arrangement keeps them -- but the ground under
+// them is the artwork, which reaches the bezel on all four sides with square
+// corners.
+//
+// One flat black scrim over the whole of it is the dressing: the picture stays
+// there to be looked at, and the chrome -- the chevron, the source marks, the
+// names, the bar, the clocks, the transport -- is read on top of it. Flat and
+// not a fade: bands of gradient across the screen were tried on the device and
+// each end of a ramp draws a line across the picture where its slope changes,
+// which is worse than the thing the ramps were there to fix. One alpha the
+// whole way up leaves nothing to see but the photograph.
+//
+// It is a child of the artwork's own frame rather than of the page, for two
+// reasons: the source marks are children of that frame and are brought to the
+// front of it when they appear, so they keep their own colour over the scrim
+// instead of being darkened with the picture; and the frame is what the words'
+// page slides out from under, so the scrim travels with the sleeve rather than
+// staying behind to darken the page it uncovers.
+// ---------------------------------------------------------------------------
+
+// How much of the picture the scrim takes out. The whole screen is a large
+// area of flat black to put over a photograph, and this is the most that still
+// leaves it a photograph: at half, a pale sleeve still reads as one and the
+// white names, the bar and the transport are legible on it.
+#define IMMERSIVE_SCRIM_OPA 128
+
+static lv_obj_t *immersive_scrim;
+static bool immersive_up;
+// Where the controls' block sat among the page's children before this
+// arrangement lifted it to the front, so putting it down again is putting it
+// back and not merely below the picture (see immersive_take_back()).
+static int immersive_menu_index;
+
+// ---------------------------------------------------------------------------
 // Lyrics
 //
 // For a file on the card, a page of words beside the sleeve: a finger
@@ -1758,6 +1828,12 @@ static void lyrics_look(bool on) {
 		lv_obj_remove_local_style_prop(cover_panel, LV_STYLE_BG_OPA, 0);
 		lv_obj_remove_local_style_prop(player_menu, LV_STYLE_BG_OPA, 0);
 		lv_obj_remove_local_style_prop(player_menu, LV_STYLE_BG_IMAGE_OPA, 0);
+		// What was handed back at the foot of the block is Immersive's own
+		// arrangement of it, where the picture is behind the controls rather
+		// than beside them.
+		if (layout_immersive_now) {
+			immersive_deck_clear();
+		}
 	}
 	lyrics_look_on = on;
 	// The V1 had the same blur up before the words came, and wants it back.
@@ -1918,7 +1994,12 @@ static void lyrics_layout(void) {
 	int top = layout_alt_now || layout_studio_now ? head_bottom : back_btn_centre_y() + 28;
 	int pane_y = 0;
 	int x = 0, w = cover_box_w, h = cover_box_h - top;
-	if (layout_studio_now) {
+	if (layout_immersive_now) {
+		// The whole screen is the picture and the controls stand on its foot,
+		// as in the standard arrangement: the words fill what is above them
+		// rather than running under them.
+		h -= menu_height;
+	} else if (layout_studio_now) {
 		pane_y = top;
 		int bottom = studio_box_h - STUDIO_BOTTOM;
 		if (layout_wave_now && wave_canvas) {
@@ -1927,6 +2008,9 @@ static void lyrics_layout(void) {
 		x = STUDIO_MARGIN;
 		w = studio_box_w - 2 * STUDIO_MARGIN;
 		h = bottom - top;
+	}
+	if (h < 0) {
+		h = 0;
 	}
 	lyrics_pane_x = x;
 	int view_x = layout_studio_now ? 0 : STUDIO_MARGIN;
@@ -2632,23 +2716,134 @@ static void studio_put(void) {
 // Reparenting and not rebuilding: the title label carries its scrolling, the
 // star carries what it does when pressed, and copying either of them would be
 // copying behaviour.
-static void player_apply_geometry(void);
+static void player_apply_geometry(bool force);
 static void placeholder_place(void);
+
+// The controls' block, made clear. On this board it always is; on the others it
+// carries the panel's fill, and a picture is behind it here rather than beside
+// it. Its own copy of the blurred artwork goes too: there is nothing for it to
+// be a reflection of.
+static void immersive_deck_clear(void) {
+	if (!player_menu) {
+		return;
+	}
+	lv_obj_set_style_bg_opa(player_menu, LV_OPA_TRANSP, 0);
+	lv_obj_set_style_bg_image_opa(player_menu, LV_OPA_TRANSP, 0);
+}
+
+// Up or down, the one scrim. It is only there for a picture: over one, the
+// chrome is the light chrome the page already turns on over artwork, and over
+// none it is the theme's own, on the page's own colour.
+static void immersive_fades(bool over_art) {
+	if (!immersive_scrim) {
+		return;
+	}
+	lv_obj_set_hidden(immersive_scrim, !over_art);
+}
+
+// The sleeve over the whole screen, with the controls on the scrim over it.
+static void immersive_put(void) {
+	if (!immersive_scrim || !cover_art_group) {
+		return;
+	}
+	int screen_w = (int)lv_obj_get_width(player_screen);
+	int screen_h = (int)lv_obj_get_height(player_screen);
+	if (screen_w <= 0 || screen_h <= 0) {
+		return;
+	}
+
+	// Where the block belongs, remembered before it is lifted: this runs again
+	// every time the arrangement is re-applied, and what it must give back is
+	// the order the page was built in, not whichever one the last arrangement
+	// left behind.
+	if (player_menu) {
+		if (!immersive_up) {
+			immersive_menu_index = lv_obj_get_index(player_menu);
+		}
+	}
+
+	immersive_up = true;
+
+	// The panel and the frame it holds run the whole screen, so the picture is
+	// drawn at one pixel to one of the size it was asked for at (see
+	// reload_cover). Square corners: rounded ones would leave four arcs of page
+	// colour inside the bezel the picture is meant to reach.
+	cover_box_h = screen_h;
+	lv_obj_set_size(cover_panel, screen_w, screen_h);
+	lv_obj_set_style_bg_opa(cover_panel, LV_OPA_TRANSP, 0);
+	cover_art_w = screen_w;
+	cover_art_h = screen_h;
+	lv_obj_set_size(cover_art_group, cover_art_w, cover_art_h);
+	lv_obj_set_pos(cover_art_group, 0, 0);
+	lv_obj_set_style_radius(cover_art_group, 0, 0);
+	lv_obj_set_style_radius(cover_img, 0, 0);
+
+	immersive_deck_clear();
+	// And over the artwork, which fills the screen behind it: the block is
+	// built before the panel is, so without this the picture would be drawn
+	// over the controls it is the ground for. Where it was is written down
+	// above, on the way in.
+	if (player_menu) {
+		lv_obj_move_foreground(player_menu);
+	}
+
+	// The picture or the note, and -- in cover_show(), which is the one place
+	// that knows either way -- the two fades, which are only there for a
+	// picture.
+	cover_show(current_cover.pixels != NULL);
+	lyrics_layout(); // the words' page is measured against this one
+}
+
+// Puts the frame, the panel and the block back where every other arrangement
+// keeps them. Returns true when it was the arrangement in force, which is what
+// the geometry has to be told: the sleeve is not the panel's size any more, and
+// the geometry's own answer only changes when the deck does.
+static bool immersive_take_back(void) {
+	if (!immersive_up) {
+		return false;
+	}
+	immersive_up = false;
+
+	if (immersive_scrim) {
+		lv_obj_set_hidden(immersive_scrim, true);
+	}
+
+	// The sleeve's own corners: where it sits and how big it is belong to the
+	// geometry, which is asked for them again below.
+	lv_obj_set_style_radius(cover_art_group, sleeve_radius, 0);
+	lv_obj_set_style_radius(cover_img, sleeve_radius, 0);
+
+	lv_obj_remove_local_style_prop(cover_panel, LV_STYLE_BG_OPA, 0);
+	if (player_menu) {
+		lv_obj_remove_local_style_prop(player_menu, LV_STYLE_BG_OPA, 0);
+		lv_obj_remove_local_style_prop(player_menu, LV_STYLE_BG_IMAGE_OPA, 0);
+		// Back where the page was built with it: the block is a child of the
+		// page from the start and only ever moved to the front here, so the
+		// index written down on the way in is the whole of what it is owed.
+		// Asking for the panel's own index instead would put it a place lower
+		// than it belongs, since a move takes the object out of the list first.
+		lv_obj_move_to_index(player_menu, immersive_menu_index);
+	}
+	cover_show(current_cover.pixels != NULL);
+	return true;
+}
 
 static void apply_layout(void) {
 	if (!alt_title_pill || !song_text_obj) {
 		return;
 	}
 
-	// Always first: the two arrangements below know nothing about Studio, so
-	// they have to find the ellipsis and the star where they left them.
+	// Always first: the two arrangements below know nothing about Studio or
+	// Immersive, so they have to find the ellipsis and the star where those
+	// two left them, and the sleeve the shape they gave it.
 	studio_take_back();
+	bool was_immersive = immersive_take_back();
 
 	// The panel split follows the arrangement (the alternative one leaves the
 	// names on the sleeve, so its deck is shorter and the sleeve taller).
 	// Before the pill room is worked out below, which is measured from the
 	// sleeve.
-	player_apply_geometry();
+	player_apply_geometry(was_immersive);
 
 	if (layout_alt_now) {
 		// A pill each, and not one pill with two lines in it: the title and the
@@ -2747,10 +2942,12 @@ static void apply_layout(void) {
 		}
 	}
 
-	if (layout_studio_now) {
-		studio_put();
+	if (layout_immersive_now) {
+		immersive_put(); // which places the words' page with it
+	} else if (layout_studio_now) {
+		studio_put(); // likewise, through studio_place()
 	} else {
-		lyrics_layout(); // studio_put() places the page itself
+		lyrics_layout();
 		full_backdrop_apply(); // studio_take_back() took the V1's blur down with Studio's
 	}
 	align_title_with_star(); // the title may have just left its row, or come back to it
@@ -2769,19 +2966,22 @@ static void apply_layout(void) {
 // waveform: the bar's parent, size and transparency are decided here and
 // nowhere else.
 static void update_layout(const device_state_t *state) {
-	// Studio only wants a picture and a name, and takes whatever is playing:
-	// a file, a cached Qobuz or Tidal track, a podcast, a book, a station.
+	// Studio and Immersive only want a picture and a name, and take whatever
+	// is playing: a file, a cached Qobuz or Tidal track, a podcast, a book, a
+	// station.
 	bool local = playing_local_file(state);
 	bool lyrics = lyrics_wanted && local;
 	bool studio = layout_choice == PLAYER_LAYOUT_STUDIO;
+	bool immersive = layout_choice == PLAYER_LAYOUT_IMMERSIVE;
 	bool wave = layout_choice == PLAYER_LAYOUT_ALTERNATIVE && local;
 	bool alt = wave;
 
-	if (studio == layout_studio_now && alt == layout_alt_now && wave == layout_wave_now && lyrics == lyrics_allowed &&
-		alt_title_pill) {
+	if (studio == layout_studio_now && immersive == layout_immersive_now && alt == layout_alt_now &&
+		wave == layout_wave_now && lyrics == lyrics_allowed && alt_title_pill) {
 		return;
 	}
 	layout_studio_now = studio;
+	layout_immersive_now = immersive;
 	layout_alt_now = alt;
 	layout_wave_now = wave;
 	lyrics_allowed = lyrics;
@@ -2798,10 +2998,10 @@ static void update_layout(const device_state_t *state) {
 
 	// The blurred copy is made at the shape of whatever shows it, and the
 	// sleeve at the size the arrangement draws it, so moving in or out of
-	// Studio means the ones on hand are the wrong shape and the picture is
-	// asked for again. Only on a change of arrangement, which is a setting
-	// the user has just touched.
-	if (studio != backdrop_is_studio && cover_shown_path[0]) {
+	// Studio or Immersive means the ones on hand are the wrong shape and the
+	// picture is asked for again. Only on a change of arrangement, which is a
+	// setting the user has just touched.
+	if ((studio != backdrop_is_studio || immersive != cover_shape_immersive) && cover_shown_path[0]) {
 		reload_cover(cover_shown_path);
 	}
 }
@@ -3009,6 +3209,7 @@ static void reload_cover(const char *filepath) {
 	if (filepath && filepath[0]) {
 		backdrop_is_studio = layout_studio_now;
 		backdrop_is_full = backdrop_fills_screen();
+		cover_shape_immersive = layout_immersive_now;
 		cover_set_backdrop_upright(backdrop_is_full);
 
 		// The sleeve is asked for at the size the arrangement in force will
@@ -3017,7 +3218,10 @@ static void reload_cover(const char *filepath) {
 		// being dragged, or the control centre coming down over it, means: in
 		// Studio the picture is decoded at the width of the screen and shown
 		// at two thirds of it, and that resampling is the interface's core
-		// being spent again and again on an answer that never changes.
+		// being spent again and again on an answer that never changes. In
+		// Immersive the box IS the screen -- immersive_put() has already put
+		// the panel at that shape -- so the picture comes back cropped to fill
+		// it and is drawn at one pixel to one.
 		int cover_w = backdrop_is_studio ? studio_cover_geometry(NULL) : cover_art_w;
 		int cover_h = backdrop_is_studio ? cover_w : cover_art_h;
 		coverloader_request_player(filepath, cover_w, cover_h, backdrop_w,
@@ -4856,8 +5060,13 @@ static void placeholder_place(void) {
 	int dy = 0;
 	if (layout_alt_now) {
 		int pills = lv_font_get_line_height(bp_title_font()) + lv_font_get_line_height(bp_artist_font()) +
-					4 * alt_pill_pad_v + 6;
+				4 * alt_pill_pad_v + 6;
 		dy = -(pills + alt_pad) / 2;
+	} else if (layout_immersive_now) {
+		// The picture is the whole screen and the controls stand on its foot,
+		// so the middle of the picture is under them: what the mark is centred
+		// in is the part of it that is left.
+		dy = -menu_height / 2;
 	} else if (bp_is_tempotec_v1()) {
 		dy = compact_sleeve_top() + cover_art_h / 2 - cover_box_h / 2;
 	}
@@ -4869,12 +5078,16 @@ static void placeholder_place(void) {
 // arrangement needs (compact_deck_height), so switching to the alternative
 // arrangement -- which leaves the names on the sleeve -- makes the deck
 // shorter and the sleeve taller. The wide panels keep their fixed split.
-static void player_apply_geometry(void) {
+// `force` recomputes even when the deck's height has not moved, which is what
+// coming out of Immersive needs: there the deck is exactly the standard one's,
+// and what has to be put back is the sleeve -- the panel and the picture inside
+// it were the whole screen.
+static void player_apply_geometry(bool force) {
 	if (!player_menu || !cover_panel || !bp_is_tempotec_v1()) {
 		return;
 	}
 	int want_menu = compact_deck_height(layout_alt_now);
-	if (want_menu == menu_height) {
+	if (want_menu == menu_height && !force) {
 		return; // the arrangement did not change the deck
 	}
 	menu_height = want_menu;
@@ -4976,6 +5189,7 @@ void player_init(gui_config_t *cfg) {
 	cover_box_h = cover_height;
 	cover_art_w = cover_box_w;
 	cover_art_h = cover_box_h;
+	sleeve_radius = compact ? 14 : 18;
 	alt_pad = compact ? 6 : ALT_PAD;
 	alt_fav_size = compact ? 36 : ALT_FAV_SIZE;
 	alt_pill_pad_h = compact ? 10 : ALT_PILL_PAD_H;
@@ -5408,7 +5622,7 @@ void player_init(gui_config_t *cfg) {
 	lv_obj_set_style_bg_opa(cover_art_group, LV_OPA_TRANSP, 0);
 	lv_obj_set_style_border_width(cover_art_group, 0, 0);
 	lv_obj_set_style_pad_all(cover_art_group, 0, 0);
-	lv_obj_set_style_radius(cover_art_group, compact ? 14 : 18, 0);
+	lv_obj_set_style_radius(cover_art_group, sleeve_radius, 0);
 	lv_obj_set_style_clip_corner(cover_art_group, true, 0);
 	lv_obj_set_scrollable(cover_art_group, false);
 	lv_obj_set_clickable(cover_art_group, false);
@@ -5527,10 +5741,30 @@ void player_init(gui_config_t *cfg) {
 	lv_obj_set_hidden(alt_fav_circle, true);
 
 	cover_img = lv_image_create(cover_art_group);
-	lv_obj_set_style_radius(cover_img, compact ? 14 : 18, 0);
+	lv_obj_set_style_radius(cover_img, sleeve_radius, 0);
 	lv_obj_set_style_clip_corner(cover_img, true, 0);
 	lv_obj_center(cover_img);
 	lv_obj_set_hidden(cover_img, true);
+
+	// Immersive's scrim: one flat black over the picture, at a fixed alpha, the
+	// whole screen of it. Built here rather than inside that arrangement because
+	// it is the page's own furniture -- created once, and shown only while that
+	// arrangement is up over a picture (cover_show).
+	//
+	// A child of the artwork's frame and not of the panel, so that it is drawn
+	// over the picture and under the source marks, which are brought to the
+	// front of this same frame when they appear. Its size is the frame's, which
+	// the arrangement below sets to the screen: nothing has to be placed when
+	// the deck's height changes, because nothing about it depends on the deck.
+	immersive_scrim = lv_obj_create(cover_art_group);
+	lv_obj_remove_style_all(immersive_scrim);
+	lv_obj_set_size(immersive_scrim, lv_pct(100), lv_pct(100));
+	lv_obj_set_pos(immersive_scrim, 0, 0);
+	lv_obj_set_style_bg_color(immersive_scrim, lv_color_black(), 0);
+	lv_obj_set_style_bg_opa(immersive_scrim, IMMERSIVE_SCRIM_OPA, 0);
+	lv_obj_set_scrollable(immersive_scrim, false);
+	lv_obj_set_clickable(immersive_scrim, false);
+	lv_obj_set_hidden(immersive_scrim, true);
 
 	// ---------------------------------------------------------------------
 	// Studio: the blurred sleeve behind the whole screen, and everything else
@@ -5656,11 +5890,15 @@ void player_init(gui_config_t *cfg) {
 	// Whichever arrangement was left selected, now that every widget it moves
 	// exists.
 	int saved = (int)config_get_int("screen", "player_layout_alt", 0);
-	layout_choice = (saved == (int)PLAYER_LAYOUT_ALTERNATIVE)	? PLAYER_LAYOUT_ALTERNATIVE
-					: (saved == (int)PLAYER_LAYOUT_STUDIO)		? PLAYER_LAYOUT_STUDIO
-																: PLAYER_LAYOUT_STANDARD;
-	layout_alt_now = false; // apply_layout() below puts the standard one up first
+	layout_choice = (saved == (int)PLAYER_LAYOUT_ALTERNATIVE)  ? PLAYER_LAYOUT_ALTERNATIVE
+					: (saved == (int)PLAYER_LAYOUT_STUDIO)	   ? PLAYER_LAYOUT_STUDIO
+					: (saved == (int)PLAYER_LAYOUT_IMMERSIVE) ? PLAYER_LAYOUT_IMMERSIVE
+															  : PLAYER_LAYOUT_STANDARD;
+	// apply_layout() below puts the standard one up first: none of the three
+	// others is in force until it says so.
+	layout_alt_now = false;
 	layout_studio_now = false;
+	layout_immersive_now = false;
 	apply_layout();
 
 	theme_register_refresh(player_refresh_theme);

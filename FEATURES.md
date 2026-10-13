@@ -63,6 +63,8 @@
 
 - Artwork edge to edge across the top, and the same picture flipped, blurred and dimmed behind the controls.
 - **Alternative layout** - the progress bar becomes a **waveform**
+- **Immersive layout** - the picture itself, edge to edge across the whole panel: the sleeve fills the screen and is centre-cropped, with a flat black scrim over the whole of it so the names, the bar, the transport and the chevron stay legible on top. Anything holding artwork gets one - local files, podcasts, audiobooks, Subsonic and the streaming services alike - and without a picture the page falls back to its own colour with the controls in the theme's ink.
+- **Player layout** - Standard, Waveform, Alternative or Immersive, in Settings → Music → Display options; the choice is remembered across restarts.
 - **Cover Flow** - an album carousel, swiped up from the bottom of the Music page.
 - **Queue**, **Details** and, while an audiobook is loaded, **Chapters**.
 

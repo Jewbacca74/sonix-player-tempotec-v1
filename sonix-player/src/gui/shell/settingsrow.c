@@ -1138,7 +1138,11 @@ lv_obj_t *settingsrow_pills(lv_obj_t *parent, const char *title, lv_obj_t **pill
 static lv_obj_t *pill_make(lv_obj_t *parent, const char *label_text, int value, lv_event_cb_t cb) {
 	lv_obj_t *btn = lv_btn_create(parent);
 	lv_obj_set_size(btn, LV_SIZE_CONTENT, compact_rows() ? 36 : 56);
-	lv_obj_set_style_pad_hor(btn, compact_rows() ? 12 : 26, 0);
+	// Eight and not twelve on the V1: a row of pills is as narrow as its
+	// longest label times how many there are, and the player's layout row now
+	// holds four of them -- at twelve they take three lines of a 224 px card
+	// instead of two, and the page below them moves down with them.
+	lv_obj_set_style_pad_hor(btn, compact_rows() ? 8 : 26, 0);
 	lv_obj_set_style_radius(btn, LV_RADIUS_CIRCLE, 0); // Adwaita pill button
 	lv_obj_set_style_shadow_width(btn, 0, 0);
 	lv_obj_set_style_border_width(btn, 0, 0);
