@@ -93,7 +93,7 @@ Showcase of **Tokyo Night** appearance: a blue-black palette with function-match
   </tr>
 </table>
 
-### Ember theme
+### Amber on black theme
 
 Showcase of **Ember** appearance: fiery orange accents on a pure black background, with warm amber artwork and glowing icons.
 
