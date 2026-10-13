@@ -119,6 +119,15 @@ theme_kind_t theme_get_kind(void);
 lv_color_t theme_semantic_color(theme_semantic_t role);
 lv_color_t theme_player_chrome_color(theme_player_chrome_t role);
 
+// What the file browser recolours its folder glyphs to, and nothing else on
+// the page. Tokyo Night answers with the violet of its own palette; every
+// other theme with the shared icon colour it has always used, so the page is
+// unchanged outside Tokyo Night.
+//
+// Read at paint time: a hand-set colour is a snapshot, so the page asks again
+// whenever the palette moves.
+lv_color_t theme_browser_folder_color(void);
+
 // Switches between Dark and Light, and repaints the UI. Both added palettes
 // are treated as dark by the legacy toggle, so one toggle from either goes to Light.
 void theme_toggle(void);

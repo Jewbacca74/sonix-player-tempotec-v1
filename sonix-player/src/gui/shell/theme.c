@@ -448,6 +448,23 @@ lv_color_t theme_semantic_color(theme_semantic_t role) {
 	}
 }
 
+// The file browser's folders are the one thing in the interface that does not
+// wear a shared colour: Tokyo Night gives them its violet -- the hue its Now
+// Playing deck already uses -- and nowhere else is it spent. Every other
+// palette answers with the colour it has always used here, so outside Tokyo
+// Night the page is unchanged.
+//
+// The names on the rows are not part of this: they read in the ordinary text
+// colour, the same one the library lists write theirs in.
+lv_color_t theme_browser_folder_color(void) {
+	if (selected_kind == THEME_KIND_TOKYO_NIGHT) {
+		return theme_semantic_color(THEME_SEMANTIC_PURPLE); // #bb9af7, the palette's violet
+	}
+	// Unchanged from before: the signal green a folder wears on the other
+	// function-glyph palette, and the plain text colour everywhere else.
+	return theme_uses_function_glyphs() ? theme_semantic_color(THEME_SEMANTIC_GREEN) : active->text_primary;
+}
+
 lv_color_t theme_player_chrome_color(theme_player_chrome_t role) {
 	if (selected_kind == THEME_KIND_AMBER_ON_BLACK) {
 		switch (role) {

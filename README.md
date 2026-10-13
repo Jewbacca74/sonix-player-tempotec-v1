@@ -79,11 +79,17 @@ The same screens in the added **Tokyo Night** appearance: a blue-black palette w
       <br><sub><b>Settings</b></sub>
     </td>
     <td align="center">
+      <a href="screenshots/tokyonight/now-playing.png"><img src="screenshots/tokyonight/now-playing.png" width="180" alt="Tokyo Night now playing"></a>
+      <br><sub><b>Now Playing</b></sub>
+    </td>
+    <td align="center">
+      <a href="screenshots/tokyonight/file-browser.png"><img src="screenshots/tokyonight/file-browser.png" width="180" alt="Tokyo Night file browser"></a>
+      <br><sub><b>File Browser</b></sub>
+    </td>
+    <td align="center">
       <a href="screenshots/tokyonight/streaming.png"><img src="screenshots/tokyonight/streaming.png" width="180" alt="Tokyo Night streaming"></a>
       <br><sub><b>Streaming</b></sub>
     </td>
-    <td></td>
-    <td></td>
   </tr>
 </table>
 
