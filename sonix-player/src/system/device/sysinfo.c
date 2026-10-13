@@ -61,7 +61,12 @@ static const sysinfo_model_t MODELS[] = {
 		.cs43131 = false,
 		.tap_wake = false,
 		.one_flank = true,
-		.media_keys_swapped = false,
+		// The V1 kernel labels the physical next and previous keys in the
+		// opposite order, like the R3 Pro II. Without this correction the
+		// physical next key is dispatched through the previous-key handler;
+		// after the restart threshold that handler seeks back to zero instead
+		// of advancing the queue.
+		.media_keys_swapped = true,
 		// Measured on the device: /sys/class/switch holds only `headset`, no
 		// `balance`, and its state reads 1 with both sockets empty. Read as
 		// the HiBy nodes are, that is a 3.5 mm plug that is never pulled out.

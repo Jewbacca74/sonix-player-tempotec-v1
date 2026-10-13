@@ -9,8 +9,9 @@
 // on its own and a rocker split in two. On the left there is the volume rocker.
 // The kernel reports the three media keys as KEY_NEXTSONG, KEY_PLAYPAUSE and
 // KEY_PREVIOUSSONG, and reports the skip keys swapped with respect to their
-// physical positions -- the stock firmware compensates for that and so does
-// this one (see system.c). The R1 has volume up, volume down, play and next,
+// physical positions on the R3 Pro II and TempoTec V1 -- the stock firmware
+// compensates for that and so does this one (see system.c). The R1 has volume
+// up, volume down, play and next,
 // all on the right, and no previous key. Nothing here speaks in kernel codes:
 // the buttons are named as the person holding the device sees them.
 //
