@@ -305,20 +305,6 @@ static void row_show_glyph(row_t *row, bool is_dir) {
 	lv_obj_set_style_image_recolor_opa(row->icon, LV_OPA_COVER, 0);
 }
 
-// The name on a row, in the colour this page writes them in: Tokyo Night's pale
-// pink, and the shared dim-text colour on every other palette.
-//
-// Set by hand rather than left to the style because the two are not the same
-// question -- the style says "quieter than a title", this says "the browse
-// list" -- and a hand-set colour is a snapshot, so browser_theme_refresh()
-// below paints these again whenever the palette moves.
-static void row_paint_name(row_t *row) {
-	if (!row->label) {
-		return;
-	}
-	lv_obj_set_style_text_color(row->label, theme_browser_text_color(), 0);
-}
-
 // Album art must not be tinted, so the recolour the glyphs rely on is switched
 // off for as long as a picture is on the row.
 static void row_show_cover(row_t *row, const lv_image_dsc_t *dsc) {
@@ -1523,10 +1509,10 @@ static void build_rows(int width) {
 		row->label = lv_label_create(row->button);
 		lv_label_set_long_mode(row->label, LV_LABEL_LONG_DOT);
 		lv_obj_set_flex_grow(row->label, 1);
-		// The names read in the quiet colour -- the same one the home screen
-		// uses for its tagline -- rather than the title white.
-		lv_obj_add_style(row->label, &theme_style_text_dim, 0);
-		row_paint_name(row);
+		// The ordinary text colour, the one every other list in the interface
+		// writes its rows in: a file name is the row's title here, not a
+		// second line under one.
+		lv_obj_add_style(row->label, &theme_style_text, 0);
 		lv_obj_set_style_text_font(row->label, bp_tile_label_font(), 0);
 		// Two lines at most: the cap on the height is what makes LV_LABEL_LONG_DOT
 		// cut the name there, with the ellipsis, instead of wrapping on past the
@@ -1585,14 +1571,12 @@ static lv_obj_t *corner_button(gui_config_t *cfg, int slot, const lv_image_dsc_t
 	return btn;
 }
 
-// The two colours this page sets by hand, painted again when the palette moves.
-// Without this a theme change leaves the browse list in the colours it was
-// built with -- shared styles follow the palette on their own, hand-set ones
-// do not.
+// The one colour this page sets by hand, painted again when the palette moves.
+// Without this a theme change leaves the folders in the colour they were built
+// with -- shared styles follow the palette on their own, hand-set ones do not.
 static void browser_theme_refresh(void) {
 	for (int i = 0; i < ROW_POOL; i++) {
 		row_t *row = &rows[i];
-		row_paint_name(row);
 		// A row showing artwork keeps it: putting the glyph back would drop
 		// the picture off a row nobody has scrolled away from.
 		if (!row->has_thumb && row->index >= 0 && (size_t)row->index < shown.count) {
