@@ -7,9 +7,9 @@ The firmware builder starts with an official V1 update package, replaces the sto
 This is not an official TempoTec or HiBy release. **The port has been tested on physical TempoTec Variations V1 hardware and works perfectly on the tested device.** It targets the **TempoTec Variations V1 only**; compatibility with the V1-A or other players in the Variations family is not established.
 
 
-## Screenshots
+## Previews
 
-Interface previews, rendered at the V1's native 240 × 320 resolution. Click any picture to open it full size. (This is not the default font neither the color)
+Interface previews of the stock UI of Sonix, rendered at the V1's native 240 × 320 resolution. Click any picture to open it full size. (This is not the default font neither the color)
 
 <table>
   <tr>
@@ -52,7 +52,7 @@ Interface previews, rendered at the V1's native 240 × 320 resolution. Click any
 
 ### Tokyo Night theme
 
-The same screens in the added **Tokyo Night** appearance: a blue-black palette with function-matched icons, chosen in Settings → Appearance → Theme. It is available on the V1 alongside Dark and Light.
+Showcase of **Tokyo Night** appearance: a blue-black palette with function-matched icons, chosen in Settings → Appearance → Theme. It is available on the V1 alongside Dark and Light.
 
 <table>
   <tr>
@@ -95,7 +95,7 @@ The same screens in the added **Tokyo Night** appearance: a blue-black palette w
 
 ### Ember theme
 
-The same screens in the **Ember** appearance: fiery orange accents on a pure black background, with warm amber artwork and glowing icons.
+Showcase of **Ember** appearance: fiery orange accents on a pure black background, with warm amber artwork and glowing icons.
 
 <table>
   <tr>
@@ -180,17 +180,6 @@ The interface font is a setting (Settings → Appearance → Font): MiSans, Neon
 The boot screen is a setting too (Settings → Appearance → Boot screen): **Retrospace**, the default, **Space**, **Travelling in space**, or **Stock**, the firmware's own light and dark pictures. The choice cannot live in the config — the script that draws the logo runs before any filesystem holding a config is mounted — so it is written to the same flash marker the theme uses, and appears from the next power-on.
 
 See [FEATURES.md](FEATURES.md) for a longer feature list. Streaming services also require valid credentials and may depend on third-party service availability.
-
-## Build a firmware image
-
-The recommended route is the repository's GitHub Actions workflow. It cross-compiles the MIPS player and launcher, packages them into an update based on official V1 firmware, validates the result and uploads a downloadable artifact.
-
-1. Open the repository's **Actions** tab and select **Build TempoTec V1 firmware**.
-2. Choose **Run workflow** on the branch you want to build. The stock firmware URL is prefilled with the [official TempoTec V1 firmware folder](https://drive.google.com/drive/folders/1jbT9lhRvJ8sbJuepnaBpss861mpsYwnv?usp=sharing); change it only if you have another official V1 package to use.
-3. Confirm the required checkbox acknowledging that this is an unofficial community build and that you will keep the matching official firmware and checksum available for recovery.
-4. When the run succeeds, download the `sonix-tempotec-v1-<commit>` artifact. It contains `v1.upt`, `v1_md5.txt`, the player binaries, and stock/output validation reports.
-
-Artifacts are retained for 14 days. The port has been tested on physical V1 hardware, but Actions validates each generated package automatically rather than installing that specific image on a player. See [`.github/workflows/build-tempotec-v1.yml`](.github/workflows/build-tempotec-v1.yml) for the build and validation steps.
 
 ## Install or restore firmware
 
