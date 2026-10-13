@@ -10,6 +10,12 @@
 // the blurred cover carries the title, the artist and the time in large
 // figures. A chevron pointing up says how to get rid of it: swipe up.
 //
+// The two palettes added for the V1 -- Tokyo Night and Amber on Black -- draw
+// it the other way round: the artwork runs the whole panel and that same strip
+// is a translucent field of the palette's own colour laid over its foot, with
+// the title, the artist and the clock in the palette's ink. The blurred copy
+// is never borrowed there: a field is a colour, not a blur.
+//
 // The artwork is borrowed from the player, which has already decoded it for
 // the current track -- nothing is decoded here, so a wake stays instant.
 

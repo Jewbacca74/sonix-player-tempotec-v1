@@ -28,10 +28,10 @@
 #define DISMISS_ANIM_MS 180
 
 static lv_obj_t *saver;		 // the whole thing, full screen on the top layer
-static lv_obj_t *cover_img;	 // the artwork, filling what is above the strip
+static lv_obj_t *cover_img;	 // the artwork: above the strip, or the whole panel under a field
 static lv_obj_t *cover_placeholder; // the note, for a track that has none
-static lv_obj_t *info_strip; // metadata over blur, or translucent black in Amber
-static lv_obj_t *cover_box;	 // the artwork's frame, everything above the strip
+static lv_obj_t *info_strip; // metadata over blur, or a translucent panel in the V1 palettes
+static lv_obj_t *cover_box;	 // the artwork's frame: everything above the strip, or the screen
 static lv_obj_t *title_label;
 static lv_obj_t *artist_label;
 static lv_obj_t *clock_label;
@@ -44,10 +44,16 @@ static int strip_h;
 
 // What the strip falls back to when there is no artwork to size it from, and
 // the height it always has over a picture from the folder -- there the block
-// is built to order rather than borrowed, so there is nothing to measure. Amber
-// uses this same stable height for its translucent black metadata field.
+// is built to order rather than borrowed, so there is nothing to measure. The
+// two V1 palettes use this same stable height for the metadata field they lay
+// over the sleeve rather than under it.
 #define DEFAULT_STRIP_H bp_pick(132, 250)
-#define AMBER_STRIP_OPA LV_OPA_50 // black panel at 50% transparency
+
+// How much of the sleeve still shows through that field, per palette. Amber's
+// cream and amber type is bright enough to read through half; Tokyo Night's
+// violet, cyan and blue are dimmer inks, so its film is a step heavier.
+#define AMBER_STRIP_OPA LV_OPA_50
+#define TOKYO_STRIP_OPA LV_OPA_60
 
 // ---------------------------------------------------------------------------
 // Pictures from the card
@@ -65,9 +71,9 @@ static int strip_h;
 // ---------------------------------------------------------------------------
 
 static screensaver_source_t source;
-// The picture on screen and, outside Amber, the blurred block over its lower part. Owned here,
-// not by the player: freed here whenever a different one is chosen or the
-// screensaver goes away.
+// The picture on screen and, outside the V1 palettes, the blurred block over
+// its lower part. Owned here, not by the player: freed here whenever a
+// different one is chosen or the screensaver goes away.
 static cover_image_t image_pic, image_strip;
 static char image_file[512]; // what image_pic was built from
 
@@ -86,12 +92,20 @@ static bool next_pending; // a request is out with the loader
 // The height is therefore taken from the picture, leaving nothing to paint.
 //
 // In the regular themes an album cover stops where its blurred strip starts.
-// A folder photograph already fills the screen. Amber uses that same full-image
-// arrangement for album art too, so its black-transparent panel really overlays
-// the cover rather than a plain black area below it.
+// A folder photograph already fills the screen, and so does the artwork under
+// the V1 palettes' metadata field: that field is translucent, and it is only
+// over the sleeve that it means anything.
 //
 // Cheap, and a no-op unless something has actually changed.
 static int cover_box_h;
+
+// The two palettes added for the V1 draw the metadata over the sleeve itself:
+// the artwork runs the whole panel and a translucent field of the palette's
+// own colour is laid over its foot. Dark and Light keep the blurred strip,
+// which is the artwork the player already made for that purpose.
+static bool metadata_over_art(void) {
+	return theme_is_amber_on_black() || theme_is_tokyo_night();
+}
 
 static void set_strip_height(int height) {
 	if (height <= 0 || height >= screen_h) {
@@ -102,8 +116,8 @@ static void set_strip_height(int height) {
 		lv_obj_set_height(info_strip, strip_h);
 		lv_obj_align(info_strip, LV_ALIGN_BOTTOM_MID, 0, 0);
 	}
-	bool panel_over_art = source == SCREENSAVER_SOURCE_IMAGES || theme_is_amber_on_black();
-	int want = panel_over_art ? screen_h : screen_h - strip_h;
+	bool over_art = source == SCREENSAVER_SOURCE_IMAGES || metadata_over_art();
+	int want = over_art ? screen_h : screen_h - strip_h;
 	if (want != cover_box_h) {
 		cover_box_h = want;
 		lv_obj_set_height(cover_box, cover_box_h);
@@ -290,14 +304,23 @@ static void promote_next(void) {
 	next_file[0] = '\0';
 }
 
-// Amber replaces the artwork-derived blur beneath its metadata with a fixed
-// black-transparent field. This keeps the theme's cream and amber type legible
-// over every sleeve while letting the cover remain visible behind it.
+// The V1 palettes replace the artwork-derived blur beneath their metadata with
+// a fixed translucent field: Amber's own black, Tokyo Night's blue-black
+// panel. Either keeps the palette's ink legible over every sleeve while still
+// letting the cover show through behind it. The other themes keep the blurred
+// copy, or plain black when there is no artwork to blur.
 static void set_info_strip_backdrop(const lv_image_dsc_t *backdrop) {
 	if (theme_is_amber_on_black()) {
 		lv_obj_set_style_bg_image_src(info_strip, NULL, 0);
 		lv_obj_set_style_bg_color(info_strip, lv_color_black(), 0);
 		lv_obj_set_style_bg_opa(info_strip, AMBER_STRIP_OPA, 0);
+		return;
+	}
+
+	if (theme_is_tokyo_night()) {
+		lv_obj_set_style_bg_image_src(info_strip, NULL, 0);
+		lv_obj_set_style_bg_color(info_strip, theme()->panel, 0);
+		lv_obj_set_style_bg_opa(info_strip, TOKYO_STRIP_OPA, 0);
 		return;
 	}
 
@@ -311,39 +334,73 @@ static void set_info_strip_backdrop(const lv_image_dsc_t *backdrop) {
 	}
 }
 
+// The metadata field's ink, by palette. Amber takes the cream, amber and
+// signal-orange roles sampled from its reference Now Playing screen; Tokyo
+// Night takes the violet it gives the deck's track name, the cyan it gives the
+// artist line and its own accent blue for the time. Dark and Light have no
+// field of their own: they keep the light type they have always worn over the
+// blurred strip, whatever the page behind them is.
 static void screensaver_refresh_theme(void) {
 	if (!saver) {
 		return;
 	}
 
 	bool amber = theme_is_amber_on_black();
-	lv_obj_set_style_bg_color(saver, amber ? theme()->screen_bg : lv_color_black(), 0);
+	bool tokyo = theme_is_tokyo_night();
+	bool field = amber || tokyo;
+
+	// The page behind everything. Where there is a field it is the palette's own
+	// background -- both the ground the note sits on when a track has no artwork
+	// and the colour the translucent field is read against; black otherwise,
+	// which is what the blurred strip is built to sit on.
+	lv_color_t page = field ? theme()->screen_bg : lv_color_black();
+	lv_obj_set_style_bg_color(saver, page, 0);
+	if (cover_box) {
+		lv_obj_set_style_bg_color(cover_box, page, 0);
+	}
+
+	// What the words and the marks are drawn in. Over a field they take the
+	// roles the palette's own Now Playing deck gives the same things: the
+	// track name's colour for the title, the artist line's for the artist --
+	// which is Amber's amber and Tokyo Night's cyan, the one place the two
+	// palettes ask a different colour of the same role -- the accent for the
+	// time and the deck's quiet chevron for the way out.
+	lv_color_t ink_title = lv_color_white();
+	lv_color_t ink_artist = lv_color_make(200, 200, 200);
+	lv_color_t ink_clock = lv_color_white();
+	lv_color_t ink_chevron = lv_color_white();
+	if (field) {
+		ink_title = theme_player_chrome_color(THEME_PLAYER_CHROME_PRIMARY);
+		ink_artist = tokyo ? theme_semantic_color(THEME_SEMANTIC_CYAN)
+						   : theme_player_chrome_color(THEME_PLAYER_CHROME_SECONDARY);
+		ink_clock = theme()->accent;
+		ink_chevron = theme_player_chrome_color(THEME_PLAYER_CHROME_CHEVRON);
+	}
+
 	if (cover_placeholder) {
+		// The note in the middle of a screen with no artwork: Amber's subdued
+		// amber, the palette's own secondary text everywhere else.
 		lv_obj_set_style_image_recolor(cover_placeholder,
-								   amber ? theme_player_chrome_color(THEME_PLAYER_CHROME_SECONDARY)
-										 : theme()->text_secondary,
-								   0);
+									   amber ? theme_player_chrome_color(THEME_PLAYER_CHROME_SECONDARY)
+											 : theme()->text_secondary,
+									   0);
 	}
 	if (title_label) {
-		lv_obj_set_style_text_color(title_label,
-								 amber ? theme_player_chrome_color(THEME_PLAYER_CHROME_PRIMARY) : lv_color_white(), 0);
+		lv_obj_set_style_text_color(title_label, ink_title, 0);
 	}
 	if (artist_label) {
-		lv_obj_set_style_text_color(artist_label,
-								 amber ? theme_player_chrome_color(THEME_PLAYER_CHROME_SECONDARY)
-									   : lv_color_make(200, 200, 200),
-								 0);
+		lv_obj_set_style_text_color(artist_label, ink_artist, 0);
 	}
 	if (clock_label) {
-		lv_obj_set_style_text_color(clock_label, amber ? theme()->accent : lv_color_white(), 0);
+		lv_obj_set_style_text_color(clock_label, ink_clock, 0);
 	}
 	if (chevron_icon) {
-		lv_obj_set_style_image_recolor(chevron_icon,
-								  amber ? theme_player_chrome_color(THEME_PLAYER_CHROME_CHEVRON) : lv_color_white(), 0);
+		lv_obj_set_style_image_recolor(chevron_icon, ink_chevron, 0);
 	}
 
 	// A theme can change while this is on screen. Reapply the source-specific
-	// strip immediately so a blurred frame never survives into Amber.
+	// field immediately, so a blurred frame never survives into a palette that
+	// has one of its own.
 	if (screensaver_is_visible()) {
 		refresh_content();
 	}
@@ -420,23 +477,25 @@ static void refresh_content(void) {
 	}
 
 	// The strip first: in the regular themes the artwork is scaled into the
-	// area above it. Amber settles the same panel height, but overlays it on a
-	// full-screen cover so the transparent black still shows the sleeve below.
+	// area above it. The two V1 palettes settle the same panel height, but
+	// overlay it on a full-screen cover so their translucent field really has
+	// the sleeve under it.
 	const lv_image_dsc_t *backdrop = player_backdrop_image();
 	// The player's blurred copy is as tall as whatever shows it, and one
 	// arrangement shows it behind the whole screen: a strip that tall is the
 	// screen, so that one keeps the default height and takes the top of the
-	// picture instead. Amber deliberately never borrows that blurred copy.
+	// picture instead. The two V1 palettes deliberately never borrow that
+	// blurred copy -- their field is a colour, not a blur.
 	int strip_from_backdrop = backdrop ? (int)backdrop->header.h : 0;
-	set_strip_height(!theme_is_amber_on_black() && strip_from_backdrop > 0 && strip_from_backdrop < screen_h
+	set_strip_height(!metadata_over_art() && strip_from_backdrop > 0 && strip_from_backdrop < screen_h
 														 ? strip_from_backdrop : DEFAULT_STRIP_H);
 	const lv_image_dsc_t *cover = shown_cover;
 	if (cover) {
 		lv_image_set_src(cover_img, cover);
 		// Fill the available artwork area, cropping the overflow: a letterboxed
-		// cover with black bars would look like a bug, not a screensaver. Amber
-		// deliberately fills the whole screen, including the transparent panel.
-		int image_h = theme_is_amber_on_black() ? screen_h : screen_h - strip_h;
+		// cover with black bars would look like a bug, not a screensaver. Under
+		// a field the whole screen is artwork, the field included.
+		int image_h = metadata_over_art() ? screen_h : screen_h - strip_h;
 		int32_t zoom_w = (256 * screen_w) / (int32_t)cover->header.w;
 		int32_t zoom_h = (256 * image_h) / (int32_t)cover->header.h;
 		lv_image_set_scale(cover_img, zoom_w > zoom_h ? zoom_w : zoom_h);
@@ -448,8 +507,8 @@ static void refresh_content(void) {
 		lv_obj_set_hidden(cover_placeholder, false);
 	}
 
-	// In Amber this clears the blurred artwork and puts the palette's
-	// black-transparent field in its place.
+	// In Amber and Tokyo Night this clears the blurred artwork and puts the
+	// palette's translucent field in its place.
 	set_info_strip_backdrop(backdrop);
 
 	refresh_clock();
@@ -666,7 +725,10 @@ void screensaver_init(gui_config_t *cfg) {
 	lv_obj_add_event_cb(saver, drag_cb, LV_EVENT_RELEASED, NULL);
 	lv_obj_add_event_cb(saver, drag_cb, LV_EVENT_PRESS_LOST, NULL);
 
-	// The artwork: everything above the strip, centre-cropped to fill it.
+	// The artwork: everything above the strip in the regular themes, and the
+	// whole screen under the two V1 palettes, centre-cropped to fill it either
+	// way. Its fill is the page colour (see screensaver_refresh_theme): what
+	// shows when a track has no artwork behind the note.
 	cover_box = lv_obj_create(saver);
 	lv_obj_set_size(cover_box, screen_w, screen_h - strip_h);
 	lv_obj_set_pos(cover_box, 0, 0);
@@ -686,11 +748,6 @@ void screensaver_init(gui_config_t *cfg) {
 	// gone wrong.
 	cover_placeholder = lv_image_create(cover_box);
 	lv_image_set_src(cover_placeholder, &icon_music_note);
-	lv_obj_set_style_image_recolor(cover_placeholder,
-								   theme_is_amber_on_black()
-									   ? theme_player_chrome_color(THEME_PLAYER_CHROME_SECONDARY)
-									   : theme()->text_secondary,
-								   0);
 	lv_obj_set_style_image_recolor_opa(cover_placeholder, LV_OPA_COVER, 0);
 	lv_obj_center(cover_placeholder);
 
@@ -698,7 +755,9 @@ void screensaver_init(gui_config_t *cfg) {
 	lv_obj_center(cover_img);
 	lv_image_set_inner_align(cover_img, LV_IMAGE_ALIGN_CENTER);
 
-	// Metadata field: blurred artwork in the other themes, transparent black in Amber.
+	// Metadata field: the player's blurred artwork in Dark and Light, a
+	// translucent fill of the palette's own colour in the two V1 palettes (see
+	// set_info_strip_backdrop).
 	info_strip = lv_obj_create(saver);
 	lv_obj_set_size(info_strip, screen_w, strip_h);
 	lv_obj_align(info_strip, LV_ALIGN_BOTTOM_MID, 0, 0);
@@ -714,29 +773,27 @@ void screensaver_init(gui_config_t *cfg) {
 	lv_obj_set_flex_flow(info_strip, LV_FLEX_FLOW_COLUMN);
 	lv_obj_set_flex_align(info_strip, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-	// Amber takes its cream, amber and signal-orange roles from the player chrome;
-	// the other themes retain the existing light type over the dark blur.
+	// None of the ink is set here. What the words and the marks are drawn in
+	// depends on the palette -- Amber's cream and signal orange, Tokyo Night's
+	// violet, cyan and blue, the light type Dark and Light have always worn over
+	// the blurred strip -- and it is all written in screensaver_refresh_theme(),
+	// which runs at the end of this function and again on every theme change.
+	// One place, so the two can never disagree.
 	title_label = lv_label_create(info_strip);
 	lv_obj_set_width(title_label, lv_pct(100));
 	lv_obj_set_style_text_font(title_label, &font_ui_28, 0);
-	lv_obj_set_style_text_color(title_label,
-							 theme_is_amber_on_black() ? theme_player_chrome_color(THEME_PLAYER_CHROME_PRIMARY) : lv_color_white(), 0);
 	lv_obj_set_style_text_align(title_label, LV_TEXT_ALIGN_CENTER, 0);
 	scrolltext_apply(title_label);
 
 	artist_label = lv_label_create(info_strip);
 	lv_obj_set_width(artist_label, lv_pct(100));
 	lv_obj_set_style_text_font(artist_label, &font_ui_22, 0);
-	lv_obj_set_style_text_color(artist_label,
-							 theme_is_amber_on_black() ? theme_player_chrome_color(THEME_PLAYER_CHROME_SECONDARY)
-																	  : lv_color_make(200, 200, 200), 0);
 	lv_obj_set_style_text_align(artist_label, LV_TEXT_ALIGN_CENTER, 0);
 	scrolltext_apply(artist_label);
 
 	// The time, in the largest figures the screen has.
 	clock_label = lv_label_create(info_strip);
 	lv_obj_set_style_text_font(clock_label, &font_ui_72, 0);
-	lv_obj_set_style_text_color(clock_label, theme_is_amber_on_black() ? theme()->accent : lv_color_white(), 0);
 	lv_obj_set_style_pad_top(clock_label, bp_pick(2, 6), 0);
 
 	// The way out, spelled out: swipe up. A sign, not a button -- tapping it
@@ -755,10 +812,6 @@ void screensaver_init(gui_config_t *cfg) {
 
 	chevron_icon = lv_image_create(chevron_btn);
 	lv_image_set_src(chevron_icon, &icon_chevron_up);
-	lv_obj_set_style_image_recolor(chevron_icon,
-								  theme_is_amber_on_black() ? theme_player_chrome_color(THEME_PLAYER_CHROME_CHEVRON)
-																	  : lv_color_white(),
-								  0);
 	lv_obj_set_style_image_recolor_opa(chevron_icon, LV_OPA_COVER, 0);
 	lv_obj_set_style_image_opa(chevron_icon, LV_OPA_70, 0);
 	lv_obj_center(chevron_icon);

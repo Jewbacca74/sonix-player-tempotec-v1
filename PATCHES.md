@@ -90,6 +90,33 @@ fill, and over a loaded picture the artwork covers it. With no artwork the
 scrim stays down and the page is its own colour with the theme's ink, exactly
 as the standard arrangement draws it.
 
+The **screensaver** follows the same split. Dark and Light keep the arrangement
+they have always had: the artwork stops where the blurred strip begins, and the
+title, the artist and the time are read on the player's own blurred copy in
+light type. The two palettes added for the V1 draw it the other way round:
+Amber on Black and Tokyo Night both let the artwork run the **whole** panel,
+centre-cropped, and lay a translucent field of the palette's own colour over
+its foot — Amber's `#000000` at half alpha, Tokyo Night's `#16161e` at 60%, a
+step heavier because the violet, cyan and blue inks are dimmer than the cream
+and amber ones and have less headroom over a pale sleeve. The blurred copy is
+never borrowed there: a field is a colour, not a blur.
+
+The type in that field takes the roles the palette's own Now Playing deck gives
+the same things. Tokyo Night: the track name's violet `#bb9af7` for the title,
+the artist line's cyan `#7dcfff` for the artist, the accent blue `#7aa2f7` for
+the clock — the screensaver's own rule, which Amber set when the clock there
+became its signal amber — and the palette's ordinary icon colour `#c0caf5` for
+the chevron that says how to dismiss it, at the same 70% it has always worn.
+Amber: cream, amber and signal orange, unchanged. A track with no artwork
+behind either field sits on the palette's page colour rather than on black, so
+the same screen reads the same way whether the sleeve is there or not.
+
+The field's colour and every line of ink are written in one place, in the
+screensaver's theme-refresh callback, where they were already written for
+Amber. Adding Tokyo Night beside it is a second branch in three functions —
+`metadata_over_art()`, `set_info_strip_backdrop()` and that callback — and
+touches the Amber path nowhere.
+
 Two board matters that are not layout live beside the profile. The V1 kernel
 has one switch node, `/sys/class/switch/headset`, and no `balance` node; with
 nothing in either socket the headset node reads `1`, which the HiBy logic took
