@@ -1412,56 +1412,29 @@ static int menu_height;
 // them is the artwork, which reaches the bezel on all four sides with square
 // corners.
 //
-// Three bands of fade are the whole of the dressing, and they are what makes
-// that readable: the chevron and the source marks stand on the top one, the
-// controls on the foot of the screen's, and the one across the middle keeps a
-// pale picture from competing with the two. All three are black, like the
-// backdrop the controls already sit on over a cover in the other arrangements,
-// so the light chrome the page turns on over artwork is what is read on them.
+// One flat black scrim over the whole of it is the dressing: the picture stays
+// there to be looked at, and the chrome -- the chevron, the source marks, the
+// names, the bar, the clocks, the transport -- is read on top of it. Flat and
+// not a fade: bands of gradient across the screen were tried on the device and
+// each end of a ramp draws a line across the picture where its slope changes,
+// which is worse than the thing the ramps were there to fix. One alpha the
+// whole way up leaves nothing to see but the photograph.
 //
-// The fades are the one thing here that is not a decoded picture: a rectangle
-// whose colour never changes and whose alpha ramps, which is what LVGL's
-// gradient stops are for. (The ends of a scrolling title fade the other way
-// round -- scrolltext.c masks what is drawn through them -- and the words'
-// column does the same; there it is the text that has to come up out of the
-// picture behind it, and here it is the picture that has to go down into the
-// chrome.)
+// It is a child of the artwork's own frame rather than of the page, for two
+// reasons: the source marks are children of that frame and are brought to the
+// front of it when they appear, so they keep their own colour over the scrim
+// instead of being darkened with the picture; and the frame is what the words'
+// page slides out from under, so the scrim travels with the sleeve rather than
+// staying behind to darken the page it uncovers.
 // ---------------------------------------------------------------------------
 
-// What the top band covers: the chevron and the four source marks.
-#define IMMERSIVE_TOP_H bp_pick(64, 96)
-// Down to here the top band stays at its own alpha and only below this starts
-// to let the picture back in. A band that began to fade at the very top edge
-// left the chevron -- white, in a fixed place, over whatever the sleeve
-// happens to be -- all but invisible on a pale cover.
-#define IMMERSIVE_TOP_HOLD bp_pick(44, 66)
-// A second, much lighter fade over the top of the picture, holding the same
-// idea further down: at 60 of 255 over the upper half it still reads as a
-// photograph, while the white glyphs -- the chevron and the album's own white
-// areas -- stop competing with it.
-#define IMMERSIVE_ECHO_H bp_pick(124, 186)
-#define IMMERSIVE_ECHO_OPA 60
-// How far the lower fade reaches above the controls. What the words and the
-// bar are read on is solid from the top of the controls down.
-#define IMMERSIVE_RAMP bp_pick(34, 46)
-// The foot of the lower band, over the controls. Short of opaque: the picture
-// is meant to be seen through the fade.
-#define IMMERSIVE_BOTTOM_OPA 200
-// And the top band's own. The meter is the one that was measured: over a sleeve
-// that is nearly white the chevron needed this much behind it to stay legible,
-// and it is still light enough that the picture above the echo reads.
-#define IMMERSIVE_TOP_OPA 150
+// How much of the picture the scrim takes out. The whole screen is a large
+// area of flat black to put over a photograph, and this is the most that still
+// leaves it a photograph: at half, a pale sleeve still reads as one and the
+// white names, the bar and the transport are legible on it.
+#define IMMERSIVE_SCRIM_OPA 128
 
-static lv_obj_t *immersive_scrim_top;
-static lv_obj_t *immersive_scrim_echo;
-static lv_obj_t *immersive_scrim_bottom;
-// One descriptor per band, and not one shared: the stop positions are what the
-// band's own height and the deck's decide, and a style holds the descriptor
-// rather than a copy of it -- so these are file-scope and are never handed to
-// two objects.
-static lv_grad_dsc_t immersive_top_grad;
-static lv_grad_dsc_t immersive_echo_grad;
-static lv_grad_dsc_t immersive_bottom_grad;
+static lv_obj_t *immersive_scrim;
 static bool immersive_up;
 // Where the controls' block sat among the page's children before this
 // arrangement lifted it to the front, so putting it down again is putting it
@@ -2746,52 +2719,6 @@ static void studio_put(void) {
 static void player_apply_geometry(bool force);
 static void placeholder_place(void);
 
-// Where the three fades sit, for the deck as it is now.
-//
-// Placed by hand rather than laid out: what is under them is a stack of
-// absolutely positioned pieces already, and a band that has to reach the very
-// bottom of the screen has nothing to be laid out against.
-static void immersive_place(void) {
-	if (!immersive_scrim_top || !immersive_scrim_bottom) {
-		return;
-	}
-	int screen_w = (int)lv_obj_get_width(player_screen);
-	int screen_h = (int)lv_obj_get_height(player_screen);
-	if (screen_w <= 0 || screen_h <= 0) {
-		return;
-	}
-
-	lv_obj_set_size(immersive_scrim_top, screen_w, IMMERSIVE_TOP_H);
-	lv_obj_set_pos(immersive_scrim_top, 0, 0);
-
-	// The lighter one under it, as tall as it may be: on a panel shorter than
-	// the two bands together it gives way rather than running into the deck.
-	int echo = IMMERSIVE_ECHO_H;
-	if (echo > screen_h - menu_height - IMMERSIVE_RAMP) {
-		echo = screen_h - menu_height - IMMERSIVE_RAMP;
-	}
-	if (immersive_scrim_echo) {
-		// Never taller than the room it has, and never negative: whether it is
-		// on screen at all is immersive_fades()'s business, not this one's.
-		lv_obj_set_size(immersive_scrim_echo, screen_w, echo < 0 ? 0 : echo);
-		lv_obj_set_pos(immersive_scrim_echo, 0, 0);
-	}
-
-	// From the foot of the screen up over the top of the controls: opaque from
-	// the top of the controls down, and the ramp above them.
-	int band = menu_height + IMMERSIVE_RAMP;
-	if (band > screen_h) {
-		band = screen_h;
-	}
-	lv_obj_set_size(immersive_scrim_bottom, screen_w, band);
-	lv_obj_set_pos(immersive_scrim_bottom, 0, screen_h - band);
-
-	// The one number that moves with the deck: where the ramp ends, as a share
-	// of a band whose height is the deck's. A stop past the end of the ramp is
-	// padded, so everything below it keeps the stop's own colour and alpha.
-	immersive_bottom_grad.stops[1].frac = (uint8_t)(IMMERSIVE_RAMP * 255 / band);
-}
-
 // The controls' block, made clear. On this board it always is; on the others it
 // carries the panel's fill, and a picture is behind it here rather than beside
 // it. Its own copy of the blurred artwork goes too: there is nothing for it to
@@ -2804,24 +2731,19 @@ static void immersive_deck_clear(void) {
 	lv_obj_set_style_bg_image_opa(player_menu, LV_OPA_TRANSP, 0);
 }
 
-// Up or down, the three bands. They are only there for a picture: over one, the
+// Up or down, the one scrim. It is only there for a picture: over one, the
 // chrome is the light chrome the page already turns on over artwork, and over
 // none it is the theme's own, on the page's own colour.
 static void immersive_fades(bool over_art) {
-	if (!immersive_scrim_top || !immersive_scrim_bottom) {
+	if (!immersive_scrim) {
 		return;
 	}
-	lv_obj_set_hidden(immersive_scrim_top, !over_art);
-	lv_obj_set_hidden(immersive_scrim_bottom, !over_art);
-	if (immersive_scrim_echo) {
-		lv_obj_set_hidden(immersive_scrim_echo, !over_art);
-	}
+	lv_obj_set_hidden(immersive_scrim, !over_art);
 }
 
-// The sleeve over the whole screen, with the controls on the fade across its
-// foot.
+// The sleeve over the whole screen, with the controls on the scrim over it.
 static void immersive_put(void) {
-	if (!immersive_scrim_top || !immersive_scrim_bottom || !cover_art_group) {
+	if (!immersive_scrim || !cover_art_group) {
 		return;
 	}
 	int screen_w = (int)lv_obj_get_width(player_screen);
@@ -2865,7 +2787,6 @@ static void immersive_put(void) {
 		lv_obj_move_foreground(player_menu);
 	}
 
-	immersive_place();
 	// The picture or the note, and -- in cover_show(), which is the one place
 	// that knows either way -- the two fades, which are only there for a
 	// picture.
@@ -2883,14 +2804,8 @@ static bool immersive_take_back(void) {
 	}
 	immersive_up = false;
 
-	if (immersive_scrim_top) {
-		lv_obj_set_hidden(immersive_scrim_top, true);
-	}
-	if (immersive_scrim_echo) {
-		lv_obj_set_hidden(immersive_scrim_echo, true);
-	}
-	if (immersive_scrim_bottom) {
-		lv_obj_set_hidden(immersive_scrim_bottom, true);
+	if (immersive_scrim) {
+		lv_obj_set_hidden(immersive_scrim, true);
 	}
 
 	// The sleeve's own corners: where it sits and how big it is belong to the
@@ -5831,62 +5746,25 @@ void player_init(gui_config_t *cfg) {
 	lv_obj_center(cover_img);
 	lv_obj_set_hidden(cover_img, true);
 
-	// Immersive's two fades: black rectangles whose alpha ramps, one across the
-	// top of the screen and one across the foot of the controls. Built here
-	// rather than inside that arrangement because they are the page's own
-	// furniture -- created once, sized and placed by immersive_place(), and
-	// shown only while that arrangement is up over a picture (cover_show).
+	// Immersive's scrim: one flat black over the picture, at a fixed alpha, the
+	// whole screen of it. Built here rather than inside that arrangement because
+	// it is the page's own furniture -- created once, and shown only while that
+	// arrangement is up over a picture (cover_show).
 	//
-	// The same colour at both ends of each band, with only the alpha moving:
-	// that is a gradient of one hue, which is what the stops below say. The
-	// top band is dark at the top and clear at its foot, and the lower one the
-	// other way round; the lower band's foot is over the controls and stays at
-	// its stop past the end of the ramp.
-	lv_grad_vertical_init(&immersive_top_grad);
-	lv_grad_vertical_init(&immersive_echo_grad);
-	lv_grad_vertical_init(&immersive_bottom_grad);
-	{
-		const lv_color_t ink[] = {lv_color_black(), lv_color_black()};
-		const lv_opa_t top_opas[] = {IMMERSIVE_TOP_OPA, LV_OPA_TRANSP};
-		const lv_opa_t echo_opas[] = {IMMERSIVE_ECHO_OPA, LV_OPA_TRANSP};
-		const lv_opa_t bottom_opas[] = {LV_OPA_TRANSP, IMMERSIVE_BOTTOM_OPA};
-		// The top band's first stop sits where its hold ends, and the
-		// calculator pads anything above a stop with that stop's own colour
-		// and alpha -- so the band is flat down to there and only then begins
-		// to fade. Nothing moves it afterwards; the band's height is fixed.
-		const uint8_t top_fracs[] = {(uint8_t)(IMMERSIVE_TOP_HOLD * 255 / IMMERSIVE_TOP_H), 255};
-		const uint8_t fracs[] = {0, 255};
-		lv_grad_init_stops(&immersive_top_grad, ink, top_opas, top_fracs, 2);
-		lv_grad_init_stops(&immersive_echo_grad, ink, echo_opas, fracs, 2);
-		lv_grad_init_stops(&immersive_bottom_grad, ink, bottom_opas, fracs, 2);
-	}
-
-	immersive_scrim_top = lv_obj_create(cover_panel);
-	lv_obj_remove_style_all(immersive_scrim_top);
-	lv_obj_set_style_bg_color(immersive_scrim_top, lv_color_black(), 0);
-	lv_obj_set_style_bg_opa(immersive_scrim_top, LV_OPA_COVER, 0);
-	lv_obj_set_style_bg_grad(immersive_scrim_top, &immersive_top_grad, 0);
-	lv_obj_set_scrollable(immersive_scrim_top, false);
-	lv_obj_set_clickable(immersive_scrim_top, false);
-	lv_obj_set_hidden(immersive_scrim_top, true);
-
-	immersive_scrim_echo = lv_obj_create(cover_panel);
-	lv_obj_remove_style_all(immersive_scrim_echo);
-	lv_obj_set_style_bg_color(immersive_scrim_echo, lv_color_black(), 0);
-	lv_obj_set_style_bg_opa(immersive_scrim_echo, LV_OPA_COVER, 0);
-	lv_obj_set_style_bg_grad(immersive_scrim_echo, &immersive_echo_grad, 0);
-	lv_obj_set_scrollable(immersive_scrim_echo, false);
-	lv_obj_set_clickable(immersive_scrim_echo, false);
-	lv_obj_set_hidden(immersive_scrim_echo, true);
-
-	immersive_scrim_bottom = lv_obj_create(cover_panel);
-	lv_obj_remove_style_all(immersive_scrim_bottom);
-	lv_obj_set_style_bg_color(immersive_scrim_bottom, lv_color_black(), 0);
-	lv_obj_set_style_bg_opa(immersive_scrim_bottom, LV_OPA_COVER, 0);
-	lv_obj_set_style_bg_grad(immersive_scrim_bottom, &immersive_bottom_grad, 0);
-	lv_obj_set_scrollable(immersive_scrim_bottom, false);
-	lv_obj_set_clickable(immersive_scrim_bottom, false);
-	lv_obj_set_hidden(immersive_scrim_bottom, true);
+	// A child of the artwork's frame and not of the panel, so that it is drawn
+	// over the picture and under the source marks, which are brought to the
+	// front of this same frame when they appear. Its size is the frame's, which
+	// the arrangement below sets to the screen: nothing has to be placed when
+	// the deck's height changes, because nothing about it depends on the deck.
+	immersive_scrim = lv_obj_create(cover_art_group);
+	lv_obj_remove_style_all(immersive_scrim);
+	lv_obj_set_size(immersive_scrim, lv_pct(100), lv_pct(100));
+	lv_obj_set_pos(immersive_scrim, 0, 0);
+	lv_obj_set_style_bg_color(immersive_scrim, lv_color_black(), 0);
+	lv_obj_set_style_bg_opa(immersive_scrim, IMMERSIVE_SCRIM_OPA, 0);
+	lv_obj_set_scrollable(immersive_scrim, false);
+	lv_obj_set_clickable(immersive_scrim, false);
+	lv_obj_set_hidden(immersive_scrim, true);
 
 	// ---------------------------------------------------------------------
 	// Studio: the blurred sleeve behind the whole screen, and everything else

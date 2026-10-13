@@ -75,18 +75,19 @@ corners square off, and the deck is emptied of its own fill so what stands
 behind the controls is the artwork itself rather than a blurred copy of it. The
 controls keep the rows they have in the standard arrangement -- the deck's
 height is the same, and the two clocks, the queue position and the transport do
-not move -- but every one of them is now over a picture, so three black bands
-carry them: a 64 px one that holds its alpha down to 44 px and then fades (the
-chevron and the four source badges are fixed, white, and cannot be moved clear
-of a pale cover), a much lighter 124 px one below it that keeps the upper half
-of the picture from competing with them, and one across the deck that is solid
-from the top of the controls down and ramps over the 34 px above them. All
-three are the same black with only the alpha moving, so nothing is tinted. The
+not move -- but every one of them is now over a picture, so one flat black
+scrim at half alpha covers the whole screen and everything is read on top of
+it. Flat, and not the bands of gradient that were tried first: a ramp's ends
+are a step in the alpha's slope, and on this panel each of them draws a
+visible line across the photograph. The scrim is a child of the artwork's
+frame, so the source badges -- which are children of that frame and are
+brought to its front when they appear -- keep their own colour over it rather
+than being darkened with the picture. The
 picture is asked for at 240×320 with COVER fit and drawn one pixel to one, so
 the sleeve is not resampled on every frame. The blurred copy is still made --
 the words' page is drawn on it -- but the deck keeps neither it nor its own
 fill, and over a loaded picture the artwork covers it. With no artwork the
-bands stay down and the page is its own colour with the theme's ink, exactly
+scrim stays down and the page is its own colour with the theme's ink, exactly
 as the standard arrangement draws it.
 
 Two board matters that are not layout live beside the profile. The V1 kernel
