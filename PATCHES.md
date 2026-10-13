@@ -69,6 +69,26 @@ names, bar, clocks, transport -- from the line heights of the fonts in force
 never lifted into the queue-position row above it. The full panel stays the
 swipe and lyrics-gesture hit target.
 
+The fourth arrangement, **Immersive**, is the sleeve at the bezel: the cover
+panel, the clipped frame and the picture all take the size of the screen, the
+corners square off, and the deck is emptied of its own fill so what stands
+behind the controls is the artwork itself rather than a blurred copy of it. The
+controls keep the rows they have in the standard arrangement -- the deck's
+height is the same, and the two clocks, the queue position and the transport do
+not move -- but every one of them is now over a picture, so three black bands
+carry them: a 64 px one that holds its alpha down to 44 px and then fades (the
+chevron and the four source badges are fixed, white, and cannot be moved clear
+of a pale cover), a much lighter 124 px one below it that keeps the upper half
+of the picture from competing with them, and one across the deck that is solid
+from the top of the controls down and ramps over the 34 px above them. All
+three are the same black with only the alpha moving, so nothing is tinted. The
+picture is asked for at 240×320 with COVER fit and drawn one pixel to one, so
+the sleeve is not resampled on every frame. The blurred copy is still made --
+the words' page is drawn on it -- but the deck keeps neither it nor its own
+fill, and over a loaded picture the artwork covers it. With no artwork the
+bands stay down and the page is its own colour with the theme's ink, exactly
+as the standard arrangement draws it.
+
 Two board matters that are not layout live beside the profile. The V1 kernel
 has one switch node, `/sys/class/switch/headset`, and no `balance` node; with
 nothing in either socket the headset node reads `1`, which the HiBy logic took
