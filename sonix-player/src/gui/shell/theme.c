@@ -448,6 +448,35 @@ lv_color_t theme_semantic_color(theme_semantic_t role) {
 	}
 }
 
+// The file browser is the one page that does not dress its rows in the shared
+// text and icon colours: Tokyo Night gives its folders the violet and its names
+// a pale pink, two hues of that palette, and nowhere else in the interface are
+// they used. Every other palette answers with the colours it has always used
+// here, so outside Tokyo Night nothing moves.
+//
+// The pink is the palette's own red, #f7768e, taken as it stands: the hue the
+// palette puts beside the violet, and the one that reads as a colour on a
+// #24283b card rather than as another shade of the foreground.
+static lv_color_t tokyo_browser_pink(void) {
+	return lv_color_make(247, 118, 142); // #f7768e
+}
+
+lv_color_t theme_browser_folder_color(void) {
+	if (selected_kind == THEME_KIND_TOKYO_NIGHT) {
+		return theme_semantic_color(THEME_SEMANTIC_PURPLE); // #bb9af7, the palette's violet
+	}
+	// Unchanged from before: the signal green a folder wears on the other
+	// function-glyph palette, and the plain text colour everywhere else.
+	return theme_uses_function_glyphs() ? theme_semantic_color(THEME_SEMANTIC_GREEN) : active->text_primary;
+}
+
+lv_color_t theme_browser_text_color(void) {
+	if (selected_kind == THEME_KIND_TOKYO_NIGHT) {
+		return tokyo_browser_pink();
+	}
+	return active->text_secondary; // what the shared dim-text style paints
+}
+
 lv_color_t theme_player_chrome_color(theme_player_chrome_t role) {
 	if (selected_kind == THEME_KIND_AMBER_ON_BLACK) {
 		switch (role) {

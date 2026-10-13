@@ -292,19 +292,31 @@ static void row_show_glyph(row_t *row, bool is_dir) {
 	// browser row can show besides a folder is playable anyway.
 	lv_image_set_src(row->icon, is_dir ? &icon_folder : &icon_music2);
 	lv_obj_add_style(row->icon, &theme_style_icon, 0);
-	// A folder wears the status bar's battery colour -- the signal orange on
-	// Amber on Black -- so it reads as the thing that can be entered. The note
-	// keeps the shared icon colour. Rows are recycled between folders and
-	// files, so the local recolour is dropped again for everything else.
+	// A folder wears the colour the palette gives this page -- Tokyo Night's
+	// violet, the signal green on Amber on Black -- so it reads as the thing
+	// that can be entered. The note keeps the shared icon colour. Rows are
+	// recycled between folders and files, so the local recolour is dropped
+	// again for everything else.
 	if (is_dir) {
-		lv_obj_set_style_image_recolor(row->icon,
-									   theme_uses_function_glyphs() ? theme_semantic_color(THEME_SEMANTIC_GREEN)
-																   : theme()->text_primary,
-									   0);
+		lv_obj_set_style_image_recolor(row->icon, theme_browser_folder_color(), 0);
 	} else {
 		lv_obj_remove_local_style_prop(row->icon, LV_STYLE_IMAGE_RECOLOR, 0);
 	}
 	lv_obj_set_style_image_recolor_opa(row->icon, LV_OPA_COVER, 0);
+}
+
+// The name on a row, in the colour this page writes them in: Tokyo Night's pale
+// pink, and the shared dim-text colour on every other palette.
+//
+// Set by hand rather than left to the style because the two are not the same
+// question -- the style says "quieter than a title", this says "the browse
+// list" -- and a hand-set colour is a snapshot, so browser_theme_refresh()
+// below paints these again whenever the palette moves.
+static void row_paint_name(row_t *row) {
+	if (!row->label) {
+		return;
+	}
+	lv_obj_set_style_text_color(row->label, theme_browser_text_color(), 0);
 }
 
 // Album art must not be tinted, so the recolour the glyphs rely on is switched
@@ -1514,6 +1526,7 @@ static void build_rows(int width) {
 		// The names read in the quiet colour -- the same one the home screen
 		// uses for its tagline -- rather than the title white.
 		lv_obj_add_style(row->label, &theme_style_text_dim, 0);
+		row_paint_name(row);
 		lv_obj_set_style_text_font(row->label, bp_tile_label_font(), 0);
 		// Two lines at most: the cap on the height is what makes LV_LABEL_LONG_DOT
 		// cut the name there, with the ellipsis, instead of wrapping on past the
@@ -1570,6 +1583,22 @@ static lv_obj_t *corner_button(gui_config_t *cfg, int slot, const lv_image_dsc_t
 	settingsrow_scale_corner_icon(image, cfg);
 	lv_obj_center(image);
 	return btn;
+}
+
+// The two colours this page sets by hand, painted again when the palette moves.
+// Without this a theme change leaves the browse list in the colours it was
+// built with -- shared styles follow the palette on their own, hand-set ones
+// do not.
+static void browser_theme_refresh(void) {
+	for (int i = 0; i < ROW_POOL; i++) {
+		row_t *row = &rows[i];
+		row_paint_name(row);
+		// A row showing artwork keeps it: putting the glyph back would drop
+		// the picture off a row nobody has scrolled away from.
+		if (!row->has_thumb && row->index >= 0 && (size_t)row->index < shown.count) {
+			row_show_glyph(row, shown.entries[row->index].is_dir != 0);
+		}
+	}
 }
 
 void browser_init(gui_config_t *cfg) {
@@ -1673,6 +1702,10 @@ void browser_init(gui_config_t *cfg) {
 
 	thumb_timer = lv_timer_create(thumb_timer_cb, THUMB_TICK_PERIOD_MS, NULL);
 	lv_timer_pause(thumb_timer);
+
+	// The page paints two of its colours by hand, so it asks for them again
+	// when the theme or the accent changes.
+	theme_register_refresh(browser_theme_refresh);
 
 	browser_open_dir(root_path);
 }
