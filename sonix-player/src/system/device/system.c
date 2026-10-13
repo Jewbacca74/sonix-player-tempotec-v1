@@ -1308,11 +1308,12 @@ static bool combo_release(int code) {
 // clicks -- and remapping it along with the side buttons would change two
 // things while meaning to change one (see keymap.h).
 //
-// On the R3 Pro II the two media keys arrive SWAPPED: the kernel reports
-// NEXTSONG for the UPPER one and PREVIOUSSONG for the lower. The stock firmware
-// compensates the same way, and there are years of muscle memory built on it.
-// The R1 has no previous key: its one skip key, under play, is a GPIO key that
-// keyboard_gpio_add.sh declares as KEY_NEXTSONG, and it is next.
+// On the R3 Pro II and TempoTec V1 the two media keys arrive SWAPPED: the
+// kernel reports NEXTSONG for the physical previous button and PREVIOUSSONG for
+// the physical next one. The stock firmware compensates the same way, and there
+// are years of muscle memory built on it. The R1 has no previous key: its one
+// skip key, under play, is a GPIO key that keyboard_gpio_add.sh declares as
+// KEY_NEXTSONG, and it is next.
 //
 // Rotating the screen does not flip this on top. The button remap page can say
 // exactly that instead, and a hidden second swap on top of a user's own mapping
