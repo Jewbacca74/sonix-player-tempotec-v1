@@ -30,11 +30,12 @@
 static lv_obj_t *saver;		 // the whole thing, full screen on the top layer
 static lv_obj_t *cover_img;	 // the artwork, filling what is above the strip
 static lv_obj_t *cover_placeholder; // the note, for a track that has none
-static lv_obj_t *info_strip; // the blurred block along the bottom
+static lv_obj_t *info_strip; // metadata over blur, or translucent black in Amber
 static lv_obj_t *cover_box;	 // the artwork's frame, everything above the strip
 static lv_obj_t *title_label;
 static lv_obj_t *artist_label;
 static lv_obj_t *clock_label;
+static lv_obj_t *chevron_icon;
 static lv_timer_t *clock_timer;
 
 static bool enabled;
@@ -43,8 +44,10 @@ static int strip_h;
 
 // What the strip falls back to when there is no artwork to size it from, and
 // the height it always has over a picture from the folder -- there the block
-// is built to order rather than borrowed, so there is nothing to measure.
+// is built to order rather than borrowed, so there is nothing to measure. Amber
+// uses this same stable height for its translucent black metadata field.
 #define DEFAULT_STRIP_H bp_pick(132, 250)
+#define AMBER_STRIP_OPA LV_OPA_50 // black panel at 50% transparency
 
 // ---------------------------------------------------------------------------
 // Pictures from the card
@@ -62,7 +65,7 @@ static int strip_h;
 // ---------------------------------------------------------------------------
 
 static screensaver_source_t source;
-// The picture on screen and the blurred block over its lower part. Owned here,
+// The picture on screen and, outside Amber, the blurred block over its lower part. Owned here,
 // not by the player: freed here whenever a different one is chosen or the
 // screensaver goes away.
 static cover_image_t image_pic, image_strip;
@@ -82,10 +85,10 @@ static bool next_pending; // a request is out with the loader
 // than the blurred block would show a black bar above it and another below.
 // The height is therefore taken from the picture, leaving nothing to paint.
 //
-// Over an album cover the picture's box stops where the strip starts. Over a
-// photograph from the folder it is the whole screen: there the strip is drawn
-// ON TOP of a picture that fills the panel, which is what "the blurred part
-// hides the bottom of the image" means.
+// In the regular themes an album cover stops where its blurred strip starts.
+// A folder photograph already fills the screen. Amber uses that same full-image
+// arrangement for album art too, so its black-transparent panel really overlays
+// the cover rather than a plain black area below it.
 //
 // Cheap, and a no-op unless something has actually changed.
 static int cover_box_h;
@@ -99,7 +102,8 @@ static void set_strip_height(int height) {
 		lv_obj_set_height(info_strip, strip_h);
 		lv_obj_align(info_strip, LV_ALIGN_BOTTOM_MID, 0, 0);
 	}
-	int want = source == SCREENSAVER_SOURCE_IMAGES ? screen_h : screen_h - strip_h;
+	bool panel_over_art = source == SCREENSAVER_SOURCE_IMAGES || theme_is_amber_on_black();
+	int want = panel_over_art ? screen_h : screen_h - strip_h;
 	if (want != cover_box_h) {
 		cover_box_h = want;
 		lv_obj_set_height(cover_box, cover_box_h);
@@ -113,6 +117,7 @@ screensaver_source_t screensaver_source(void) { return source; }
 
 static void request_next(void);
 static void drop_next(void);
+static void refresh_content(void);
 
 void screensaver_set_source(screensaver_source_t chosen) {
 	source = chosen == SCREENSAVER_SOURCE_IMAGES ? SCREENSAVER_SOURCE_IMAGES : SCREENSAVER_SOURCE_ALBUM;
@@ -233,8 +238,6 @@ static void refresh_clock(void) {
 static char shown_file[512];
 static const void *shown_cover;
 
-static void refresh_content(void);
-
 // Runs while the screensaver is up. The clock is the obvious reason, but the
 // important one is the track: the player frees its artwork at every track
 // change and calls screensaver_release_artwork(), which blanks the picture, so
@@ -287,6 +290,65 @@ static void promote_next(void) {
 	next_file[0] = '\0';
 }
 
+// Amber replaces the artwork-derived blur beneath its metadata with a fixed
+// black-transparent field. This keeps the theme's cream and amber type legible
+// over every sleeve while letting the cover remain visible behind it.
+static void set_info_strip_backdrop(const lv_image_dsc_t *backdrop) {
+	if (theme_is_amber_on_black()) {
+		lv_obj_set_style_bg_image_src(info_strip, NULL, 0);
+		lv_obj_set_style_bg_color(info_strip, lv_color_black(), 0);
+		lv_obj_set_style_bg_opa(info_strip, AMBER_STRIP_OPA, 0);
+		return;
+	}
+
+	if (backdrop) {
+		lv_obj_set_style_bg_image_src(info_strip, backdrop, 0);
+		lv_obj_set_style_bg_opa(info_strip, LV_OPA_TRANSP, 0);
+	} else {
+		lv_obj_set_style_bg_image_src(info_strip, NULL, 0);
+		lv_obj_set_style_bg_color(info_strip, lv_color_black(), 0);
+		lv_obj_set_style_bg_opa(info_strip, LV_OPA_60, 0);
+	}
+}
+
+static void screensaver_refresh_theme(void) {
+	if (!saver) {
+		return;
+	}
+
+	bool amber = theme_is_amber_on_black();
+	lv_obj_set_style_bg_color(saver, amber ? theme()->screen_bg : lv_color_black(), 0);
+	if (cover_placeholder) {
+		lv_obj_set_style_image_recolor(cover_placeholder,
+								   amber ? theme_player_chrome_color(THEME_PLAYER_CHROME_SECONDARY)
+										 : theme()->text_secondary,
+								   0);
+	}
+	if (title_label) {
+		lv_obj_set_style_text_color(title_label,
+								 amber ? theme_player_chrome_color(THEME_PLAYER_CHROME_PRIMARY) : lv_color_white(), 0);
+	}
+	if (artist_label) {
+		lv_obj_set_style_text_color(artist_label,
+								 amber ? theme_player_chrome_color(THEME_PLAYER_CHROME_SECONDARY)
+									   : lv_color_make(200, 200, 200),
+								 0);
+	}
+	if (clock_label) {
+		lv_obj_set_style_text_color(clock_label, amber ? theme()->accent : lv_color_white(), 0);
+	}
+	if (chevron_icon) {
+		lv_obj_set_style_image_recolor(chevron_icon,
+								  amber ? theme_player_chrome_color(THEME_PLAYER_CHROME_CHEVRON) : lv_color_white(), 0);
+	}
+
+	// A theme can change while this is on screen. Reapply the source-specific
+	// strip immediately so a blurred frame never survives into Amber.
+	if (screensaver_is_visible()) {
+		refresh_content();
+	}
+}
+
 // Draws whatever is currently held. Nothing is decoded here.
 static void draw_from_folder(void) {
 	set_strip_height(DEFAULT_STRIP_H);
@@ -307,14 +369,7 @@ static void draw_from_folder(void) {
 		lv_obj_set_hidden(cover_placeholder, false);
 	}
 
-	if (image_strip.pixels) {
-		lv_obj_set_style_bg_image_src(info_strip, &image_strip.dsc, 0);
-		lv_obj_set_style_bg_opa(info_strip, LV_OPA_TRANSP, 0);
-	} else {
-		lv_obj_set_style_bg_image_src(info_strip, NULL, 0);
-		lv_obj_set_style_bg_color(info_strip, lv_color_black(), 0);
-		lv_obj_set_style_bg_opa(info_strip, LV_OPA_60, 0);
-	}
+	set_info_strip_backdrop(image_strip.pixels ? &image_strip.dsc : NULL);
 }
 
 // The artwork is the player's own, already decoded for this track: borrowed
@@ -364,25 +419,26 @@ static void refresh_content(void) {
 		return;
 	}
 
-	// The strip first: the artwork below is scaled to whatever is left above
-	// it, so its height has to be settled before that sum is done.
+	// The strip first: in the regular themes the artwork is scaled into the
+	// area above it. Amber settles the same panel height, but overlays it on a
+	// full-screen cover so the transparent black still shows the sleeve below.
 	const lv_image_dsc_t *backdrop = player_backdrop_image();
 	// The player's blurred copy is as tall as whatever shows it, and one
 	// arrangement shows it behind the whole screen: a strip that tall is the
 	// screen, so that one keeps the default height and takes the top of the
-	// picture instead.
+	// picture instead. Amber deliberately never borrows that blurred copy.
 	int strip_from_backdrop = backdrop ? (int)backdrop->header.h : 0;
-	set_strip_height(strip_from_backdrop > 0 && strip_from_backdrop < screen_h ? strip_from_backdrop
-																			  : DEFAULT_STRIP_H);
-
+	set_strip_height(!theme_is_amber_on_black() && strip_from_backdrop > 0 && strip_from_backdrop < screen_h
+														 ? strip_from_backdrop : DEFAULT_STRIP_H);
 	const lv_image_dsc_t *cover = shown_cover;
 	if (cover) {
 		lv_image_set_src(cover_img, cover);
-		// Fill the whole area above the strip, cropping the overflow: a
-		// letterboxed cover with black bars would look like a bug, not a
-		// screensaver.
+		// Fill the available artwork area, cropping the overflow: a letterboxed
+		// cover with black bars would look like a bug, not a screensaver. Amber
+		// deliberately fills the whole screen, including the transparent panel.
+		int image_h = theme_is_amber_on_black() ? screen_h : screen_h - strip_h;
 		int32_t zoom_w = (256 * screen_w) / (int32_t)cover->header.w;
-		int32_t zoom_h = (256 * (screen_h - strip_h)) / (int32_t)cover->header.h;
+		int32_t zoom_h = (256 * image_h) / (int32_t)cover->header.h;
 		lv_image_set_scale(cover_img, zoom_w > zoom_h ? zoom_w : zoom_h);
 		lv_obj_set_hidden(cover_img, false);
 		lv_obj_set_hidden(cover_placeholder, true);
@@ -392,15 +448,9 @@ static void refresh_content(void) {
 		lv_obj_set_hidden(cover_placeholder, false);
 	}
 
-	if (backdrop) {
-		lv_obj_set_style_bg_image_src(info_strip, backdrop, 0);
-		lv_obj_set_style_bg_opa(info_strip, LV_OPA_TRANSP, 0);
-	} else {
-		// No artwork at all: a plain dark strip carries the text instead.
-		lv_obj_set_style_bg_image_src(info_strip, NULL, 0);
-		lv_obj_set_style_bg_color(info_strip, lv_color_black(), 0);
-		lv_obj_set_style_bg_opa(info_strip, LV_OPA_60, 0);
-	}
+	// In Amber this clears the blurred artwork and puts the palette's
+	// black-transparent field in its place.
+	set_info_strip_backdrop(backdrop);
 
 	refresh_clock();
 }
@@ -525,9 +575,7 @@ void screensaver_release_artwork(void) {
 	lv_image_set_src(cover_img, NULL);
 	lv_obj_set_hidden(cover_img, true);
 	lv_obj_set_hidden(cover_placeholder, false);
-	lv_obj_set_style_bg_image_src(info_strip, NULL, 0);
-	lv_obj_set_style_bg_color(info_strip, lv_color_black(), 0);
-	lv_obj_set_style_bg_opa(info_strip, LV_OPA_60, 0);
+	set_info_strip_backdrop(NULL);
 }
 
 void screensaver_hide(void) {
@@ -638,7 +686,11 @@ void screensaver_init(gui_config_t *cfg) {
 	// gone wrong.
 	cover_placeholder = lv_image_create(cover_box);
 	lv_image_set_src(cover_placeholder, &icon_music_note);
-	lv_obj_set_style_image_recolor(cover_placeholder, theme()->text_secondary, 0);
+	lv_obj_set_style_image_recolor(cover_placeholder,
+								   theme_is_amber_on_black()
+									   ? theme_player_chrome_color(THEME_PLAYER_CHROME_SECONDARY)
+									   : theme()->text_secondary,
+								   0);
 	lv_obj_set_style_image_recolor_opa(cover_placeholder, LV_OPA_COVER, 0);
 	lv_obj_center(cover_placeholder);
 
@@ -646,7 +698,7 @@ void screensaver_init(gui_config_t *cfg) {
 	lv_obj_center(cover_img);
 	lv_image_set_inner_align(cover_img, LV_IMAGE_ALIGN_CENTER);
 
-	// The blurred block: the same picture the player draws its controls on.
+	// Metadata field: blurred artwork in the other themes, transparent black in Amber.
 	info_strip = lv_obj_create(saver);
 	lv_obj_set_size(info_strip, screen_w, strip_h);
 	lv_obj_align(info_strip, LV_ALIGN_BOTTOM_MID, 0, 0);
@@ -662,26 +714,29 @@ void screensaver_init(gui_config_t *cfg) {
 	lv_obj_set_flex_flow(info_strip, LV_FLEX_FLOW_COLUMN);
 	lv_obj_set_flex_align(info_strip, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-	// The blurred backdrop is always the dark treatment, so the text on it is
-	// light in both themes.
+	// Amber takes its cream, amber and signal-orange roles from the player chrome;
+	// the other themes retain the existing light type over the dark blur.
 	title_label = lv_label_create(info_strip);
 	lv_obj_set_width(title_label, lv_pct(100));
 	lv_obj_set_style_text_font(title_label, &font_ui_28, 0);
-	lv_obj_set_style_text_color(title_label, lv_color_white(), 0);
+	lv_obj_set_style_text_color(title_label,
+							 theme_is_amber_on_black() ? theme_player_chrome_color(THEME_PLAYER_CHROME_PRIMARY) : lv_color_white(), 0);
 	lv_obj_set_style_text_align(title_label, LV_TEXT_ALIGN_CENTER, 0);
 	scrolltext_apply(title_label);
 
 	artist_label = lv_label_create(info_strip);
 	lv_obj_set_width(artist_label, lv_pct(100));
 	lv_obj_set_style_text_font(artist_label, &font_ui_22, 0);
-	lv_obj_set_style_text_color(artist_label, lv_color_make(200, 200, 200), 0);
+	lv_obj_set_style_text_color(artist_label,
+							 theme_is_amber_on_black() ? theme_player_chrome_color(THEME_PLAYER_CHROME_SECONDARY)
+																	  : lv_color_make(200, 200, 200), 0);
 	lv_obj_set_style_text_align(artist_label, LV_TEXT_ALIGN_CENTER, 0);
 	scrolltext_apply(artist_label);
 
 	// The time, in the largest figures the screen has.
 	clock_label = lv_label_create(info_strip);
 	lv_obj_set_style_text_font(clock_label, &font_ui_72, 0);
-	lv_obj_set_style_text_color(clock_label, lv_color_white(), 0);
+	lv_obj_set_style_text_color(clock_label, theme_is_amber_on_black() ? theme()->accent : lv_color_white(), 0);
 	lv_obj_set_style_pad_top(clock_label, bp_pick(2, 6), 0);
 
 	// The way out, spelled out: swipe up. A sign, not a button -- tapping it
@@ -698,12 +753,15 @@ void screensaver_init(gui_config_t *cfg) {
 	lv_obj_set_clickable(chevron_btn, false);
 	lv_obj_set_scrollable(chevron_btn, false);
 
-	lv_obj_t *chevron = lv_image_create(chevron_btn);
-	lv_image_set_src(chevron, &icon_chevron_up);
-	lv_obj_set_style_image_recolor(chevron, lv_color_white(), 0);
-	lv_obj_set_style_image_recolor_opa(chevron, LV_OPA_COVER, 0);
-	lv_obj_set_style_image_opa(chevron, LV_OPA_70, 0);
-	lv_obj_center(chevron);
+	chevron_icon = lv_image_create(chevron_btn);
+	lv_image_set_src(chevron_icon, &icon_chevron_up);
+	lv_obj_set_style_image_recolor(chevron_icon,
+								  theme_is_amber_on_black() ? theme_player_chrome_color(THEME_PLAYER_CHROME_CHEVRON)
+																	  : lv_color_white(),
+								  0);
+	lv_obj_set_style_image_recolor_opa(chevron_icon, LV_OPA_COVER, 0);
+	lv_obj_set_style_image_opa(chevron_icon, LV_OPA_70, 0);
+	lv_obj_center(chevron_icon);
 
 	// One second, not ten: the clock only needs a minute's resolution, but the
 	// same tick is what notices a track change, and a screensaver that shows
@@ -714,4 +772,6 @@ void screensaver_init(gui_config_t *cfg) {
 	// on it -- but with the panel off nothing is scanned out, so ticking it
 	// once a second all night buys nothing.
 	power_pause_in_standby(clock_timer);
+	theme_register_refresh(screensaver_refresh_theme);
+	screensaver_refresh_theme();
 }

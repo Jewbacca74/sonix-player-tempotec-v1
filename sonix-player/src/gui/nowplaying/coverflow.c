@@ -25,11 +25,10 @@
 // ---------------------------------------------------------------------------
 // The crate
 //
-// A column of records seen from the front. The one in the middle faces the
-// viewer; the ones above and below are turned away from it, so each shows its
-// outer edge nearer and its inner edge -- the one towards the middle --
-// further. The inner edges converge and everything runs back towards a point
-// behind the middle record.
+// A horizontal row of records seen from the front. The one in the middle faces
+// the viewer; the ones on either side turn away from it. Their outer edges are
+// nearer and their inner edges -- the ones towards the middle -- further away,
+// so the row runs back towards a point behind the middle record.
 //
 // The turn is a projection, and it is continuous. A square tilted away from a
 // camera does not project to a shorter square: the far edge is narrower than
@@ -40,12 +39,12 @@
 //
 // The per-frame cost is bounded and constant. Only two records are ever part
 // way through their turn -- the two either side of the middle, since anything a
-// whole place away is already turned as far as it goes -- and their two heights
+// whole place away is already turned as far as it goes -- and their two widths
 // always add up to the same number, so the work is exactly
 //
-//     CF_MID_W * (CF_MID_W + CF_LEAN_H)
+//     CF_MID_W * (CF_MID_W + CF_LEAN_W)
 //
-// however fast the column is moving, and nothing at all when it is still. It
+// however fast the row is moving, and nothing at all when it is still. It
 // also only happens while a finger is down.
 //
 // What gets turned is not the cover but the RECORD: a square built once per
@@ -55,18 +54,18 @@
 // printed on it rather than somebody else's sleeve.
 // ---------------------------------------------------------------------------
 
-// Two records above the middle and two below are what fits. The column is
-// walked through the positions in between, so one extra place is carried: at
-// any moment one of the six is off an edge.
+// Two records on either side of the middle are what fits. The row is walked
+// through the positions in between, so one extra place is carried: at any
+// moment one of the six is just beyond an edge.
 #define CF_BEFORE 2
 #define CF_SLOTS 6
 
 // The record: the size a square is decoded, built and drawn at.
 #define CF_MID_W 210
 
-// The height a fully turned record comes out at, and how wide its far edge is
+// The width a fully turned record comes out at, and how wide its far edge is
 // as a percentage of its near one. Together they are the angle.
-#define CF_LEAN_H 90
+#define CF_LEAN_W 90
 #define CF_FAR_PCT 62
 
 // How much of the colour survives at the far edge, out of 256, and how the
@@ -74,18 +73,18 @@
 //
 // The fall is a square root of the distance rather than the distance itself,
 // which keeps the near two thirds close to full colour and puts nearly all the
-// darkening in the last strip, where the surface really is turning away. A
+// darkening at the inner edge, where the surface really is turning away. A
 // straight-line fall to a darker far edge reads as dirt instead: a third of
 // every record smeared uniformly grey, with no sense of anything being lit.
 #define CF_FAR_SHADE 178
 
 // How far apart the places are, centre to centre. Less than the middle record
-// is tall on purpose: the record beside it tucks behind it, which is what gives
-// the column a front and a back instead of a stack of tiles.
+// is wide on purpose: the record beside it tucks behind it, which is what gives
+// the row a front and a back instead of a strip of tiles.
 #define CF_PITCH_NEAR 118 // between the middle and the place next to it
 #define CF_PITCH_FAR 86   // between two turned places further out
 
-// How far the finger travels to move the column by one record.
+// How far the finger travels to move the row by one record.
 #define CF_STEP_PX 96
 
 // The travel that separates a tap from a drag.
@@ -97,7 +96,7 @@
 #define CF_SETTLE_MS 220
 #define CF_FLING_MAX_PLACES 6
 
-// The band at the bottom of the Musica page the opening pull has to start in,
+// The band at the bottom of the main menu where the opening pull has to start,
 // and the travel that hands the sheet over to the finger.
 #define CF_EDGE_H 56
 #define CF_EDGE_COMMIT_PX 12
@@ -120,7 +119,7 @@
 #define CF_BACK_ROWS 64
 #define CF_BACK_RADIUS 16
 
-// The scroll position is kept in 16.16 of a place, so a drag moves the column
+// The scroll position is kept in 16.16 of a place, so a drag moves the row
 // by fractions of a record and every record's angle moves with it.
 #define CF_ONE 65536
 
@@ -146,9 +145,9 @@
 //
 // It is painted around a rectangle sitting inside the record, so the light
 // clears the sleeve on every side; with no vertical offset it rings the sleeve
-// instead of pooling under it. That rectangle follows the record's height,
+// instead of pooling under it. That rectangle follows the record's width,
 // which shrinks as the record turns, so a sleeve seen at an angle throws a
-// flatter light than one facing the front.
+// narrower light than one facing the front.
 #define CF_GLOW_INSET 12
 #define CF_GLOW_MIN_H 10
 #define CF_GLOW_RADIUS 20
@@ -168,8 +167,8 @@ typedef struct {
 	lv_image_dsc_t warp_dsc; // points at `warp`
 	uint8_t *face;           // the square that gets turned: card + artwork or glyph
 	uint8_t *warp;           // the turned copy, RGB565A8
-	int warp_max_h;          // how tall this place's turned copy can ever be
-	int warp_h;              // how tall it is now, -1 for nothing drawn yet
+	int warp_max_w;          // how wide this place's turned copy can ever be
+	int warp_w;              // how wide it is now, -1 for nothing drawn yet
 	int index;               // the album it is bound to, -1 for none
 	bool requested;
 	bool settled; // the worker has answered, one way or the other
@@ -221,8 +220,8 @@ static uint8_t *glow_map; // the alpha map, always CF_GLOW_MAX_W wide whatever i
 static int glow_map_w = -1, glow_map_h = -1; // the caster it was painted for
 // Filled in as the places are laid out: the record nearest the middle wins.
 static int32_t glow_best;
-static int glow_bottom;
-static int glow_height;
+static int glow_centre_x;
+static int glow_width;
 static uint32_t glow_tone;
 static int sheet_h;
 static bool sheet_open;
@@ -274,94 +273,64 @@ void coverflow_set_enabled(bool on) {
 // ---------------------------------------------------------------------------
 // The projection
 //
-// For a square standing at an angle about a horizontal axis: call t the
-// distance down the finished bitmap, 0 at the near edge and 1 at the far one,
-// and s the ratio of the far edge's width to the near one. The plane's depth
-// grows evenly across the record but not across the screen, and dividing by it
-// gives both numbers this needs:
-//
-//     denom = (1 - t) + t*s      how wide this row is, as a fraction of the
-//                                near edge. Linear, because the sloping sides
-//                                of a projected square are still straight lines.
-//
-//     v     = t*s / denom        which row of the source shows here. NOT t:
-//                                that division is the perspective, the reason
-//                                the far half of the record carries more of the
-//                                picture than the near half.
-//
-// A plain squeeze is this with s fixed at 1.
-//
-// The angle is not quantised: `height` comes straight from how far the place is
-// from the middle, and everything else follows from it. Fixed point 16.16, and
-// 64-bit only in the per-row arithmetic -- sixty to two hundred rows, not per
-// pixel.
+// The sideways turn is a perspective projection, not a simple squeeze. The
+// source coordinate that each screen column draws is divided by its depth, so
+// the artwork crowds naturally towards the far, inner edge. The arithmetic is
+// fixed-point and happens per output column, never per output pixel.
 // ---------------------------------------------------------------------------
 
-// The far edge that goes with a height, in 16.16 of the near edge: one number
-// decides the whole shape.
-//
-// In 16.16 and not in percent. Percent has only thirty-nine values between
-// facing the viewer and fully turned, over a hundred and twenty heights, so the
-// far edge moved three pixels at a time and stood still in between -- which is
-// visible as a stutter at exactly the moment a record comes round to the front.
 static int record_px(int px) {
 	return (int)(((int64_t)px * record_scale + LV_SCALE_NONE / 2) / LV_SCALE_NONE);
 }
 
-static int32_t height_to_far(int height) {
-	int turn = CF_MID_W - height; // 0 flat, CF_MID_W - CF_LEAN_H fully turned
-	int span = CF_MID_W - CF_LEAN_H;
+// The far edge that goes with a displayed width, in 16.16 of the near edge.
+// In 16.16 rather than in percent, so a side cover keeps moving smoothly as it
+// turns instead of stepping through a small set of apparent widths.
+static int32_t width_to_far(int width) {
+	int turn = CF_MID_W - width; // 0 flat, CF_MID_W - CF_LEAN_W fully turned
+	int span = CF_MID_W - CF_LEAN_W;
 	int32_t full = (int32_t)(((int64_t)CF_FAR_PCT << 16) / 100);
 	return 65536 - (int32_t)(((int64_t)(65536 - full) * turn) / span);
 }
 
-// Turns `src` (a CF_MID_W square, RGB565) into a trapezoid `height` tall in
-// `dst` (RGB565A8: the colour map followed by the alpha map, the alpha stride
-// half the colour one -- which is what LVGL assumes, see lv_draw_sw_img.c).
+// Turns `src` (a CF_MID_W square, RGB565) into a `width` by CF_MID_W image.
+// The record is rotated about its vertical axis. Each output column has its own
+// depth and consequently its own height: the far, inner edge is shorter, so
+// the top and bottom outlines are the sloping sides of a real trapezoid rather
+// than a flat squeeze. The artwork is sampled at that same depth, crowding its
+// source columns naturally towards the far edge.
 //
-// `near_bottom` tells the two sides apart. A record BELOW the middle leans back
-// with its bottom edge nearest, so the table is walked backwards -- and the
-// picture is read backwards with it, or the record comes out upside down.
-// Square root in 16.16, by halving the interval. Sixteen turns, no floating
-// point, and it runs once per row and not once per pixel.
-static int32_t isqrt16(int32_t x) {
-	if (x <= 0) {
-		return 0;
-	}
-	int32_t lo = 0, hi = 65536;
-	while (lo < hi) {
-		int32_t mid = (lo + hi + 1) >> 1;
-		if ((int64_t)mid * mid <= ((int64_t)x << 16)) {
-			lo = mid;
-		} else {
-			hi = mid - 1;
-		}
-	}
-	return lo;
-}
-
-static void warp_square(const uint16_t *src, int height, bool near_bottom, uint8_t *dst) {
+// `near_right` selects the outside edge of the row. A record right of the
+// centre has its right edge nearest, while a record left of centre has its left
+// edge nearest. Keeping the source orientation with that edge avoids mirroring
+// the sleeve as it crosses the middle.
+static void warp_square(const uint16_t *src, int width, bool near_right, uint8_t *dst) {
 	const int W = CF_MID_W;
-	size_t rgb_bytes = (size_t)W * height * 2;
-	const int32_t s = height_to_far(height);
+	size_t rgb_bytes = (size_t)width * W * 2;
+	const int32_t s = width_to_far(width);
 
-	for (int y = 0; y < height; y++) {
-		// The centre of the row, not its top edge: sampling the edge shifts the
-		// whole picture up by half a row and loses the last one.
-		int row_in_table = near_bottom ? height - 1 - y : y;
-		int32_t t = (int32_t)(((int64_t)(2 * row_in_table + 1) << 16) / (2 * height));
+	for (int x = 0; x < width; x++) {
+		// Read the projection from the near edge to the far edge, whichever side
+		// that is on. Sampling the centre rather than the edge preserves both end
+		// columns of the sleeve.
+		int col_in_table = near_right ? width - 1 - x : x;
+		int32_t t = (int32_t)(((int64_t)(2 * col_in_table + 1) << 16) / (2 * width));
 		int32_t ts = (int32_t)(((int64_t)t * s) >> 16);
 		int32_t denom = (65536 - t) + ts;
-		int32_t v = (int32_t)(((int64_t)ts << 16) / denom);
-		if (near_bottom) {
-			v = 65536 - v;
+		int32_t u = (int32_t)(((int64_t)ts << 16) / denom);
+		if (near_right) {
+			u = 65536 - u;
 		}
-		// Brightness follows the width, so it fades at the rate the projection
-		// narrows rather than at a rate of its own -- but through a square root,
-		// so the near part of the record keeps its colour and the fall is
-		// gathered at the far edge. A record facing the viewer has no far edge
-		// to fade towards, and dividing by the span between the two edges would
-		// be dividing by nothing: it keeps all its colour.
+		int source_x = (int)(((int64_t)u * W) >> 16);
+		if (source_x < 0) {
+			source_x = 0;
+		} else if (source_x >= W) {
+			source_x = W - 1;
+		}
+
+		// Brightness follows the projection. The square-root fall preserves the
+		// colour over most of a sleeve and puts the shade at the far edge, where
+		// the surface is actually turning away.
 		int32_t span = 65536 - s;
 		unsigned shade = 256u;
 		if (span > 0) {
@@ -369,86 +338,76 @@ static void warp_square(const uint16_t *src, int height, bool near_bottom, uint8
 			if (lit < 0) {
 				lit = 0;
 			}
-			shade = (unsigned)(CF_FAR_SHADE + (int)(((int64_t)(256 - CF_FAR_SHADE) * isqrt16(lit)) >> 16));
+			// Integer square root in 16.16. Kept here, once per output column,
+			// rather than in the W-pixel inner loop below.
+			int32_t lo = 0, hi = 65536;
+			while (lo < hi) {
+				int32_t mid = (lo + hi + 1) >> 1;
+				if ((int64_t)mid * mid <= ((int64_t)lit << 16)) {
+					lo = mid;
+				} else {
+					hi = mid - 1;
+				}
+			}
+			shade = (unsigned)(CF_FAR_SHADE + (int)(((int64_t)(256 - CF_FAR_SHADE) * lo) >> 16));
 		}
 
-		// The width in sixteenths of a pixel, so the two sloping sides land on
-		// a fraction of a pixel and are drawn as one. Rounded to whole pixels
-		// they were a staircase, and a staircase is what a leaning record must
-		// not have: it is the one edge the eye follows all the way down.
-		int32_t width16 = (int32_t)(((int64_t)W * denom) >> 12); // 16ths
-		int width = (int)(width16 >> 4);
-		if (width < 1) {
-			width = 1;
-			width16 = 16;
+		// The sloping top and bottom edge, in sixteenths of a pixel. A fully
+		// front-facing record is a solid W by W square; farther columns become
+		// shorter and are centred about its horizontal middle.
+		int32_t height16 = (int32_t)(((int64_t)W * denom) >> 12);
+		int height = (int)(height16 >> 4);
+		if (height < 1) {
+			height = 1;
+			height16 = 16;
 		}
-		// What is left over after the whole pixels, split between the two sides:
-		// the row overhangs by half of it at each end, not by all of it at both.
-		int edge = (int)(width16 & 15);
-		int x0 = (W - width) / 2;
-		int line = (int)(((int64_t)v * W) >> 16);
-		if (line < 0) {
-			line = 0;
-		} else if (line >= W) {
-			line = W - 1;
+		int edge = (int)(height16 & 15);
+		int y0 = (W - height) / 2;
+		uint8_t *dalpha = dst + rgb_bytes + x;
+		for (int y = 0; y < y0; y++) {
+			dalpha[(size_t)y * width] = 0;
 		}
-
-		const uint16_t *srow = src + (size_t)line * W;
-		uint16_t *drgb = (uint16_t *)dst + (size_t)y * W;
-		uint8_t *dalpha = dst + rgb_bytes + (size_t)y * W;
-
-		// The alpha of a row is one run of solid between two runs of nothing:
-		// three memsets, rather than a store per pixel inside the tight loop.
-		if (x0) {
-			memset(dalpha, 0, (size_t)x0);
+		for (int y = 0; y < height; y++) {
+			dalpha[(size_t)(y0 + y) * width] = 0xFF;
 		}
-		memset(dalpha + x0, 0xFF, (size_t)width);
-		if (W - x0 - width > 0) {
-			memset(dalpha + x0 + width, 0, (size_t)(W - x0 - width));
+		for (int y = y0 + height; y < W; y++) {
+			dalpha[(size_t)y * width] = 0;
 		}
 
-		// And the fraction of a pixel the row overhangs by, one on each side.
-		// This is the whole of the antialiasing: the sides of the trapezoid move
-		// by less than a pixel per row, so without it they climb in visible
-		// steps of three or four rows at a time.
+		// Give the two fractional edge pixels their opacity without adding a
+		// black fringe. Their colour is filled below from the nearest source row.
 		uint8_t soft = (uint8_t)(edge * 255 / 32);
 		if (soft) {
-			if (x0 > 0) {
-				dalpha[x0 - 1] = soft;
+			if (y0 > 0) {
+				dalpha[(size_t)(y0 - 1) * width] = soft;
 			}
-			if (x0 + width < W) {
-				dalpha[x0 + width] = soft;
+			if (y0 + height < W) {
+				dalpha[(size_t)(y0 + height) * width] = soft;
 			}
 		}
 
-		// Across the row the picture is stretched to the width this row projects
-		// to: the division by depth has already been done, once, in picking that
-		// width and that source row.
-		int32_t step = (int32_t)(((int64_t)W << 16) / width);
-		int32_t u = step / 2;
-		uint16_t *d = drgb + x0;
-		for (int x = 0; x < width; x++) {
-			int sx = u >> 16;
-			u += step;
-			if (sx >= W) {
-				sx = W - 1;
+		int32_t step = (int32_t)(((int64_t)W << 16) / height);
+		int32_t v = step / 2;
+		for (int y = 0; y < height; y++) {
+			int source_y = v >> 16;
+			v += step;
+			if (source_y >= W) {
+				source_y = W - 1;
 			}
-			uint16_t c = srow[sx];
+			uint16_t c = src[(size_t)source_y * W + source_x];
 			unsigned r = (((c >> 11) & 0x1Fu) * shade) >> 8;
 			unsigned g = (((c >> 5) & 0x3Fu) * shade) >> 8;
 			unsigned b = ((c & 0x1Fu) * shade) >> 8;
-			d[x] = (uint16_t)((r << 11) | (g << 5) | b);
+			((uint16_t *)dst)[(size_t)(y0 + y) * width + x] = (uint16_t)((r << 11) | (g << 5) | b);
 		}
 
-		// The two soft pixels take the colour of the one beside them: their
-		// alpha is what draws the edge, and a black pixel under it would put a
-		// dark fringe all the way down both sides.
 		if (soft) {
-			if (x0 > 0) {
-				drgb[x0 - 1] = d[0];
+			uint16_t *rgb = (uint16_t *)dst;
+			if (y0 > 0) {
+				rgb[(size_t)(y0 - 1) * width + x] = rgb[(size_t)y0 * width + x];
 			}
-			if (x0 + width < W) {
-				drgb[x0 + width] = d[width - 1];
+			if (y0 + height < W) {
+				rgb[(size_t)(y0 + height) * width + x] = rgb[(size_t)(y0 + height - 1) * width + x];
 			}
 		}
 	}
@@ -545,7 +504,7 @@ static void face_paint(cf_slot_t *slot, const cover_image_t *cover) {
 	face_draw_cover((uint16_t *)slot->face, cover);
 	slot->tone = cover_dominant_tone(cover);
 	slot->has_cover = true;
-	slot->warp_h = -1; // the turned copy is out of date
+	slot->warp_w = -1; // the turned copy is out of date
 }
 
 // The empty record: the card and the album glyph, and nothing else.
@@ -557,7 +516,7 @@ static void face_reset(cf_slot_t *slot) {
 	face_draw_glyph((uint16_t *)slot->face, &icon_album_big, theme()->text_secondary, 90);
 	slot->tone = 0; // no sleeve, no colour: the glow falls back to the accent
 	slot->has_cover = false;
-	slot->warp_h = -1; // the turned copy is out of date
+	slot->warp_w = -1; // the turned copy is out of date
 }
 
 // ---------------------------------------------------------------------------
@@ -625,8 +584,8 @@ static const cf_row_t *album_at(int index) {
 
 static int slot_id(int i) { return COVERLOADER_COVERFLOW_BASE + i; }
 
-// Where the middle of a place sits, as an offset down the column. `d` is 16.16
-// places and may be anything in between.
+// Where the middle of a place sits, as a horizontal offset through the row.
+// `d` is 16.16 places and may be anything in between.
 static int place_offset(int32_t d) {
 	int32_t away = d < 0 ? -d : d;
 	int32_t near_part = away > CF_ONE ? CF_ONE : away;
@@ -637,50 +596,50 @@ static int place_offset(int32_t d) {
 	return d < 0 ? -px : px;
 }
 
-// How tall a place this far from the middle is drawn: full height facing the
-// viewer, CF_LEAN_H once it is a whole place away, and every value in between.
-static int place_height(int32_t d) {
+// How wide a place this far from the middle is drawn: full width facing the
+// viewer, CF_LEAN_W once it is a whole place away, and every value in between.
+static int place_width(int32_t d) {
 	int32_t away = d < 0 ? -d : d;
 	if (away > CF_ONE) {
 		away = CF_ONE;
 	}
-	return CF_MID_W - (int)(((int64_t)away * (CF_MID_W - CF_LEAN_H)) >> 16);
+	return CF_MID_W - (int)(((int64_t)away * (CF_MID_W - CF_LEAN_W)) >> 16);
 }
 
-// The tallest a place can ever be drawn. Only the two either side of the middle
+// The widest a place can ever be drawn. Only the two either side of the middle
 // come round to facing the viewer; the rest are always turned as far as they
-// go, and their turned copy is a third of the size.
-static int slot_max_height(int i) {
+// go, and their turned copy stays narrow.
+static int slot_max_width(int i) {
 	int away = i <= CF_BEFORE ? CF_BEFORE - i : i - CF_BEFORE - 1;
-	return away == 0 ? CF_MID_W : CF_LEAN_H;
+	return away == 0 ? CF_MID_W : CF_LEAN_W;
 }
 
-// Turns a place's face to the height its position asks for, and hands the
-// result to LVGL. Does nothing when the height has not moved: the picture on
+// Turns a place's face to the width its position asks for, and hands the
+// result to LVGL. Does nothing when the width has not moved: the picture on
 // screen is already the right one.
-static void slot_turn(int i, int height) {
+static void slot_turn(int i, int width) {
 	cf_slot_t *slot = &slots[i];
 	if (!slot->face || !slot->warp) {
 		return;
 	}
-	if (height > slot->warp_max_h) {
-		height = slot->warp_max_h;
+	if (width > slot->warp_max_w) {
+		width = slot->warp_max_w;
 	}
-	if (slot->warp_h == height) {
+	if (slot->warp_w == width) {
 		return;
 	}
 
-	warp_square((const uint16_t *)slot->face, height, i > CF_BEFORE, slot->warp);
-	slot->warp_h = height;
+	warp_square((const uint16_t *)slot->face, width, i > CF_BEFORE, slot->warp);
+	slot->warp_w = width;
 	slot->warp_dsc.header.magic = LV_IMAGE_HEADER_MAGIC;
 	slot->warp_dsc.header.cf = LV_COLOR_FORMAT_RGB565A8;
-	slot->warp_dsc.header.w = CF_MID_W;
-	slot->warp_dsc.header.h = (uint32_t)height;
-	slot->warp_dsc.header.stride = CF_MID_W * 2;
-	slot->warp_dsc.data_size = (uint32_t)CF_MID_W * height * 3;
+	slot->warp_dsc.header.w = (uint32_t)width;
+	slot->warp_dsc.header.h = CF_MID_W;
+	slot->warp_dsc.header.stride = (uint32_t)width * 2;
+	slot->warp_dsc.data_size = (uint32_t)CF_MID_W * width * 3;
 	slot->warp_dsc.data = slot->warp;
 	// The image cache is off in this build (LV_CACHE_DEF_SIZE is 0), so the same
-	// descriptor with new contents and a new height is simply read again.
+	// descriptor with new contents and a new width is simply read again.
 	lv_image_set_src(slot->image, &slot->warp_dsc);
 	lv_image_set_scale_x(slot->image, (uint32_t)record_scale);
 	lv_image_set_scale_y(slot->image, (uint32_t)record_scale);
@@ -745,7 +704,7 @@ static void slot_bind(int i) {
 	}
 
 	// Everything else is asked for straight away, moving or not. Holding the
-	// requests back while the column moved is what emptied the crate during a
+	// requests back while the row moved is what emptied the crate during a
 	// scroll.
 	if (!slot->requested && !slot->settled) {
 		if (album->has_path) {
@@ -756,40 +715,39 @@ static void slot_bind(int i) {
 		}
 	}
 
-	int height = place_height(d);
-	slot_turn(i, height);
-	if (slot->warp_h > 0) {
-		height = slot->warp_h;
+	int width = place_width(d);
+	slot_turn(i, width);
+	if (slot->warp_w > 0) {
+		width = slot->warp_w;
 	}
-	int display_height = record_px(height);
-	int center_y = mid_y + place_offset(d);
-	int y = center_y - height / 2; // LVGL scales around the image's source-space centre
-	lv_obj_set_pos(slot->image, mid_x - CF_MID_W / 2, y);
+	int centre_x = mid_x + place_offset(d);
+	// LVGL scales around the source-space centre. The projected frame stays
+	// vertically centred while its width and its far edge turn away.
+	lv_obj_set_pos(slot->image, centre_x - width / 2, mid_y - CF_MID_W / 2);
 
-	// The glow belongs to whichever record is nearest the middle, and it is
-	// worked out here because this is the only place that knows where a place
-	// ended up. It swells as the record comes round to face the front: the
-	// height IS how far round it is, so the same number does both jobs.
+	// The glow belongs to whichever record is nearest the middle. Its width is
+	// the same projection that draws the record, so it shrinks to nothing as a
+	// sleeve turns edge-on instead of leaking light from an invisible face.
 	int32_t away = d < 0 ? -d : d;
 	if (away < glow_best) {
 		glow_best = away;
-		glow_bottom = center_y + display_height / 2;
-		glow_height = height;
+		glow_centre_x = centre_x;
+		glow_width = width;
 		glow_tone = slot->tone;
 	}
 }
 
 // ---------------------------------------------------------------------------
-// Moving the column without losing the pictures
+// Moving the row without losing the pictures
 //
-// When the column advances by one place, five of the six records on screen are
-// the same five: they have simply moved up a place. Rebinding each slot from
+// When the row advances by one place, five of the six records on screen are
+// the same five: they have simply moved across a place. Rebinding each slot from
 // scratch would throw all five faces away and ask for them again, emptying the
 // crate for as long as the finger keeps moving.
 //
 // So the faces move with the records. What stays with the slot is its turned
-// copy, because that belongs to the place and not to the record: a place above
-// the middle turns the other way from one below it, and the two by the middle
+// copy, because that belongs to the place and not to the record: a place left of
+// the middle turns the other way from one right of it, and the two by the middle
 // are the only ones that can be seen straight. The turned copy is therefore
 // marked out of date and worked out again, which is two or three warps -- the
 // same order as one frame of a drag, and once per place crossed rather than
@@ -848,7 +806,7 @@ static void faces_rotate(int delta) {
 		}
 		// The face this place is holding is not the one its turned copy was made
 		// from, whichever way it got here.
-		slots[i].warp_h = -1;
+		slots[i].warp_w = -1;
 	}
 }
 
@@ -955,10 +913,10 @@ static void place_glow(void) {
 		return;
 	}
 	// Full strength only when the record is facing the front, nothing at all
-	// when it is fully turned: a pool of light under a record seen edge-on is
+	// when it is fully turned: a pool of light around a record seen edge-on is
 	// light with nothing to come from.
-	int span = CF_MID_W - CF_LEAN_H;
-	int upright = glow_height - CF_LEAN_H;
+	int span = CF_MID_W - CF_LEAN_W;
+	int upright = glow_width - CF_LEAN_W;
 	if (upright < 0) {
 		upright = 0;
 	}
@@ -967,29 +925,31 @@ static void place_glow(void) {
 		lv_obj_set_hidden(glow_obj, true);
 		return;
 	}
+
 	// Inside the record and centred on it, so what escapes is a ring and not a
-	// pool. The width never changes -- a record's width does not -- while the
-	// height is whatever the turn has left of it.
-	int gw = CF_MID_W - CF_GLOW_INSET * 2;
-	int gh = glow_height - CF_GLOW_INSET * 2;
+	// pool. Horizontal cover flow keeps the sleeve's height constant and turns
+	// its width towards the centre.
+	int gw = glow_width - CF_GLOW_INSET * 2;
+	int gh = CF_MID_W - CF_GLOW_INSET * 2;
+	if (gw < CF_GLOW_MIN_H) {
+		gw = CF_GLOW_MIN_H;
+	}
 	if (gh < CF_GLOW_MIN_H) {
 		gh = CF_GLOW_MIN_H;
 	}
 
 	// The map is repainted only when the caster's shape changes, which during a
-	// drag is once a frame and while the column is still is never.
+	// drag is once a frame and while the row is still is never.
 	if (gw != glow_map_w || gh != glow_map_h) {
 		glow_paint(gw, gh);
 		glow_map_w = gw;
 		glow_map_h = gh;
 	}
 
-	int display_height = record_px(glow_height);
-	int center_y = glow_bottom - display_height / 2;
 	int source_w = gw + 2 * CF_GLOW_REACH;
 	int source_h = gh + 2 * CF_GLOW_REACH;
 	lv_obj_set_hidden(glow_obj, false);
-	lv_obj_set_pos(glow_obj, mid_x - source_w / 2, center_y - source_h / 2);
+	lv_obj_set_pos(glow_obj, glow_centre_x - source_w / 2, mid_y - source_h / 2);
 	// The colour is the image's recolour, which is what lets one alpha map serve
 	// every album.
 	lv_obj_set_style_image_recolor(glow_obj, lv_color_hex(glow_tone ? glow_tone : lv_color_to_u32(theme()->accent)),
@@ -1039,7 +999,7 @@ static void refresh_title(void) {
 	}
 }
 
-// Moves the column to an absolute position and redraws it. The name under the
+// Moves the row to an absolute position and redraws it. The name under the
 // crate follows the record nearest the middle, so it changes halfway between
 // two rather than only when everything has come to rest.
 static void scroll_set(int32_t value) {
@@ -1066,7 +1026,7 @@ static void scroll_anim_cb(void *var, int32_t v) {
 	scroll_set(v);
 }
 
-// The column has come to rest.
+// The row has come to rest.
 static void scroll_idle(void) {
 	relayout();
 	lv_timer_resume(poll_timer);
@@ -1394,7 +1354,7 @@ static void back_veil_clicked_cb(lv_event_t *e) {
 // ---------------------------------------------------------------------------
 // The sheet
 //
-// Not a page. It comes up over the Musica grid the way the control centre comes
+// Not a page. It comes up over the main menu the way the control centre comes
 // down over whatever is underneath, and by the same three calls: the gesture
 // moves it a pixel at a time, and only the last stretch after the release is
 // animated. Its buffers exist only while it is up.
@@ -1407,7 +1367,7 @@ static void back_veil_clicked_cb(lv_event_t *e) {
 
 static size_t face_bytes(void) { return (size_t)CF_MID_W * CF_MID_W * 2; }
 
-static size_t warp_bytes(const cf_slot_t *slot) { return (size_t)CF_MID_W * slot->warp_max_h * 3; }
+static size_t warp_bytes(const cf_slot_t *slot) { return (size_t)CF_MID_W * slot->warp_max_w * 3; }
 
 static void buffers_free(void) {
 	for (int i = 0; i < CF_SLOTS; i++) {
@@ -1421,7 +1381,7 @@ static void buffers_free(void) {
 		big_free(slot->warp, warp_bytes(slot));
 		slot->face = NULL;
 		slot->warp = NULL;
-		slot->warp_h = -1;
+		slot->warp_w = -1;
 		slot->index = -1;
 		slot->settled = false;
 		slot->has_cover = false;
@@ -1445,7 +1405,7 @@ static bool buffers_alloc(void) {
 	glow_map_h = -1;
 	for (int i = 0; i < CF_SLOTS; i++) {
 		cf_slot_t *slot = &slots[i];
-		slot->warp_max_h = slot_max_height(i);
+		slot->warp_max_w = slot_max_width(i);
 		slot->face = big_alloc(face_bytes());
 		slot->warp = big_alloc(warp_bytes(slot));
 		if (!slot->face || !slot->warp || !glow_map) {
@@ -1453,7 +1413,7 @@ static bool buffers_alloc(void) {
 			return false;
 		}
 		slot->index = -1;
-		slot->warp_h = -1;
+		slot->warp_w = -1;
 		slot->settled = false;
 		slot->requested = false;
 		face_reset(slot);
@@ -1637,13 +1597,13 @@ void coverflow_open(void) {
 }
 
 // ---------------------------------------------------------------------------
-// the gesture on the column
+// the gesture on the row
 // ---------------------------------------------------------------------------
 
-static void column_drag_cb(lv_event_t *e) {
+static void row_drag_cb(lv_event_t *e) {
 	static lv_point_t start;
 	static int32_t start_scroll;
-	static int32_t last_y;
+	static int32_t last_x;
 	static uint32_t last_tick;
 	static int32_t velocity; // 16.16 pixels per millisecond
 	static bool tracking;
@@ -1657,9 +1617,9 @@ static void column_drag_cb(lv_event_t *e) {
 
 	if (code == LV_EVENT_PRESSED) {
 		lv_indev_get_point(indev, &start);
-		lv_anim_delete(NULL, scroll_anim_cb); // a finger on the column stops a throw
+		lv_anim_delete(NULL, scroll_anim_cb); // a finger on the row stops a throw
 		start_scroll = scroll;
-		last_y = start.y;
+		last_x = start.x;
 		last_tick = lv_tick_get();
 		velocity = 0;
 		tracking = album_count > 0 && !flipped && !flipping;
@@ -1672,21 +1632,21 @@ static void column_drag_cb(lv_event_t *e) {
 
 	lv_point_t p;
 	lv_indev_get_point(indev, &p);
-	int dy = p.y - start.y;
+	int dx = p.x - start.x;
 
 	if (code == LV_EVENT_PRESSING) {
 		if (!engaged) {
-			int adx = p.x - start.x;
-			adx = adx < 0 ? -adx : adx;
-			int ady = dy < 0 ? -dy : dy;
-			if (ady < CF_DRAG_COMMIT_PX || ady <= adx) {
+			int adx = dx < 0 ? -dx : dx;
+			int ady = p.y - start.y;
+			ady = ady < 0 ? -ady : ady;
+			if (adx < CF_DRAG_COMMIT_PX || adx <= ady) {
 				return;
 			}
 			engaged = true;
 			// The travel that armed the drag is not thrown away, but it must not
-			// jump the column either: the position it started from is moved up to
-			// meet the finger.
-			start_scroll = scroll + (int32_t)(((int64_t)dy << 16) / record_px(CF_STEP_PX));
+			// jump the row either: the position it started from is moved across to
+			// meet the finger. Swiping left advances to the next album.
+			start_scroll = scroll + (int32_t)(((int64_t)dx << 16) / record_px(CF_STEP_PX));
 		}
 
 		uint32_t now = lv_tick_get();
@@ -1694,13 +1654,13 @@ static void column_drag_cb(lv_event_t *e) {
 		if (elapsed > 0) {
 			// Smoothed over the last few reads: one stray sample at the lift
 			// would otherwise decide the whole throw.
-			int32_t sample = (int32_t)((((int64_t)(p.y - last_y)) << 16) / (int32_t)elapsed);
+			int32_t sample = (int32_t)((((int64_t)(p.x - last_x)) << 16) / (int32_t)elapsed);
 			velocity += (sample - velocity) / 2;
-			last_y = p.y;
+			last_x = p.x;
 			last_tick = now;
 		}
 
-		scroll_set(start_scroll - (int32_t)(((int64_t)dy << 16) / record_px(CF_STEP_PX)));
+		scroll_set(start_scroll - (int32_t)(((int64_t)dx << 16) / record_px(CF_STEP_PX)));
 		return;
 	}
 
@@ -1807,18 +1767,17 @@ static void bar_drag_cb(lv_event_t *e) {
 // ---------------------------------------------------------------------------
 // the pull that brings the sheet up
 //
-// There is no strip along the bottom of the Musica page: an object pinned to
-// the bottom edge would sit over the last few pixels of the two bottom tiles
-// and eat the taps that land there. The gesture lives on the grid itself
-// instead -- the object the tiles bubble their presses to -- and refuses to
-// start unless the finger went down in the bottom band. A tap is untouched
+// There is no extra strip along the bottom of the main menu: an object pinned
+// there would sit over the last few pixels of the home cards and eat their taps.
+// The gesture lives on the grid and the visible mini-player instead, and refuses
+// to start unless the finger went down in the bottom band. A tap is untouched
 // either way, because nothing happens until the finger has travelled upwards.
 // ---------------------------------------------------------------------------
 
 // True from the moment the upward pull is recognised until one tick after the
-// gesture's last event. The pull starts on a tile of the Musica grid, and that
-// tile gets its CLICKED all the same when the finger lifts: without this the
-// sheet comes up with a page opened behind it.
+// gesture's last event. The pull can start on a main-menu card or on the
+// mini-player, and that target still gets its CLICKED when the finger lifts:
+// without this the sheet would come up with Music or Now Playing opened behind it.
 static bool edge_committed;
 
 bool coverflow_drag_active(void) { return edge_committed; }
@@ -1885,15 +1844,15 @@ static void edge_drag_cb(lv_event_t *e) {
 	}
 }
 
-void coverflow_attach_edge(lv_obj_t *grid, gui_config_t *cfg) {
-	if (!grid) {
+void coverflow_attach_edge(lv_obj_t *target, gui_config_t *cfg) {
+	if (!target) {
 		return;
 	}
 	void *band = (void *)(uintptr_t)(cfg->screen_height - CF_EDGE_H);
-	lv_obj_add_event_cb(grid, edge_drag_cb, LV_EVENT_PRESSED, band);
-	lv_obj_add_event_cb(grid, edge_drag_cb, LV_EVENT_PRESSING, band);
-	lv_obj_add_event_cb(grid, edge_drag_cb, LV_EVENT_RELEASED, band);
-	lv_obj_add_event_cb(grid, edge_drag_cb, LV_EVENT_PRESS_LOST, band);
+	lv_obj_add_event_cb(target, edge_drag_cb, LV_EVENT_PRESSED, band);
+	lv_obj_add_event_cb(target, edge_drag_cb, LV_EVENT_PRESSING, band);
+	lv_obj_add_event_cb(target, edge_drag_cb, LV_EVENT_RELEASED, band);
+	lv_obj_add_event_cb(target, edge_drag_cb, LV_EVENT_PRESS_LOST, band);
 }
 
 // ---------------------------------------------------------------------------
@@ -1962,7 +1921,7 @@ void coverflow_init(gui_config_t *cfg) {
 	lv_obj_set_clickable(sheet, true);
 
 	// The grip. It sits just under the status bar, above everything, and the
-	// column is not allowed to reach it.
+	// cover row is not allowed to reach it.
 	bar_hit = lv_obj_create(sheet);
 	lv_obj_remove_style_all(bar_hit);
 	lv_obj_set_size(bar_hit, CF_BAR_HIT_W, CF_BAR_HIT_H);
@@ -1980,9 +1939,9 @@ void coverflow_init(gui_config_t *cfg) {
 	lv_obj_set_style_image_opa(bar, LV_OPA_60, 0);
 	lv_obj_align(bar, LV_ALIGN_TOP_MID, 0, 0);
 
-	// Everything that scrolls lives in here and is clipped to it, which is how a
-	// record on its way past the top edge stops at the grip instead of sliding
-	// over it.
+	// Everything in the horizontal row lives in here and is clipped to it, which is
+	// how a record that reaches either side stops at the viewport edge instead of
+	// sliding over the sheet chrome.
 	int top = cfg->top_bar_height + CF_BAR_TOP + CF_BAR_HIT_H;
 	int bottom = bp_pick(60, 74); // room for the album name below the crate
 	int height = cfg->screen_height - top - bottom;
@@ -1992,10 +1951,10 @@ void coverflow_init(gui_config_t *cfg) {
 	lv_obj_set_pos(viewport, 0, top);
 	lv_obj_set_scrollable(viewport, false);
 	lv_obj_set_clickable(viewport, true);
-	lv_obj_add_event_cb(viewport, column_drag_cb, LV_EVENT_PRESSED, NULL);
-	lv_obj_add_event_cb(viewport, column_drag_cb, LV_EVENT_PRESSING, NULL);
-	lv_obj_add_event_cb(viewport, column_drag_cb, LV_EVENT_RELEASED, NULL);
-	lv_obj_add_event_cb(viewport, column_drag_cb, LV_EVENT_PRESS_LOST, NULL);
+	lv_obj_add_event_cb(viewport, row_drag_cb, LV_EVENT_PRESSED, NULL);
+	lv_obj_add_event_cb(viewport, row_drag_cb, LV_EVENT_PRESSING, NULL);
+	lv_obj_add_event_cb(viewport, row_drag_cb, LV_EVENT_RELEASED, NULL);
+	lv_obj_add_event_cb(viewport, row_drag_cb, LV_EVENT_PRESS_LOST, NULL);
 
 	mid_x = cfg->screen_width / 2;
 	// From the numbers, not from the object: a size just set is not a size LVGL
@@ -2012,7 +1971,7 @@ void coverflow_init(gui_config_t *cfg) {
 	// covers the middle of the record, so it would swallow every press landing
 	// on the sleeve: the record could not be tapped to turn it over and a drag
 	// beginning on it would move nothing. An image is not clickable, so the
-	// press reaches the column underneath.
+	// press reaches the cover row underneath.
 	// The map itself is not made here: it belongs to the sheet being up, and
 	// buffers_alloc() asks for it along with the faces.
 	glow_obj = lv_image_create(viewport);
@@ -2022,7 +1981,7 @@ void coverflow_init(gui_config_t *cfg) {
 	for (int i = 0; i < CF_SLOTS; i++) {
 		cf_slot_t *slot = &slots[i];
 		slot->index = -1;
-		slot->warp_h = -1;
+		slot->warp_w = -1;
 		slot->image = lv_image_create(viewport);
 		lv_obj_set_event_bubble(slot->image, true);
 		lv_obj_set_hidden(slot->image, true);
@@ -2137,7 +2096,7 @@ void coverflow_init(gui_config_t *cfg) {
 	lv_obj_set_scroll_dir(back_list, LV_DIR_VER);
 	lv_obj_set_scrollbar_mode(back_list, LV_SCROLLBAR_MODE_OFF);
 
-	// One frame, not a couple of hundred milliseconds: while the column is
+	// One frame, not a couple of hundred milliseconds: while the row is
 	// being scrolled this is what decides how long a record entering from an
 	// edge stays blank AFTER its cover has already been read. It pauses itself
 	// the moment nothing is outstanding, so a crate standing still costs

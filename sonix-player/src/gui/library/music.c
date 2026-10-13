@@ -14,7 +14,6 @@
 #include "src/gui/library/medialist.h"
 #include "src/gui/library/playlistpage.h"
 #include "src/gui/library/search.h"
-#include "src/gui/nowplaying/coverflow.h"
 #include "src/gui/nowplaying/player.h"
 #include "src/gui/shell/gridpage.h"
 #include "src/gui/shell/gui.h"
@@ -695,7 +694,6 @@ void music_init(gui_config_t *cfg) {
 	};
 
 	tile_grid = gridpage_build(music_screen, cfg, entries, (int)(sizeof(entries) / sizeof(entries[0])), 2, 3, true);
-	coverflow_attach_edge(tile_grid, cfg);
 
 	bool compact_header = cfg->screen_width < 320;
 	settingsrow_title_corner_slots(settingsrow_title(music_screen, cfg, "music"), cfg, compact_header ? 2 : 4);

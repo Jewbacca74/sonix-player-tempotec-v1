@@ -3187,6 +3187,20 @@ const lv_image_dsc_t *player_backdrop_image(void) {
 
 static void update_repeat_button(void);
 
+// Keep the player footer edge-free. Its border is already zeroed by the deck,
+// but its default focus outline or shadow can still show as a grey one-pixel
+// seam along the bottom in Amber on Black.
+static void player_clear_footer_edge(void) {
+	if (!player_menu) {
+		return;
+	}
+	lv_obj_set_style_border_width(player_menu, 0, 0);
+	lv_obj_set_style_border_opa(player_menu, LV_OPA_TRANSP, 0);
+	lv_obj_set_style_outline_width(player_menu, 0, 0);
+	lv_obj_set_style_outline_opa(player_menu, LV_OPA_TRANSP, 0);
+	lv_obj_set_style_shadow_width(player_menu, 0, 0);
+}
+
 // Repaints the bits that are coloured by hand, and rebuilds the blurred
 // artwork behind the controls -- it is dimmed towards the page background, so
 // it has to be regenerated when that background changes.
@@ -3195,6 +3209,9 @@ static void player_refresh_theme(void) {
 		return;
 
 	bool amber = theme_is_amber_on_black();
+	if (amber) {
+		player_clear_footer_edge();
+	}
 	lv_color_t progress_rest = lv_color_make(255, 255, 255);
 	lv_color_t playback = theme()->accent;
 	lv_color_t overflow = lv_color_make(150, 150, 150);
@@ -4992,6 +5009,9 @@ void player_init(gui_config_t *cfg) {
 	lv_obj_set_flex_flow(player_menu, LV_FLEX_FLOW_COLUMN);
 	lv_obj_set_flex_align(player_menu, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_style_border_width(player_menu, 0, 0);
+	if (theme_is_amber_on_black()) {
+		player_clear_footer_edge();
+	}
 	lv_obj_set_style_radius(player_menu, 0, 0);
 	lv_obj_set_style_pad_hor(player_menu, deck_side, 0);
 	if (compact) {
