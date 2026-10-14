@@ -1,9 +1,12 @@
 #include "led_i2c.h"
 
+#include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/ioctl.h>
+#include <sys/syscall.h>
 #include <unistd.h>
 
 // The SGM31324 sits on I2C bus 0 at address 0x30. The register map is the one
@@ -36,6 +39,18 @@
 
 static int i2c_fd = -1;
 
+// Unloads the firmware driver with the syscall directly, so it does not depend
+// on a shell or on rmmod being in the player's PATH. ENOENT means the module is
+// already gone, which is just as good.
+static int unload_driver(void) {
+	errno = 0;
+	long rc = syscall(SYS_delete_module, "leds_sgm31324_add", O_NONBLOCK);
+	if (rc == 0 || errno == ENOENT) {
+		return 0;
+	}
+	return errno ? errno : EIO;
+}
+
 static void write_reg(unsigned char reg, unsigned char value) {
 	if (i2c_fd < 0) {
 		return;
@@ -52,12 +67,20 @@ bool led_i2c_init(void) {
 	}
 
 	// Open the bus first: if it is not there, the driver is left alone and the
-	// caller keeps the pattern node.
+	// caller keeps the pattern node. A missing /dev/i2c-0 almost always means the
+	// i2c-dev module is not loaded, so try to bring it up before giving up.
 	int fd = open(I2C_BUS, O_RDWR);
 	if (fd < 0) {
+		int rc = system("modprobe i2c-dev 2>/dev/null");
+		(void)rc;
+		fd = open(I2C_BUS, O_RDWR);
+	}
+	if (fd < 0) {
+		fprintf(stderr, "led: %s will not open (%s) -- is the i2c-dev module loaded?\n", I2C_BUS, strerror(errno));
 		return false;
 	}
 	if (ioctl(fd, I2C_SLAVE, I2C_ADDR) < 0) {
+		fprintf(stderr, "led: %s: cannot select address 0x%02x (%s)\n", I2C_BUS, I2C_ADDR, strerror(errno));
 		close(fd);
 		return false;
 	}
@@ -66,9 +89,11 @@ bool led_i2c_init(void) {
 	// does not reset the chip -- it keeps running on its last register values --
 	// which is why every routine programs the registers it depends on. If the
 	// unload fails the driver still owns the chip, so leave it in charge and let
-	// the caller fall back to the registered patterns.
-	int rc = system("rmmod leds_sgm31324_add 2>/dev/null");
-	if (rc != 0) {
+	// the caller fall back to the registered patterns. EWOULDBLOCK here means the
+	// module is in use; EPERM usually means it is built in, not loadable.
+	int err = unload_driver();
+	if (err != 0) {
+		fprintf(stderr, "led: could not unload leds_sgm31324_add (%s) -- keeping the driver's patterns\n", strerror(err));
 		close(fd);
 		return false;
 	}
