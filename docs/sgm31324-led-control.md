@@ -29,6 +29,11 @@ so `rmmod` is what releases it. Unloading does not reset the chip - it keeps
 running on the last register values it was given - which is why the routines
 below program every register they depend on.
 
+On a Sonix Player image the packer disables that module outright (see step 6b
+of `sonix-packer/sonix_firmware_packer.sh`): the script is replaced with a no-op
+and the `.ko` removed, so the controller is free from boot and no `rmmod` is
+needed. The player takes the same route itself - see the note at the end.
+
 Every write is one `i2cset` on bus 0 at address `0x30`:
 
 ```sh
@@ -411,9 +416,11 @@ fade_out 48 1200              # slower, finer steps
   This matters most for `fade_out`, which has no colour arguments and depends
   entirely on what the previous routine left behind.
 - The routines are the userspace path. The player now takes the same route
-  itself: `led_init()` in `sonix-player/src/system/device/led.c` unloads the
-  driver and drives the controller through `led_i2c.c` (the register layer
-  above), so it can fade in on power-on, cross-fade between colours, breathe
-  the charging red in hardware and fade out on the way down. The driver's
-  registered patterns remain the fallback, used only when the controller
-  cannot be taken over or on the R1, which has no SGM31324 at all.
+  itself: `led_init()` in `sonix-player/src/system/device/led.c` drives the
+  controller through `led_i2c.c` (the register layer above), so it can fade in
+  on power-on, cross-fade between colours, breathe the charging red in hardware
+  and fade out on the way down. It knows the LED is an SGM31324 from the model
+  table (`sysinfo_model()->sgm31324_led`), not from the driver's pattern node,
+  so it works with the module disabled. The driver's registered patterns remain
+  the fallback, used only when the controller cannot be taken over or on the R1,
+  which has no SGM31324 at all.

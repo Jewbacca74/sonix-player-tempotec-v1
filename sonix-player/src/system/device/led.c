@@ -8,6 +8,7 @@
 
 #include "led_i2c.h"
 #include "src/system/core/config.h"
+#include "src/system/device/sysinfo.h"
 
 #define PATTERN_NODE "/sys/class/leds/sgm31324-leds/led_pattern"
 #define RED_TRIGGER_NODE "/sys/class/leds/red/trigger"
@@ -105,6 +106,19 @@ static bool have_pattern_node;
 static bool have_red_node;
 static bool have_blue_node; // the R1: no pattern node, a red and a blue LED
 static bool direct_mode;	// the SGM31324 is ours, driven over I2C
+
+// Whether this player's status LED is the SGM31324 RGB controller. The model
+// table knows (sysinfo.h); when system-info.json names no model we fall back to
+// the driver's pattern node, which only exists where the controller does. This
+// is what lets the controller be driven directly even when the firmware's
+// leds_sgm31324_add.ko is never loaded at all.
+static bool has_sgm31324(void) {
+	const sysinfo_model_t *model = sysinfo_model();
+	if (model) {
+		return model->sgm31324_led;
+	}
+	return have_pattern_node;
+}
 
 static int current_state = -1;
 static int red_trigger_state = -1; // -1 unknown, 0 "none", 1 "breathing"
@@ -588,7 +602,8 @@ void led_init(void) {
 	have_red_node = access(RED_TRIGGER_NODE, W_OK) == 0;
 	have_blue_node = !have_pattern_node && access(BLUE_BRIGHTNESS_NODE, W_OK) == 0;
 
-	if (!have_pattern_node && !have_red_node && !have_blue_node) {
+	bool sgm = has_sgm31324();
+	if (!sgm && !have_red_node && !have_blue_node) {
 		return; // host build, or firmware without the LED module
 	}
 
@@ -599,20 +614,24 @@ void led_init(void) {
 	s_brightness = (int)config_get_int("power", "led_brightness", BRIGHTNESS_DEFAULT);
 	s_transition_ms = (int)config_get_int("power", "led_transition_ms", TRANSITION_DEFAULT_MS);
 
-	// On the SGM31324 (the V1 and the R3 Pro II) take the controller over from
-	// the firmware driver and drive it directly -- that is what the fade-in
-	// below and the colour cross-fades need. The R1 has no such controller and
-	// keeps its pattern/blue path.
-	if (have_pattern_node) {
+	// On the SGM31324 (the V1 and the R3 Pro II) drive the controller directly
+	// -- that is what the fade-in below and the colour cross-fades need. The
+	// controller is free either because the firmware driver was never loaded (the
+	// packer disables it) or because led_i2c_init() unloads it. The R1 has no
+	// such controller and keeps its pattern/blue path.
+	if (sgm) {
 		direct_mode = led_i2c_init();
 	}
 	if (direct_mode) {
 		start_worker();
 	}
 
-	fprintf(stderr, "led: %s, red trigger %s, blue %s\n",
-			direct_mode ? "direct i2c" : have_pattern_node ? "pattern node" : "missing",
-			have_red_node ? "ok" : "missing", have_blue_node ? "ok" : "missing");
+	const char *mode = direct_mode ? "direct i2c"
+					   : have_pattern_node ? "pattern node"
+					   : have_blue_node	 ? "blue pwm"
+										 : "unavailable";
+	fprintf(stderr, "led: %s, red trigger %s, blue %s\n", mode, have_red_node ? "ok" : "missing",
+			have_blue_node ? "ok" : "missing");
 
 	s_last_playing = time(NULL); // the power-on colour holds for the first idle window
 
@@ -733,9 +752,16 @@ void led_set_transition_ms(int ms) {
 
 bool led_effects_available(void) {
 	// The direct path is available once we own the controller, or -- before
-	// led_init() has run -- while the driver still exposes its pattern node.
-	// The R1 has neither.
-	return direct_mode || access(PATTERN_NODE, F_OK) == 0;
+	// led_init() has run -- on a model whose LED is the SGM31324. The R1 has
+	// neither.
+	if (direct_mode) {
+		return true;
+	}
+	const sysinfo_model_t *model = sysinfo_model();
+	if (model) {
+		return model->sgm31324_led;
+	}
+	return access(PATTERN_NODE, F_OK) == 0;
 }
 
 // Posts a fade to black and waits for it to play. Shared by the power-off and

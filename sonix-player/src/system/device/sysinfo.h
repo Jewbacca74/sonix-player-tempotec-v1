@@ -69,6 +69,7 @@ typedef struct {
 	const char *update_stem; // "<stem>.upt" is the update file this player accepts
 	const char *serial_prefix; // what the number on the box starts with
 	bool pmic_charger;		   // charged by the AXP2101 alone, no MP2731 (axpcharge.h)
+	bool sgm31324_led;		   // the status LED is an SGM31324 RGB controller on I2C bus 0 (led.h)
 	bool cs43131;			   // one CS43131, 3.5 mm only, no HBC3000 (alsa-controls.h)
 	bool tap_wake;			   // the touch controller can wake the screen (power.h)
 	bool one_flank;			   // every button on the right flank (remap.c)

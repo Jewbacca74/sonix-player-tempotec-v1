@@ -62,6 +62,11 @@ static void write_reg(unsigned char reg, unsigned char value) {
 }
 
 bool led_i2c_init(void) {
+#ifdef HOST_BUILD
+	// The simulator has no SGM31324, and must never touch the developer's own
+	// I2C buses.
+	return false;
+#endif
 	if (i2c_fd >= 0) {
 		return true;
 	}

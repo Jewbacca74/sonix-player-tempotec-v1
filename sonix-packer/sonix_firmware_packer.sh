@@ -657,6 +657,38 @@ if [ \"\$boot_sel\" = \"logo:3\" ] && [ -f /etc/logo_travelling.jpeg ]; then $DI
 	say ""
 
 	# ==========================================================================
+	# 6b. The stock status-LED driver
+	# ==========================================================================
+	#
+	# The player drives the SGM31324 RGB controller directly over I2C (see
+	# sonix-player/src/system/device/led_i2c.c), which needs the controller free.
+	# The firmware's leds_sgm31324_add.ko holds it and on this kernel will not
+	# unload, so it is never loaded at all: the module script is replaced with a
+	# no-op and the .ko removed, whichever way the stock init brings it up. The
+	# R1 has no such controller and keeps its own LED driver.
+	if [ "$MODEL_DIR" != "R1" ]; then
+		step "[$MODEL_NAME] disabling the stock LED driver"
+
+		LED_SCRIPT="$SQUASH_DIR/module_driver/leds_sgm31324_add.sh"
+		if [ -e "$LED_SCRIPT" ]; then
+			printf '#!/bin/sh\n# Disabled by the firmware packer: the player drives the SGM31324 directly.\nexit 0\n' > "$LED_SCRIPT"
+			chmod 755 "$LED_SCRIPT"
+			say "    module_driver/leds_sgm31324_add.sh replaced with a no-op"
+		else
+			say "    module_driver/leds_sgm31324_add.sh was not there"
+		fi
+
+		LED_MODULE="$SQUASH_DIR/module_driver/leds_sgm31324_add.ko"
+		if [ -e "$LED_MODULE" ]; then
+			rm -f "$LED_MODULE"
+			say "    module_driver/leds_sgm31324_add.ko removed"
+		else
+			say "    module_driver/leds_sgm31324_add.ko was not there"
+		fi
+		say ""
+	fi
+
+	# ==========================================================================
 	# 7. The build stamp
 	# ==========================================================================
 	step "[$MODEL_NAME] system-info.json"
