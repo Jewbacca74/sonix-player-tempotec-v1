@@ -41,6 +41,12 @@
 #define BACKDROP_BAND_BLUR_RADIUS 4
 #define BACKDROP_BAND_BLUR_PASSES 2
 
+// How far the band pulls each channel away from the pixel's own grey, in per
+// cent of that distance added on top: the tint that keeps a frosted sleeve a
+// colour and not a wash, after the dim has taken its light (see make_backdrop).
+// 100 would leave the hue as the dim left it.
+#define BACKDROP_BAND_SAT_PCT 140
+
 // How far the backdrop is pushed towards black (dark theme) or white (light
 // theme) so the text on top of it stays readable. 100 = untouched.
 #define BACKDROP_BRIGHTNESS_PCT 42
@@ -773,6 +779,12 @@ static bool make_backdrop(const raw_image_t *src, int box_w, int box_h, bool fro
 	if (small_h < 2)
 		small_h = 2;
 
+	// A frosted band -- the foot of the picture, with the box it stands over --
+	// is treated lighter than a blur a title is read on: blurred at a smaller
+	// radius so the photograph's colour masses stay standing in the glass, and
+	// dimmed and tinted by its own numbers below.
+	bool band = from_bottom && over_h > 0;
+
 	// Flip while shrinking, so the stretch back up only has to interpolate and
 	// no separate flip pass is needed. Not for a bottom band: that one stands
 	// in for the pixels underneath it and has to face the same way. Nor when
@@ -786,10 +798,6 @@ static bool make_backdrop(const raw_image_t *src, int box_w, int box_h, bool fro
 
 	uint8_t *scratch = malloc((size_t)small_w * small_h * 3);
 	if (scratch) {
-		// A frosted band -- from_bottom, with the box it stands over -- is
-		// blurred lighter and keeps more light than a blur a title is read
-		// on: see BACKDROP_BAND_* and cover_set_backdrop_band_brightness().
-		bool band = from_bottom && over_h > 0;
 		int radius = band ? BACKDROP_BAND_BLUR_RADIUS : BACKDROP_BLUR_RADIUS;
 		int passes = band ? BACKDROP_BAND_BLUR_PASSES : BACKDROP_BLUR_PASSES;
 		for (int i = 0; i < passes; i++) {
@@ -812,15 +820,36 @@ static bool make_backdrop(const raw_image_t *src, int box_w, int box_h, bool fro
 	// light -- it is looked through, not at -- so it takes its own percentage
 	// when the caller set one (see cover_set_backdrop_band_brightness).
 	int pct = BACKDROP_BRIGHTNESS_PCT;
-	if (from_bottom && over_h > 0 && backdrop_band_pct > 0) {
+	if (band && backdrop_band_pct > 0) {
 		pct = backdrop_band_pct;
 	}
-	for (int i = 0; i < box_w * box_h * 3; i++) {
+	for (int i = 0; i < box_w * box_h * 3; i += 3) {
+		int r = rgb[i], g = rgb[i + 1], b = rgb[i + 2];
 		if (backdrop_light) {
-			rgb[i] = (uint8_t)(255 - ((255 - rgb[i]) * pct) / 100);
+			r = 255 - ((255 - r) * pct) / 100;
+			g = 255 - ((255 - g) * pct) / 100;
+			b = 255 - ((255 - b) * pct) / 100;
 		} else {
-			rgb[i] = (uint8_t)((rgb[i] * pct) / 100);
+			r = (r * pct) / 100;
+			g = (g * pct) / 100;
+			b = (b * pct) / 100;
 		}
+		if (band) {
+			// The glass tint. Dimming a pale sleeve towards black leaves a grey
+			// wash -- the one thing a frost must not be, and the worst ground
+			// for light type, which wants a dark ground of SOME colour rather
+			// than a light ground of none. So what the dim takes out of the
+			// light, the tint puts back into the hue: each channel is pulled
+			// away from the pixel's own grey by a fixed few per cent, leaving
+			// the luminance the dim chose and the colour the sleeve has.
+			int luma = (r * 299 + g * 587 + b * 114) / 1000;
+			r = luma + ((r - luma) * BACKDROP_BAND_SAT_PCT) / 100;
+			g = luma + ((g - luma) * BACKDROP_BAND_SAT_PCT) / 100;
+			b = luma + ((b - luma) * BACKDROP_BAND_SAT_PCT) / 100;
+		}
+		rgb[i] = (uint8_t)(r < 0 ? 0 : (r > 255 ? 255 : r));
+		rgb[i + 1] = (uint8_t)(g < 0 ? 0 : (g > 255 ? 255 : g));
+		rgb[i + 2] = (uint8_t)(b < 0 ? 0 : (b > 255 ? 255 : b));
 	}
 
 	bool ok = pack_rgb565_dithered(rgb, box_w, box_h, out);

@@ -91,9 +91,16 @@ What the controls stand on is a **frosted band**: the foot of the same
 photograph, blurred lighter than every other blurred copy in the player --
 `BACKDROP_BAND_BLUR_RADIUS` and `BACKDROP_BAND_BLUR_PASSES`, 4 and 2 against 9
 and 3, so the photograph's colour masses stay standing in the glass instead of
-washing out -- and kept at most of its own light (`IMMERSIVE_FROST_PCT`, 80,
-against the 42 the blurs a title is read on elsewhere get: a frost is looked
-through, not at). It is asked for
+washing out -- and dimmed to the darkness the type reads on
+(`IMMERSIVE_FROST_PCT`, 55, against the 42 the blurs a title is read on
+elsewhere get). The 80 the stock look glows at was tried first and turned a
+pale sleeve into a light wash on the device, with the cream title and the
+amber clocks floating on it; what the sleeve keeps of itself in the band at 55
+is hue rather than light, and a tint in `make_backdrop()` -- each channel
+pulled away from the pixel's own grey by `BACKDROP_BAND_SAT_PCT`, 140 -- sees
+to it that the hue survives the dim: a dark ground of some colour, which is
+what light type has always wanted here, and not a light ground of none.
+The band is asked for
 at the deck's own rectangle (240 wide by `compact_deck_height()` tall) and cut
 out of the very crop the screen-sized picture was made from -- `make_backdrop()`
 takes the band from the foot of that crop rather than from a crop of the band's

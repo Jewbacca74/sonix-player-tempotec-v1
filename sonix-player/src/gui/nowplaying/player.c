@@ -1440,12 +1440,15 @@ static int menu_height;
 // ---------------------------------------------------------------------------
 
 // How much of its own light the frost keeps, in per cent of the photograph.
-// The blur alone takes the detail out of what stands under the white names and
-// clocks; what the dimming is for is the pale sleeve, where a blurred white is
-// still a white to read white on. This is the most that still leaves the band
-// a window rather than a panel: the colours come through at most of their
-// strength, as they do in the look this arrangement follows.
-#define IMMERSIVE_FROST_PCT 80
+// On the device this turned out to be a question about the type, not about the
+// picture: at 80 per cent a pale sleeve frosts to a light wash and the cream
+// title and the amber clocks float on it with nothing to hold them. At this
+// number the glass sits at the darkness the type reads on, and what the sleeve
+// keeps of itself in the band is hue rather than light -- which the tint in
+// make_backdrop() looks after. The colour masses still stand in it, the blur
+// being light, so the band stays a window: a window in the evening, which is
+// the light a player's chrome has always wanted to be read in.
+#define IMMERSIVE_FROST_PCT 55
 
 static lv_obj_t *immersive_blur; // the frosted foot the deck stands on
 static bool immersive_up;
