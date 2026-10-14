@@ -23,6 +23,7 @@ Raw means the original compressed file, **not PCM**. Recognized suffixes are `fl
 
 ### Credentials and TLS
 
+- The password is shown as plain text while editing so you can verify what you entered. Keep the screen private while editing.
 - Authentication is Subsonic v1.16.1 token authentication: random 16-byte salt, `MD5(password + salt)`, `u/t/s`, `c=sonix`, `f=json`. The password is never put in a URL.
 - Credentials stay in memory unless **Remember credentials** is enabled. The optional `subsonic-credentials.json` beside `device_config.ini` is written atomically with mode **0600**. It contains the password **unencrypted**; do not share it or backups of it. Storage must support the requested permissions.
 - Clearing Remember and saving removes the old saved credentials. **Forget server?** stops this service and removes its account from memory and disk.
