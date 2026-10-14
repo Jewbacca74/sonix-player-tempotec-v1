@@ -3,13 +3,14 @@
 
 #include <stdbool.h>
 
-// The RGB status LED, driven exactly the way the stock player drives it.
+// The RGB status LED.
 //
-// The firmware loads leds_sgm31324_add.ko, which registers a table of preset
-// colour patterns with the SGM31324 RGB controller and exposes them as small
-// integers on /sys/class/leds/sgm31324-leds/led_pattern. The stock binary
-// just writes the pattern number for the state it is in; the numbers below
-// come out of its logical->pattern table (FUN_0047ce00) and its callers:
+// On the TempoTec V1 and the R3 Pro II the light is an SGM31324 RGB controller
+// on I2C bus 0. The firmware's leds_sgm31324_add.ko owns it and registers a
+// table of preset colour patterns, exposed as small integers on
+// /sys/class/leds/sgm31324-leds/led_pattern; the stock binary just writes the
+// pattern number for the state it is in. The numbers below come out of its
+// logical->pattern table (FUN_0047ce00) and its callers:
 //
 //   1   aqua           device on, nothing playing (written at stock startup)
 //   2   yellow         PCM at or below 48 kHz
@@ -25,23 +26,31 @@
 //   9   blue           MQA Studio
 //   10  magenta        MQA rendering
 //
-// Priority when states overlap, matching the stock state machine exactly:
-// charging red > playback colour > idle aqua (the stock code applies the
-// charging override after computing the playback colour).
+// This player does better than writing a pattern number: led_init() unloads
+// the driver and drives the controller directly over I2C (led_i2c.h), which is
+// what lets it fade in on power-on, cross-fade between colours, breathe the
+// charging red in hardware and fade out on the way down. The pattern numbers
+// above remain the fallback, used only when the controller cannot be taken over
+// or on the R1, which has no SGM31324 at all.
+//
+// The states, and their priority when they overlap (matching the stock state
+// machine, with the charge indicator on top):
+//
+//   charging red > charged green > playback colour > idle aqua
 //
 // The R1 has no RGB controller: leds_pwm_add.ko registers two plain LEDs,
-// /sys/class/leds/red and /sys/class/leds/blue. There every lit pattern
-// becomes blue at brightness 50 and off stays off, as its stock player does
-// (blue 50 for every state but 0 and 6), and the charging red is the red LED
-// with its "breathing" trigger. The same states, priorities and switches
-// apply; only the output differs. Which player it is comes from the nodes
-// present, the pattern node winning.
+// /sys/class/leds/red and /sys/class/leds/blue. There every lit state becomes
+// blue at brightness 50 and off stays off, as its stock player does, and the
+// charging red is the red LED with its "breathing" trigger. The same states,
+// priorities and switches apply; only the output differs. Which player it is
+// comes from the nodes present, the pattern node winning.
 //
 // Everything degrades to a no-op when the sysfs nodes are missing (the host
 // build, or firmware without the module loaded).
 
-// Probes the sysfs nodes and replays the stock startup sequence: red trigger
-// released, power-on aqua (pattern 1).
+// Probes the sysfs nodes, takes the SGM31324 over from the driver where it can,
+// and replays the stock startup sequence: red trigger released, then a fade-in
+// to the power-on aqua.
 void led_init(void);
 
 // Red breathing while a charge is actually going in, overriding the playback
@@ -51,36 +60,35 @@ void led_init(void);
 // colour, a mode's colour, or the idle aqua. The red is an override on top of
 // the rest, not a state of its own.
 //
-// Cheap to call repeatedly: it only writes when the resolved pattern changes.
-// But the caller must hand it a settled answer -- the pattern is a ramp
+// Cheap to call repeatedly: it only writes when the resolved state changes.
+// But the caller must hand it a settled answer -- the breathing is a ramp
 // programmed into the LED controller, and rewriting it restarts the ramp, so a
 // reading that flaps comes out as a red that stutters.
 void led_set_charging(bool charging);
 
-// Whether a cable is supplying at all, charge finished or not. It does not
-// light anything by itself; what it does is keep the darken-in-standby option
-// off the LED. Without it a player left plugged in overnight answers the end of
-// its charge by going dark -- the red stops having anything to say and the
-// standby option, whose window ran out hours ago, takes the LED straight out.
+// Whether a cable is supplying at all, charge finished or not. While a charge is
+// going in it is the red above; once the charge is done it is the green that
+// says so. Either way the cable keeps the darken-in-standby option off the LED:
+// without it a player left plugged in overnight answers the end of its charge
+// by going dark.
 void led_set_on_charger(bool present);
 
-// Picks the pattern for what is playing (shown when not charging). `playing`
+// Picks the state for what is playing (shown when not charging). `playing`
 // false or rate 0 falls back to the idle aqua. `podcast` true paints the
-// purple (pattern 10) instead of the sample-rate colour, and `dsd` true the
-// white (pattern 11): a DSD file goes to the DAC over DoP, at a PCM carrier
-// rate of 176.4 kHz and up that would otherwise read as hi-res PCM. Cheap to
-// call repeatedly: only writes on change.
+// purple instead of the sample-rate colour, and `dsd` true the white: a DSD
+// file goes to the DAC over DoP, at a PCM carrier rate of 176.4 kHz and up that
+// would otherwise read as hi-res PCM. Cheap to call repeatedly: only writes on
+// change.
 void led_update_playback(bool playing, int sample_rate, bool podcast, bool dsd);
 
-// Wi-Fi transfer active: pattern 12 (a register added by hand to the driver
-// script). Stays lit with the screen off, since it indicates the server is
-// running, and overrides the darken-in-standby option.
+// Wi-Fi transfer active: a blinking blue. Stays lit with the screen off, since
+// it indicates the server is running, and overrides the darken-in-standby
+// option.
 void led_set_wifi_transfer(bool active);
 
-// Bluetooth receiver mode: pattern 14, blue at full brightness (another
-// register added by hand to the driver script). Same argument as the transfer
-// above, and the same exemption from the standby option -- nothing plays
-// through audio.c in that mode, so led_update_playback() reads a stopped
+// Bluetooth receiver mode: blue at full brightness. Same argument as the
+// transfer above, and the same exemption from the standby option -- nothing
+// plays through audio.c in that mode, so led_update_playback() reads a stopped
 // player, and the LED went out twenty seconds after the screen did with a
 // computer still sending music into the jack.
 void led_set_bt_receiver(bool active);
@@ -110,5 +118,31 @@ void led_set_idle_off(bool enabled);
 // Screen state, fed by power.c: the standby option only ever darkens the LED
 // while the screen is off. Waking restarts the idle window.
 void led_set_standby(bool standby);
+
+// The brightness slider, 1-7, used as the level index itself -- the doc's
+// `led LEVEL ...`: brightness 5 is `led 5`, brightness 7 is `led 7`. Only the
+// direct path uses it; the R1's plain LEDs have no such control. Saved by the
+// caller.
+void led_set_brightness(int brightness);
+
+// The transition speed, 20-2000 ms in 10 ms steps: how long a fade-in,
+// fade-out or cross-fade takes. Only the direct path uses it.
+void led_set_transition_ms(int ms);
+
+// Whether the fancy LED features (brightness, transition speed, the fades) are
+// available on this device -- true on the SGM31324, false on the R1 and the
+// host build. The settings page hides those rows when it is false.
+bool led_effects_available(void);
+
+// Fades the LED out on the way down. Called from power_shutdown() before the
+// power goes; a no-op on the fallback path.
+void led_shutdown(void);
+
+// The same fade for a suspend to RAM: called just before the "mem" write, so
+// the light is gone before the SoC sleeps, and led_resume() brings the current
+// state back as a fade-in on the other side. Both are no-ops on the fallback
+// path.
+void led_suspend(void);
+void led_resume(void);
 
 #endif /* LED_H */

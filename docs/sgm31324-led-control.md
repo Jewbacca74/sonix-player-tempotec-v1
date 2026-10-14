@@ -410,6 +410,10 @@ fade_out 48 1200              # slower, finer steps
   let every routine share them, rather than repeating the string in each one.
   This matters most for `fade_out`, which has no colour arguments and depends
   entirely on what the previous routine left behind.
-- The routines are the userspace path, separate from the in-player LED
-  handling in `sonix-player/src/system/device/led.c` and its header, which use
-  the driver's registered patterns once the module is loaded.
+- The routines are the userspace path. The player now takes the same route
+  itself: `led_init()` in `sonix-player/src/system/device/led.c` unloads the
+  driver and drives the controller through `led_i2c.c` (the register layer
+  above), so it can fade in on power-on, cross-fade between colours, breathe
+  the charging red in hardware and fade out on the way down. The driver's
+  registered patterns remain the fallback, used only when the controller
+  cannot be taken over or on the R1, which has no SGM31324 at all.

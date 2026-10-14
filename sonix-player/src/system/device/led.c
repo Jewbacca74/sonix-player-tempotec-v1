@@ -1,9 +1,13 @@
 #include "led.h"
 
+#include <pthread.h>
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+
+#include "led_i2c.h"
+#include "src/system/core/config.h"
 
 #define PATTERN_NODE "/sys/class/leds/sgm31324-leds/led_pattern"
 #define RED_TRIGGER_NODE "/sys/class/leds/red/trigger"
@@ -15,13 +19,9 @@
 
 // Pattern numbers, as registered by leds_sgm31324_add.sh and used by the
 // stock binary (FUN_0047ce00's logical->pattern table). See led.h for the
-// full story.
-//
-// Pattern 1 is what the stock player writes at startup (logical state 1, the
-// power-on aqua). Pattern 6 is what its LED state machine forces -- last,
-// overriding even the playback colour -- while the charger flag is set: the
-// register block programs the red channel in blink mode with a ramp, i.e.
-// the breathing red. Pattern 5 (logical 0, all-zero registers) is "off".
+// full story. They are the fallback path: on the SGM31324 the controller is
+// taken over and driven directly (see led_i2c.h), and these numbers are only
+// written when that fails or on the R1, which has no such controller.
 #define PATTERN_IDLE_AQUA 1
 #define PATTERN_CHARGING_RED 6
 #define PATTERN_PCM_48K 2
@@ -48,12 +48,69 @@
 // turns the LED off entirely.
 #define IDLE_OFF_SECONDS 20
 
+// The controller's 11-step current ladder (docs/sgm31324-led-control.md). Level
+// 0 is off and each step scales a channel's 0-255 value down to 0-79.
+static const int LADDER[11] = {0, 1, 3, 7, 15, 23, 31, 39, 47, 63, 79};
+
+// The brightness slider runs 1-7 and is the level index itself, exactly as the
+// doc's `led LEVEL ...` takes it: brightness 5 is `led 5`, brightness 7 is
+// `led 7`.
+#define BRIGHTNESS_MIN 1
+#define BRIGHTNESS_MAX 7
+#define BRIGHTNESS_DEFAULT 5
+
+// The transition speed slider runs 20 ms to 2 s in 10 ms steps; this is the
+// length of a fade-in, fade-out or cross-fade.
+#define TRANSITION_MIN_MS 20
+#define TRANSITION_MAX_MS 2000
+#define TRANSITION_DEFAULT_MS 500
+
+// Software fades step every 10 ms, so a transition is its length in steps.
+#define LED_STEP_MS 10
+// A blinking state (the Wi-Fi transfer) is on and off for this long each.
+#define LED_BLINK_MS 500
+
+// The logical states the LED can be in. Each is rendered either as a driver
+// pattern (the fallback) or as a colour and an effect (the direct path).
+typedef enum {
+	LS_OFF,
+	LS_IDLE,
+	LS_PCM_48K,
+	LS_PCM_192K,
+	LS_PCM_HI,
+	LS_DSD,
+	LS_PODCAST,
+	LS_WIFI,
+	LS_BT,
+	LS_CHARGING,
+	LS_CHARGED,
+} led_state_t;
+
+// How a state is played on the controller.
+typedef enum {
+	LM_STEADY, // a single colour, reached by a cross-fade
+	LM_BREATHE, // the controller's own breathing engine
+	LM_BLINK, // software on/off blink
+	LM_OFF, // dark, reached by a fade-out
+} led_mode_t;
+
+typedef struct {
+	led_mode_t mode;
+	int r, g, b;		   // scaled 0-79
+	int period, duty, fade; // breathing timing
+	int transition_ms;	   // length of the fade into this state
+} led_render_t;
+
 static bool have_pattern_node;
 static bool have_red_node;
 static bool have_blue_node; // the R1: no pattern node, a red and a blue LED
+static bool direct_mode;	// the SGM31324 is ours, driven over I2C
 
-static int current_pattern = -1;
+static int current_state = -1;
 static int red_trigger_state = -1; // -1 unknown, 0 "none", 1 "breathing"
+
+static int s_brightness = BRIGHTNESS_DEFAULT;
+static int s_transition_ms = TRANSITION_DEFAULT_MS;
 
 // The three inputs the pattern is resolved from. The charger wins over
 // everything -- the stock LED state machine applies its charging override
@@ -77,6 +134,20 @@ static time_t s_last_playing; // when something was last playing
 static bool s_on_charger;	  // a cable is supplying, charge finished or not
 static time_t s_charger_since; // when that last changed
 
+// --- the effect thread -----------------------------------------------------
+//
+// The fades are CPU-driven walks of the controller's levels, so they cannot run
+// on the GUI thread. One worker owns the I2C bus and plays whatever target the
+// state machine last posted; a new target cuts a running fade short rather than
+// queueing behind it, which is what makes a colour change feel immediate.
+
+static pthread_t led_thread;
+static pthread_mutex_t led_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t led_cond = PTHREAD_COND_INITIALIZER;
+static led_render_t led_target;
+static volatile unsigned led_seq;
+static bool led_thread_started;
+
 static void write_str(const char *path, const char *value) {
 	FILE *f = fopen(path, "w");
 	if (!f) {
@@ -86,40 +157,342 @@ static void write_str(const char *path, const char *value) {
 	fclose(f);
 }
 
-// On the R1 the pattern only decides whether the blue LED is lit: off and the
-// charging red leave it dark, every colour of the RGB LED becomes blue. The
-// red is the trigger in apply().
-static void set_pattern(int pattern) {
-	if (pattern == current_pattern) {
-		return;
+static int led_level(void) {
+	int b = s_brightness;
+	if (b < BRIGHTNESS_MIN) {
+		b = BRIGHTNESS_MIN;
 	}
-	if (have_pattern_node) {
-		char buf[16];
-		snprintf(buf, sizeof(buf), "%d", pattern);
-		write_str(PATTERN_NODE, buf);
-	} else if (have_blue_node) {
-		bool blue = pattern != PATTERN_OFF && pattern != PATTERN_CHARGING_RED;
-		write_str(BLUE_BRIGHTNESS_NODE, blue ? BLUE_ON : "0");
-	} else {
-		return;
+	if (b > BRIGHTNESS_MAX) {
+		b = BRIGHTNESS_MAX;
 	}
-	current_pattern = pattern;
+	return b;
 }
 
-static int rate_pattern(int sample_rate) {
+// Scales a 0-255 channel through the level ladder. White is run 40% dimmer --
+// the white LED reads brighter than the coloured ones -- but a channel that was
+// lit is never dimmed all the way to zero, which would put the light out rather
+// than dim it.
+static void scale_rgb(int r, int g, int b, bool white, int *out_r, int *out_g, int *out_b) {
+	int c = LADDER[led_level()];
+	int sr = r * c / 255;
+	int sg = g * c / 255;
+	int sb = b * c / 255;
+	if (white) {
+		if (sr > 0) {
+			sr = sr * 60 / 100;
+			if (sr < 1) {
+				sr = 1;
+			}
+		}
+		if (sg > 0) {
+			sg = sg * 60 / 100;
+			if (sg < 1) {
+				sg = 1;
+			}
+		}
+		if (sb > 0) {
+			sb = sb * 60 / 100;
+			if (sb < 1) {
+				sb = 1;
+			}
+		}
+	}
+	*out_r = sr;
+	*out_g = sg;
+	*out_b = sb;
+}
+
+static unsigned ch_mask(int r, int g, int b) {
+	unsigned m = 0;
+	if (r > 0) {
+		m |= LED_CH_R;
+	}
+	if (g > 0) {
+		m |= LED_CH_G;
+	}
+	if (b > 0) {
+		m |= LED_CH_B;
+	}
+	return m;
+}
+
+static void led_post(const led_render_t *t) {
+	pthread_mutex_lock(&led_lock);
+	led_target = *t;
+	led_seq++;
+	pthread_cond_signal(&led_cond);
+	pthread_mutex_unlock(&led_lock);
+}
+
+// Sleeps `ms` in small slices, returning true if a newer target arrived while it
+// waited -- which is what lets a running fade be cut short by a colour change
+// instead of being played out to the end first.
+static bool led_wait(unsigned seen, int ms) {
+	int left = ms;
+	while (left > 0) {
+		int slice = left > 5 ? 5 : left;
+		struct timespec ts = {0, (long)slice * 1000000L};
+		nanosleep(&ts, NULL);
+		if (led_seq != seen) {
+			return true;
+		}
+		left -= slice;
+	}
+	return false;
+}
+
+static void *led_worker(void *arg) {
+	(void)arg;
+	int cur_r = 0, cur_g = 0, cur_b = 0;
+	unsigned cur_ch = 0;
+	unsigned seen = 0;
+
+	for (;;) {
+		pthread_mutex_lock(&led_lock);
+		while (led_seq == seen) {
+			pthread_cond_wait(&led_cond, &led_lock);
+		}
+		led_render_t t = led_target;
+		seen = led_seq;
+		pthread_mutex_unlock(&led_lock);
+
+		if (!led_i2c_ready()) {
+			continue;
+		}
+
+		if (t.mode == LM_BREATHE) {
+			led_i2c_breathe(t.r, t.g, t.b, (unsigned char)t.period, (unsigned char)t.duty, (unsigned char)t.fade);
+			cur_r = t.r;
+			cur_g = t.g;
+			cur_b = t.b;
+			cur_ch = ch_mask(t.r, t.g, t.b);
+			continue;
+		}
+
+		if (t.mode == LM_BLINK) {
+			unsigned ch = ch_mask(t.r, t.g, t.b);
+			led_i2c_steady();
+			for (;;) {
+				led_i2c_levels(t.r, t.g, t.b, ch);
+				if (led_wait(seen, LED_BLINK_MS)) {
+					break;
+				}
+				led_i2c_levels(0, 0, 0, ch);
+				if (led_wait(seen, LED_BLINK_MS)) {
+					break;
+				}
+			}
+			cur_r = 0;
+			cur_g = 0;
+			cur_b = 0;
+			cur_ch = ch;
+			continue;
+		}
+
+		// Steady or off: walk from whatever is on now to the target. From black
+		// this is a fade-in, to black a fade-out, and between two colours a
+		// cross-fade -- the same walk, only the endpoints differ. Every channel
+		// lit at either end stays enabled for the duration, so a channel that is
+		// dark at one end fades rather than snapping.
+		int tr = (t.mode == LM_OFF) ? 0 : t.r;
+		int tg = (t.mode == LM_OFF) ? 0 : t.g;
+		int tb = (t.mode == LM_OFF) ? 0 : t.b;
+		unsigned tch = (t.mode == LM_OFF) ? 0 : ch_mask(tr, tg, tb);
+		unsigned ramp_ch = cur_ch | tch;
+		int steps = t.transition_ms / LED_STEP_MS;
+		if (steps < 1) {
+			steps = 1;
+		}
+
+		int sr = cur_r, sg = cur_g, sb = cur_b;
+		led_i2c_steady();
+		bool cut = false;
+		for (int i = 1; i <= steps; i++) {
+			int r, g, b;
+			if (t.mode == LM_OFF) {
+				// The doc's fade_out: a quadratic fall, so it eases out rather
+				// than dropping in a straight line.
+				int k = steps - i;
+				r = sr * k * k / (steps * steps);
+				g = sg * k * k / (steps * steps);
+				b = sb * k * k / (steps * steps);
+			} else {
+				r = sr + (tr - sr) * i / steps;
+				g = sg + (tg - sg) * i / steps;
+				b = sb + (tb - sb) * i / steps;
+			}
+			led_i2c_levels(r, g, b, ramp_ch);
+			cur_r = r;
+			cur_g = g;
+			cur_b = b;
+			if (i < steps && led_wait(seen, LED_STEP_MS)) {
+				cut = true;
+				break;
+			}
+		}
+		if (cut) {
+			cur_ch = ramp_ch;
+			continue;
+		}
+		if (t.mode == LM_OFF) {
+			// The map off entirely, as the doc's fade_out leaves it.
+			led_i2c_off();
+		}
+		cur_r = tr;
+		cur_g = tg;
+		cur_b = tb;
+		cur_ch = tch;
+	}
+	return NULL;
+}
+
+static void start_worker(void) {
+	if (led_thread_started) {
+		return;
+	}
+	pthread_attr_t attr;
+	pthread_attr_init(&attr);
+	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+	if (pthread_create(&led_thread, &attr, led_worker, NULL) == 0) {
+		led_thread_started = true;
+	} else {
+		fprintf(stderr, "led: could not start the effect thread\n");
+	}
+	pthread_attr_destroy(&attr);
+}
+
+// --- state -> output -------------------------------------------------------
+
+static led_state_t rate_state(int sample_rate) {
 	// The same rate thresholds the stock player uses. A DSD file is told apart
 	// by its own flag (see led_update_playback): over DoP its rate is that of
 	// the PCM carrying it. A source at a DSD bit rate is white all the same.
 	if (sample_rate >= 2822400) {
-		return PATTERN_DSD_WHITE;
+		return LS_DSD;
 	}
 	if (sample_rate > 192000) {
-		return PATTERN_PCM_HI;
+		return LS_PCM_HI;
 	}
 	if (sample_rate > 48000) {
-		return PATTERN_PCM_192K;
+		return LS_PCM_192K;
 	}
-	return PATTERN_PCM_48K;
+	return LS_PCM_48K;
+}
+
+// The driver pattern a state falls back to. There is no green pattern
+// registered, so a fully charged battery shows the idle aqua here; the direct
+// path below paints it green.
+static int state_pattern(led_state_t s) {
+	switch (s) {
+	case LS_OFF:
+		return PATTERN_OFF;
+	case LS_IDLE:
+		return PATTERN_IDLE_AQUA;
+	case LS_PCM_48K:
+		return PATTERN_PCM_48K;
+	case LS_PCM_192K:
+		return PATTERN_PCM_192K;
+	case LS_PCM_HI:
+		return PATTERN_PCM_HI;
+	case LS_DSD:
+		return PATTERN_DSD_WHITE;
+	case LS_PODCAST:
+		return PATTERN_PODCAST_PURPLE;
+	case LS_WIFI:
+		return PATTERN_WIFI_TRANSFER;
+	case LS_BT:
+		return PATTERN_BT_RECEIVER;
+	case LS_CHARGING:
+		return PATTERN_CHARGING_RED;
+	case LS_CHARGED:
+		return PATTERN_IDLE_AQUA;
+	}
+	return PATTERN_OFF;
+}
+
+// The colour and effect a state is played with on the direct path. The colours
+// are the ones the registered patterns stand for: aqua idle, yellow 48 kHz,
+// aqua up to 192 kHz, orange above it, white DSD, purple podcasts, blue the
+// Bluetooth receiver, red breathing while charging and green once charged.
+static void build_render(led_state_t s, led_render_t *out) {
+	int r = 0, g = 0, b = 0;
+	bool white = false;
+	led_mode_t mode = LM_STEADY;
+	switch (s) {
+	case LS_OFF:
+		mode = LM_OFF;
+		break;
+	case LS_IDLE:
+	case LS_PCM_192K:
+		g = 255;
+		b = 255;
+		break;
+	case LS_PCM_48K:
+		r = 255;
+		g = 255;
+		break;
+	case LS_PCM_HI:
+		r = 255;
+		g = 128;
+		break;
+	case LS_DSD:
+		r = 255;
+		g = 255;
+		b = 255;
+		white = true;
+		break;
+	case LS_PODCAST:
+		r = 160;
+		b = 255;
+		break;
+	case LS_WIFI:
+		g = 128;
+		b = 255;
+		mode = LM_BLINK;
+		break;
+	case LS_BT:
+		b = 255;
+		break;
+	case LS_CHARGED:
+		g = 255;
+		break;
+	case LS_CHARGING:
+		r = 255;
+		mode = LM_BREATHE;
+		break;
+	}
+	scale_rgb(r, g, b, white, &out->r, &out->g, &out->b);
+	out->mode = mode;
+	out->period = 0x1E; // the stock charging pulse
+	out->duty = 0x7D;
+	out->fade = 0xBB;
+	out->transition_ms = s_transition_ms;
+}
+
+// Renders a state to whichever output is available: the direct controller, the
+// driver's pattern node, or the R1's plain blue LED. Cheap to call repeatedly:
+// it only writes when the state changes.
+static void render_state(led_state_t state) {
+	if ((int)state == current_state) {
+		return;
+	}
+	if (direct_mode) {
+		led_render_t t;
+		build_render(state, &t);
+		led_post(&t);
+	} else if (have_pattern_node) {
+		char buf[16];
+		snprintf(buf, sizeof(buf), "%d", state_pattern(state));
+		write_str(PATTERN_NODE, buf);
+	} else if (have_blue_node) {
+		// On the R1 the pattern only decides whether the blue LED is lit: off
+		// and the charging red leave it dark, every colour becomes blue.
+		bool blue = state != LS_OFF && state != LS_CHARGING;
+		write_str(BLUE_BRIGHTNESS_NODE, blue ? BLUE_ON : "0");
+	} else {
+		return;
+	}
+	current_state = state;
 }
 
 // When the "off in standby" countdown starts: the latest of the screen going
@@ -138,44 +511,44 @@ static void apply(void) {
 
 	// The separate red classdev: the R1's red LED. Breathing while a charge goes
 	// in, released otherwise. The R3 Pro II has no such node, and its charging
-	// red comes from the pattern below.
+	// red comes from the state below.
 	int want_red = charging_now ? 1 : 0;
 	if (have_red_node && want_red != red_trigger_state) {
 		red_trigger_state = want_red;
 		write_str(RED_TRIGGER_NODE, charging_now ? "breathing" : "none");
 	}
 
-	int pattern;
+	led_state_t state;
 	if (!s_led_enabled) {
-		// The master switch is off: the LED stays dark, except that a charge
-		// in progress still shows -- a device that looks dead while it is
-		// charging is worse than a lit LED.
-		set_pattern(charging_now ? PATTERN_CHARGING_RED : PATTERN_OFF);
-		return;
-	}
-	if (s_playing && s_rate > 0) {
-		// Playback always shows its colour (red while actually charging, the
-		// stock priority). A podcast has its own colour, purple, whatever the
-		// sample rate: it says what is being listened to, not how it is sampled.
-		pattern = charging_now ? PATTERN_CHARGING_RED
-				  : s_podcast  ? PATTERN_PODCAST_PURPLE
-				  : s_dsd	   ? PATTERN_DSD_WHITE
-							   : rate_pattern(s_rate);
+		// The master switch is off: the LED stays dark, except that a charge in
+		// progress still shows -- a device that looks dead while it is charging
+		// is worse than a lit LED.
+		state = charging_now ? LS_CHARGING : LS_OFF;
+	} else if (charging_now) {
+		// Charging wins over everything, the stock priority: the red breathes
+		// while a charge goes in.
+		state = LS_CHARGING;
+	} else if (s_on_charger) {
+		// A cable is supplying and the charge is done -- full, or held at the
+		// configured limit. Green says so, and like the red it is never darkened
+		// by the standby option: a player left plugged in overnight stays lit.
+		state = LS_CHARGED;
+	} else if (s_playing && s_rate > 0) {
+		// Playback always shows its colour. A podcast has its own colour, purple,
+		// whatever the sample rate: it says what is being listened to, not how it
+		// is sampled.
+		state = s_podcast ? LS_PODCAST : s_dsd ? LS_DSD : rate_state(s_rate);
 	} else if (s_dac_streaming && s_dac_rate > 0) {
 		// In DAC mode nothing plays through audio.c, so s_playing is false and
 		// the LED went dark twenty seconds after the screen did -- with the
 		// computer still sending music. The rate the host chose gets the same
 		// colour a local track of that rate would.
-		pattern = charging_now ? PATTERN_CHARGING_RED : rate_pattern(s_dac_rate);
-	} else if (charging_now) {
-		// Never darkened by the standby option: a charge in progress stays
-		// visible.
-		pattern = PATTERN_CHARGING_RED;
+		state = rate_state(s_dac_rate);
 	} else if (s_wifi_transfer) {
-		// A Wi-Fi transfer is running: its pattern stays lit even with the
-		// screen off, since it is the only sign the server is running, and it
+		// A Wi-Fi transfer is running: its light stays lit even with the screen
+		// off, since it is the only sign the server is running, and it
 		// deliberately overrides the off-in-standby option.
-		pattern = PATTERN_WIFI_TRANSFER;
+		state = LS_WIFI;
 	} else if (s_bt_receiver) {
 		// Bluetooth receiver mode, lit whether or not the sender is sending
 		// right now: the mode is what the LED reports, the way the transfer
@@ -183,35 +556,31 @@ static void apply(void) {
 		// branch at the top never fires and without this one the LED went dark
 		// twenty seconds after the screen did -- with music still coming out of
 		// the jack.
-		pattern = PATTERN_BT_RECEIVER;
+		state = LS_BT;
 	} else if (s_dac_active) {
 		// The mode is up but the computer is not sending anything yet. Same
 		// argument as the transfer above: with the screen dark the LED is the
 		// only sign the player is a sound card, so the standby option does not
 		// reach it.
-		pattern = PATTERN_IDLE_AQUA;
-	} else if (s_idle_off_enabled && !s_on_charger && s_standby &&
-			   time(NULL) - idle_window_start() >= IDLE_OFF_SECONDS) {
+		state = LS_IDLE;
+	} else if (s_idle_off_enabled && s_standby && time(NULL) - idle_window_start() >= IDLE_OFF_SECONDS) {
 		// LED off in standby: the screen has been off this long with nothing
-		// playing and nothing else going on. The window runs from whichever
-		// came last -- the screen going dark, playback stopping, the cable
-		// going in or out. Counted from the screen alone, a track paused with
-		// the screen already off would find the window long since elapsed and
-		// put the LED out the instant the music stopped, with no aqua in
-		// between. With the screen on the aqua stays: the device is visibly in
-		// use.
+		// playing and nothing else going on. The window runs from whichever came
+		// last -- the screen going dark, playback stopping, the cable going in or
+		// out. Counted from the screen alone, a track paused with the screen
+		// already off would find the window long since elapsed and put the LED
+		// out the instant the music stopped, with no aqua in between. With the
+		// screen on the aqua stays: the device is visibly in use.
 		//
-		// And not on the charger at all, which is the point of s_on_charger: a
-		// battery that reaches 100%, or its configured limit, has nothing left
-		// to say in red, and a player left plugged in overnight would answer
-		// the end of its charge by going dark. On a cable the LED keeps the
-		// aqua that says the device is there -- the same exemption the transfer
-		// server, the receiver and DAC mode have above.
-		pattern = PATTERN_OFF;
+		// A cable is handled above (LS_CHARGED), which is the point: a battery
+		// that reaches 100%, or its configured limit, has nothing left to say in
+		// red, and a player left plugged in overnight would otherwise answer the
+		// end of its charge by going dark.
+		state = LS_OFF;
 	} else {
-		pattern = PATTERN_IDLE_AQUA;
+		state = LS_IDLE;
 	}
-	set_pattern(pattern);
+	render_state(state);
 }
 
 void led_init(void) {
@@ -223,18 +592,38 @@ void led_init(void) {
 		return; // host build, or firmware without the LED module
 	}
 
-	fprintf(stderr, "led: pattern node %s, red trigger %s, blue %s\n", have_pattern_node ? "ok" : "missing",
+	// The switches and the two effect controls, as they were left, so the very
+	// first render already honours them.
+	s_led_enabled = config_get_bool("power", "led_on", true);
+	s_idle_off_enabled = config_get_bool("power", "led_off_standby", true);
+	s_brightness = (int)config_get_int("power", "led_brightness", BRIGHTNESS_DEFAULT);
+	s_transition_ms = (int)config_get_int("power", "led_transition_ms", TRANSITION_DEFAULT_MS);
+
+	// On the SGM31324 (the V1 and the R3 Pro II) take the controller over from
+	// the firmware driver and drive it directly -- that is what the fade-in
+	// below and the colour cross-fades need. The R1 has no such controller and
+	// keeps its pattern/blue path.
+	if (have_pattern_node) {
+		direct_mode = led_i2c_init();
+	}
+	if (direct_mode) {
+		start_worker();
+	}
+
+	fprintf(stderr, "led: %s, red trigger %s, blue %s\n",
+			direct_mode ? "direct i2c" : have_pattern_node ? "pattern node" : "missing",
 			have_red_node ? "ok" : "missing", have_blue_node ? "ok" : "missing");
 
 	s_last_playing = time(NULL); // the power-on colour holds for the first idle window
 
-	// Exactly the stock startup sequence: red trigger released, pattern 1 (blue
-	// on the R1).
+	// Exactly the stock startup sequence: red trigger released, then the idle
+	// colour. On the direct path the worker starts from black, so this first
+	// render is a fade-in.
 	if (have_red_node) {
 		write_str(RED_TRIGGER_NODE, "none");
 		red_trigger_state = 0;
 	}
-	set_pattern(PATTERN_IDLE_AQUA);
+	apply();
 }
 
 void led_set_charging(bool charging) {
@@ -315,3 +704,66 @@ void led_set_standby(bool standby) {
 	apply();
 }
 
+void led_set_brightness(int brightness) {
+	if (brightness < BRIGHTNESS_MIN) {
+		brightness = BRIGHTNESS_MIN;
+	}
+	if (brightness > BRIGHTNESS_MAX) {
+		brightness = BRIGHTNESS_MAX;
+	}
+	if (brightness == s_brightness) {
+		return;
+	}
+	s_brightness = brightness;
+	if (direct_mode) {
+		current_state = -1; // force a re-render at the new level
+		apply();
+	}
+}
+
+void led_set_transition_ms(int ms) {
+	if (ms < TRANSITION_MIN_MS) {
+		ms = TRANSITION_MIN_MS;
+	}
+	if (ms > TRANSITION_MAX_MS) {
+		ms = TRANSITION_MAX_MS;
+	}
+	s_transition_ms = ms;
+}
+
+bool led_effects_available(void) {
+	// The direct path is available once we own the controller, or -- before
+	// led_init() has run -- while the driver still exposes its pattern node.
+	// The R1 has neither.
+	return direct_mode || access(PATTERN_NODE, F_OK) == 0;
+}
+
+// Posts a fade to black and waits for it to play. Shared by the power-off and
+// the suspend paths, both of which want the light gone before the power does.
+static void fade_out_and_wait(void) {
+	if (!direct_mode) {
+		return;
+	}
+	led_render_t t;
+	memset(&t, 0, sizeof(t));
+	t.mode = LM_OFF;
+	t.transition_ms = s_transition_ms;
+	led_post(&t);
+	struct timespec ts = {0, (long)s_transition_ms * 1000000L};
+	nanosleep(&ts, NULL);
+}
+
+void led_shutdown(void) { fade_out_and_wait(); }
+
+void led_suspend(void) { fade_out_and_wait(); }
+
+void led_resume(void) {
+	// The light was faded out for the sleep; bring the current state back, as a
+	// fade-in from black. Forcing the render is what does it -- the state itself
+	// has not changed, so render_state() would otherwise skip it.
+	if (!direct_mode) {
+		return;
+	}
+	current_state = -1;
+	apply();
+}

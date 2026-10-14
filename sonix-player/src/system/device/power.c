@@ -1082,6 +1082,9 @@ void power_shutdown(void) {
 	// its unused socket while its amplifier is still powered, avoiding a pop in
 	// the connected headphones during shutdown.
 	power_screen_off();
+	// And the status LED, faded out rather than cut: the screen is already dark,
+	// so this is the last thing the device says on its way down.
+	led_shutdown();
 	if (!audio_prepare_poweroff()) {
 		fprintf(stderr, "power: audio did not quiesce completely before shutdown\n");
 	}
@@ -1189,6 +1192,9 @@ static void suspend_to_ram(void) {
 		audio_force_output_reinit_after_resume();
 		return;
 	}
+	// The status LED faded out before the sleep, so the light is gone with the
+	// screen and comes back with it (led_resume below).
+	led_suspend();
 	fputs("mem", f);
 	int rc = fclose(f);
 	int write_errno = errno;
@@ -1203,6 +1209,9 @@ static void suspend_to_ram(void) {
 	// record that the suspend itself succeeded.
 	printf("power: mem: awake after %u s (fclose=%d)\n", slept_s, rc);
 	fflush(stdout);
+
+	// And the LED back, as a fade-in from the dark it was left in.
+	led_resume();
 
 	// There is no "one suspend per dark-screen spell" rule: the countdown simply
 	// starts again, like any other countdown, and the instant-wake counter below
