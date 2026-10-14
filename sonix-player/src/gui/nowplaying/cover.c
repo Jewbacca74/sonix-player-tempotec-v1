@@ -39,12 +39,15 @@
 static bool backdrop_light;
 static bool backdrop_upright;
 static bool backdrop_from_bottom;
+static int backdrop_band_pct;
 
 void cover_set_backdrop_light(bool light) { backdrop_light = light; }
 
 void cover_set_backdrop_upright(bool upright) { backdrop_upright = upright; }
 
 void cover_set_backdrop_from_bottom(bool from_bottom) { backdrop_from_bottom = from_bottom; }
+
+void cover_set_backdrop_band_brightness(int pct) { backdrop_band_pct = pct; }
 
 // ---------------------------------------------------------------------------
 // raw (decoded, RGB888) images
@@ -789,12 +792,19 @@ static bool make_backdrop(const raw_image_t *src, int box_w, int box_h, bool fro
 		return false;
 
 	// Push the backdrop away from the text colour: whatever the cover happens to
-	// be, the title has to stay readable on top of it.
+	// be, the title has to stay readable on top of it. A band that frosts the
+	// picture rather than standing in for its reflection keeps more of its own
+	// light -- it is looked through, not at -- so it takes its own percentage
+	// when the caller set one (see cover_set_backdrop_band_brightness).
+	int pct = BACKDROP_BRIGHTNESS_PCT;
+	if (from_bottom && over_h > 0 && backdrop_band_pct > 0) {
+		pct = backdrop_band_pct;
+	}
 	for (int i = 0; i < box_w * box_h * 3; i++) {
 		if (backdrop_light) {
-			rgb[i] = (uint8_t)(255 - ((255 - rgb[i]) * BACKDROP_BRIGHTNESS_PCT) / 100);
+			rgb[i] = (uint8_t)(255 - ((255 - rgb[i]) * pct) / 100);
 		} else {
-			rgb[i] = (uint8_t)((rgb[i] * BACKDROP_BRIGHTNESS_PCT) / 100);
+			rgb[i] = (uint8_t)((rgb[i] * pct) / 100);
 		}
 	}
 

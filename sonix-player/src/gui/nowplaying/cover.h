@@ -132,6 +132,13 @@ void cover_set_backdrop_upright(bool upright);
 // backdrop is built.
 void cover_set_backdrop_from_bottom(bool from_bottom);
 
+// How much of its own light a frosted band keeps, in per cent, 100 being the
+// photograph untouched: a band is looked through rather than at, so it wants
+// less of the push towards black than the blur a title is read on. Zero, the
+// default, means the ordinary backdrop treatment. Takes effect the next time
+// a band is built.
+void cover_set_backdrop_band_brightness(int pct);
+
 // ---------------------------------------------------------------------------
 // Browser thumbnails
 //

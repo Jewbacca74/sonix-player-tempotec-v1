@@ -349,10 +349,10 @@ static lv_obj_t *song_text_obj; // the title and artist, wherever they live now
 static lv_obj_t *song_side_obj; // the star and the format, likewise
 static void align_title_with_star(void);
 // Two pieces of the Immersive arrangement that other code asks for by name:
-// the block of controls made clear, and the two fades across the artwork, which
-// the artwork's own arrival turns on and off (cover_show).
+// the block of controls made clear, and the frosted band at the foot of the
+// screen, which follows the deck's rectangle, the artwork's arrival and the
+// words' page (immersive_blur_apply).
 static void immersive_deck_clear(void);
-static void immersive_fades(bool over_art);
 static void immersive_blur_apply(void);
 static lv_obj_t *alt_text_col;	// the two pills, stacked at the foot of the sleeve
 static lv_obj_t *alt_title_pill;
@@ -995,12 +995,6 @@ static void cover_show(bool have_cover) {
 	if (cover_art_group && backdrop_full) {
 		lv_obj_set_style_bg_opa(cover_art_group, !have_cover && !studio ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
 	}
-
-	// Immersive's two fades are what keeps the chrome readable ON a picture.
-	// With no picture there is nothing to read through: the page shows its own
-	// colour whole, and the words and the glyphs sit on it in the theme's own
-	// ink, exactly as they do in the standard arrangement.
-	immersive_fades(have_cover && layout_immersive_now);
 }
 
 static void set_over_cover(bool on) {
@@ -1420,41 +1414,39 @@ static int menu_height;
 // them is the artwork, which reaches the bezel on all four sides with square
 // corners.
 //
-// One flat black scrim over the whole of it is the dressing: the picture stays
-// there to be looked at, and the chrome -- the chevron, the source marks, the
-// names, the bar, the clocks, the transport -- is read on top of it. Flat and
-// not a fade: bands of gradient across the screen were tried on the device and
-// each end of a ramp draws a line across the picture where its slope changes,
-// which is worse than the thing the ramps were there to fix. One alpha the
-// whole way up leaves nothing to see but the photograph.
+// The photograph above the controls is left at its own brightness: it is there
+// to be looked at, and a veil over it is a veil over the thing the arrangement
+// exists for. What the chrome is read on is the frost alone -- the foot of the
+// picture, blurred and kept at most of its own light, asked for at the size of
+// the deck and cut out of the very crop the picture above it was made from, so
+// its colours continue the photograph and the artwork is seen through it,
+// softly. The band is frosted glass rather than a panel: the names, the bar,
+// the clocks and the transport stand on the picture itself, softened, and the
+// chevron and the source marks take their chance over the sharp part of it in
+// white, as they do over every sleeve in this player. A flat black scrim over
+// the whole screen was the first dressing here, and gradients were tried
+// before it -- a ramp's ends are a step in the alpha's slope, and on this panel
+// each of them draws a visible line across the photograph -- but both are
+// darkening a picture that the deck's frost already carries the chrome on.
 //
-// It is a child of the artwork's own frame rather than of the page, for two
-// reasons: the source marks are children of that frame and are brought to the
-// front of it when they appear, so they keep their own colour over the scrim
-// instead of being darkened with the picture; and the frame is what the words'
-// page slides out from under, so the scrim travels with the sleeve rather than
-// staying behind to darken the page it uncovers.
-//
-// Under the controls the scrim is not what the chrome stands on: the foot of
-// the photograph is there, blurred and dimmed the way every other blurred copy
-// in this player is, asked for at the size of the deck and cut out of the very
-// crop the picture above it was made from. The band is frosted glass rather
-// than a panel: the artwork stays where it is and is seen through it, softly,
-// which is what keeps the foot of the screen a photograph while the names, the
-// bar, the clocks and the transport are read on top of it. It is a child of
-// the artwork's frame too, built after the scrim, so it stands over the scrim
-// and under the deck -- and under the words' page, which is a later child of
-// the panel and slides over it. Where the band meets the sharp picture above
-// it is the one edge on the screen, and it is the edge of the frost.
+// The frost is a child of the artwork's own frame rather than of the page, for
+// two reasons: the source marks are children of that frame and are brought to
+// the front of it when they appear, so they keep their own colour over the
+// band instead of being blurred with the picture; and the frame is what the
+// words' page slides out from under, so the frost travels with the sleeve
+// rather than staying behind to fog the page it uncovers. Where the band meets
+// the sharp picture above it is the one edge on the screen, and it is the edge
+// of the frost.
 // ---------------------------------------------------------------------------
 
-// How much of the picture the scrim takes out. The whole screen is a large
-// area of flat black to put over a photograph, and this is the most that still
-// leaves it a photograph: at half, a pale sleeve still reads as one and the
-// white names, the bar and the transport are legible on it.
-#define IMMERSIVE_SCRIM_OPA 128
+// How much of its own light the frost keeps, in per cent of the photograph.
+// The blur alone takes the detail out of what stands under the white names and
+// clocks; what the dimming is for is the pale sleeve, where a blurred white is
+// still a white to read white on. This is the most that still leaves the band
+// a window rather than a panel: the colours come through at most of their
+// strength, as they do in the look this arrangement follows.
+#define IMMERSIVE_FROST_PCT 70
 
-static lv_obj_t *immersive_scrim;
 static lv_obj_t *immersive_blur; // the frosted foot the deck stands on
 static bool immersive_up;
 // Where the controls' block sat among the page's children before this
@@ -2755,23 +2747,14 @@ static void immersive_deck_clear(void) {
 	lv_obj_set_style_bg_image_opa(player_menu, LV_OPA_TRANSP, 0);
 }
 
-// Up or down, the one scrim. It is only there for a picture: over one, the
-// chrome is the light chrome the page already turns on over artwork, and over
-// none it is the theme's own, on the page's own colour.
-static void immersive_fades(bool over_art) {
-	if (!immersive_scrim) {
-		return;
-	}
-	lv_obj_set_hidden(immersive_scrim, !over_art);
-}
-
 // The frosted foot of the arrangement, up or down: the blurred band the worker
 // made for the deck's own rectangle, shown at exactly that rectangle -- the
-// foot of the screen -- over the scrim and under the controls. It wants three
-// things at once to be there: the arrangement in force, a band-shaped blur on
-// hand, and no words' page up over it (the words bring Studio's own blur and
-// the two would be two frosts on one screen). Anything less and the scrim
-// alone is what the chrome stands on, as it was before the band landed.
+// foot of the screen -- over the picture and under the controls. It wants
+// three things at once to be there: the arrangement in force, a band-shaped
+// blur on hand, and no words' page up over it (the words bring Studio's own
+// blur and the two would be two frosts on one screen). Anything less and the
+// chrome stands on the sharp picture itself, or on the page's own colour when
+// there is no picture at all.
 static void immersive_blur_apply(void) {
 	if (!immersive_blur) {
 		return;
@@ -2789,9 +2772,9 @@ static void immersive_blur_apply(void) {
 	}
 }
 
-// The sleeve over the whole screen, with the controls on the scrim over it.
+// The sleeve over the whole screen, with the controls on the frost over it.
 static void immersive_put(void) {
-	if (!immersive_scrim || !cover_art_group) {
+	if (!cover_art_group) {
 		return;
 	}
 	int screen_w = (int)lv_obj_get_width(player_screen);
@@ -2838,9 +2821,7 @@ static void immersive_put(void) {
 	// down until the worker brings one.
 	immersive_blur_apply();
 
-	// The picture or the note, and -- in cover_show(), which is the one place
-	// that knows either way -- the two fades, which are only there for a
-	// picture.
+	// The picture or the note: cover_show() is the one place that knows which.
 	cover_show(current_cover.pixels != NULL);
 	lyrics_layout(); // the words' page is measured against this one
 }
@@ -2855,11 +2836,8 @@ static bool immersive_take_back(void) {
 	}
 	immersive_up = false;
 
-	if (immersive_scrim) {
-		lv_obj_set_hidden(immersive_scrim, true);
-	}
-	// The frost goes with the scrim: what stands behind the controls from here
-	// is whichever blur the arrangement now in force asked for.
+	// The frost goes too: what stands behind the controls from here is
+	// whichever blur the arrangement now in force asked for.
 	immersive_blur_apply();
 
 	// The sleeve's own corners: where it sits and how big it is belong to the
@@ -5228,6 +5206,9 @@ void player_init(gui_config_t *cfg) {
 		overflow_color = theme_player_chrome_color(THEME_PLAYER_CHROME_OVERFLOW);
 	}
 	backdrop_full = compact;
+	// The frost Immersive puts under its deck keeps more of the photograph's
+	// light than the blur a title is read on elsewhere: it is looked through.
+	cover_set_backdrop_band_brightness(IMMERSIVE_FROST_PCT);
 	// The side inset every row of the deck is laid out at, and the width of a
 	// row that follows from it. Outside the V1 that is the panel's own padding,
 	// and the bar takes the row whole.
@@ -5813,32 +5794,14 @@ void player_init(gui_config_t *cfg) {
 	lv_obj_center(cover_img);
 	lv_obj_set_hidden(cover_img, true);
 
-	// Immersive's scrim: one flat black over the picture, at a fixed alpha, the
-	// whole screen of it. Built here rather than inside that arrangement because
-	// it is the page's own furniture -- created once, and shown only while that
-	// arrangement is up over a picture (cover_show).
-	//
-	// A child of the artwork's frame and not of the panel, so that it is drawn
-	// over the picture and under the source marks, which are brought to the
-	// front of this same frame when they appear. Its size is the frame's, which
-	// the arrangement below sets to the screen: nothing has to be placed when
-	// the deck's height changes, because nothing about it depends on the deck.
-	immersive_scrim = lv_obj_create(cover_art_group);
-	lv_obj_remove_style_all(immersive_scrim);
-	lv_obj_set_size(immersive_scrim, lv_pct(100), lv_pct(100));
-	lv_obj_set_pos(immersive_scrim, 0, 0);
-	lv_obj_set_style_bg_color(immersive_scrim, lv_color_black(), 0);
-	lv_obj_set_style_bg_opa(immersive_scrim, IMMERSIVE_SCRIM_OPA, 0);
-	lv_obj_set_scrollable(immersive_scrim, false);
-	lv_obj_set_clickable(immersive_scrim, false);
-	lv_obj_set_hidden(immersive_scrim, true);
-
 	// Immersive's frosted foot: the image object the blurred band lands in,
-	// parked at the foot of the artwork's frame at the size of the deck. Built
-	// after the scrim, so over it; before the words' page -- a child of the
-	// panel, made below -- so under that. COVER and not STRETCH: between the
-	// change of arrangement and the band that follows it, the picture on hand
-	// is still the old shape, and stretching that is a visibly squashed sleeve.
+	// parked at the foot of the artwork's frame at the size of the deck. A
+	// child of the frame, so drawn over the picture and under the source marks,
+	// which are brought to the front of this same frame when they appear; and
+	// made before the words' page -- a child of the panel, below -- so under
+	// that. COVER and not STRETCH: between the change of arrangement and the
+	// band that follows it, the picture on hand is still the old shape, and
+	// stretching that is a visibly squashed sleeve.
 	immersive_blur = lv_image_create(cover_art_group);
 	lv_obj_set_size(immersive_blur, cover_box_w, menu_height);
 	lv_obj_align(immersive_blur, LV_ALIGN_BOTTOM_MID, 0, 0);
