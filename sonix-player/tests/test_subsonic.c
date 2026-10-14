@@ -4,6 +4,7 @@
 #include "src/system/core/config.h"
 #include "src/system/core/json.h"
 #include "src/system/net/http.h"
+#include "src/system/net/tls.h"
 #include "src/system/playback/playlist.h"
 
 #include <assert.h>
@@ -178,6 +179,73 @@ static void test_client(const char *directory) {
 	assert(rmdir(saved_path) == 0);
 	assert(subsonic_configure(&c, false, error, sizeof(error)));
 	puts("PASS REST/authentication/URL encoding/JSON browsing/pagination/credential permissions");
+}
+
+// The three HTTPS servers the harness starts with the certificates in
+// tls_fixtures.py: one self-signed and correctly named, one naming another
+// server, one expired. What a home Subsonic server presents, and the two
+// things that must stay refusals even when the chain requirement is lowered.
+static void test_tls(const char *good, const char *wrong_name, const char *expired) {
+	// tls_available() is also the loading: when this host has no OpenSSL at all
+	// there is nothing to test and the player refuses every https:// URL, which
+	// is itself the documented behaviour. Say so rather than pass quietly.
+	(void)tls_available();
+	if (!tls_version() || !tls_version()[0]) {
+		puts("SKIP TLS: this host has no loadable OpenSSL; every https:// is refused here");
+		return;
+	}
+
+	char url[512], *body = NULL;
+	size_t length = 0;
+	const char *reason;
+
+	// The shipped default: a certificate from no authority the bundle knows is
+	// refused, and the caller is told why.
+	tls_set_verify_mode(TLS_VERIFY_STRICT);
+	assert(tls_verify_mode() == TLS_VERIFY_STRICT);
+	snprintf(url, sizeof(url), "%s/pattern?length=64&seed=3", good);
+	assert(!http_get(url, &body, &length, 4096, 10));
+	reason = http_last_error();
+	assert(reason && strncmp(reason, "tls_", 4) == 0); // the certificate, not the network
+	assert(body == NULL);
+
+	// Relaxed, which is what the switch writes: the same server now connects.
+	tls_set_verify_mode(TLS_VERIFY_RELAXED);
+	assert(tls_verify_mode() == TLS_VERIFY_RELAXED);
+	assert(http_get(url, &body, &length, 4096, 10));
+	assert(length == 64);
+	check_pattern((const unsigned char *)body, length, 0, 3); // the body came from this server
+	free(body);
+	body = NULL;
+
+	// And only the chain is forgiven. A certificate issued to another name, and
+	// one whose dates do not cover now, fail exactly as they do in strict mode.
+	snprintf(url, sizeof(url), "%s/pattern?length=64&seed=3", wrong_name);
+	assert(!http_get(url, &body, &length, 4096, 10));
+	assert(strcmp(http_last_error(), "tls_cert_name_mismatch") == 0);
+	snprintf(url, sizeof(url), "%s/pattern?length=64&seed=3", expired);
+	assert(!http_get(url, &body, &length, 4096, 10));
+	assert(strcmp(http_last_error(), "tls_cert_expired") == 0);
+
+	// A connection already open keeps working when the setting changes under it:
+	// the shared context is rebuilt, and this stream holds its own reference to
+	// the one it was opened with.
+	snprintf(url, sizeof(url), "%s/pattern?length=64&seed=3", good);
+	tls_set_verify_mode(TLS_VERIFY_RELAXED);
+	http_stream_t stream;
+	assert(http_stream_open(&stream, url, 10));
+	tls_set_verify_mode(TLS_VERIFY_STRICT);
+	assert(tls_verify_mode() == TLS_VERIFY_STRICT);
+	char buffer[64];
+	int n = http_stream_read(&stream, buffer, sizeof(buffer));
+	assert(n > 0);
+	check_pattern((const unsigned char *)buffer, (size_t)n, 0, 3);
+	http_stream_close(&stream);
+
+	// Where the next boot reads it from: the switch is not a memory-only setting.
+	assert(strcmp(config_get("network", "tls_verify", ""), "strict") == 0);
+	puts("PASS TLS: strict refuses a self-signed certificate, relaxed accepts it, "
+		 "name/date failures stay failures and a live stream survives the switch");
 }
 
 static void test_json_exact(void) {
@@ -547,7 +615,9 @@ static void test_leases(void) {
 
 int main(int argc, char **argv) {
 	setvbuf(stdout, NULL, _IONBF, 0);
-	assert(argc == 3);
+	// http base, config directory, then the three HTTPS servers the harness
+	// starts: self-signed, wrong name, expired.
+	assert(argc == 6);
 	signal(SIGPIPE, SIG_IGN); // TLS/socket code, same as the application
 	assert(strlen(argv[1]) < sizeof(base));
 	strcpy(base, argv[1]);
@@ -558,6 +628,7 @@ int main(int argc, char **argv) {
 	json_free(&doc);
 	test_json_exact();
 	test_client(argv[2]);
+	test_tls(argv[3], argv[4], argv[5]);
 	test_ring();
 	test_header_race();
 	test_transfer_edges();

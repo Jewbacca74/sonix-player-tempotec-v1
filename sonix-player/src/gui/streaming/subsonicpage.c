@@ -12,6 +12,7 @@
 #include "src/system/audio/audio.h"
 #include "src/system/core/lang.h"
 #include "src/system/core/utils.h"
+#include "src/system/net/tls.h"
 #include "src/system/playback/device_state.h"
 #include "src/system/playback/playlist.h"
 #include "src/system/streaming/streamturn.h"
@@ -26,7 +27,7 @@
 
 lv_obj_t *subsonic_screen;
 static lv_obj_t *settings_screen, *edit_screen, *list_screen;
-static lv_obj_t *list_container, *list_title, *server_value, *user_value, *remember_switch;
+static lv_obj_t *list_container, *list_title, *server_value, *user_value, *remember_switch, *relaxed_switch;
 static lv_obj_t *edit_field, *edit_title, *format_pills[3], *bitrate_pills[2];
 static keyboard_t *keyboard;
 static gui_config_t *config;
@@ -217,6 +218,14 @@ static void settings_refresh(void) {
 	} else {
 		lv_obj_remove_state(remember_switch, LV_STATE_CHECKED);
 	}
+	// Read back rather than remembered here: the setting is [network]
+	// tls_verify, which the developer options or an edited config file can also
+	// have changed, and the switch has to agree with what is in force.
+	if (tls_verify_mode() == TLS_VERIFY_RELAXED) {
+		lv_obj_add_state(relaxed_switch, LV_STATE_CHECKED);
+	} else {
+		lv_obj_remove_state(relaxed_switch, LV_STATE_CHECKED);
+	}
 	quality_refresh();
 }
 
@@ -246,6 +255,17 @@ static void bitrate_cb(lv_event_t *e) {
 
 static void remember_cb(lv_event_t *e) {
 	draft_remember = lv_obj_has_state(lv_event_get_target(e), LV_STATE_CHECKED);
+}
+
+// The certificate switch is the one control on this page that is not about this
+// server: it is [network] tls_verify, which every https:// the player opens
+// reads, radio stations included. Written and applied at once -- the reason
+// somebody is looking at it is a connection that just failed with a certificate
+// error, and a setting that only worked after a restart would be of no use.
+static void certificates_cb(lv_event_t *e) {
+	(void)e;
+	bool relaxed = lv_obj_has_state(relaxed_switch, LV_STATE_CHECKED);
+	tls_set_verify_mode(relaxed ? TLS_VERIFY_RELAXED : TLS_VERIFY_STRICT);
 }
 
 static void edit_cb(lv_event_t *e) {
@@ -552,6 +572,18 @@ static lv_obj_t *screen(void) {
 	return obj;
 }
 
+// A paragraph of explanation under the row it belongs to. Wraps, because a
+// translated note is longer than the panel is wide and an ellipsis would drop
+// the half that says what the setting does.
+static void add_note(lv_obj_t *container, const char *key) {
+	lv_obj_t *note = lv_label_create(container);
+	lv_obj_add_style(note, &theme_style_text_dim, 0);
+	lv_obj_set_style_text_font(note, &font_ui_18, 0);
+	lv_obj_set_width(note, lv_pct(100));
+	lv_label_set_long_mode(note, LV_LABEL_LONG_WRAP);
+	lv_label_set_text(note, tr(key));
+}
+
 static void build_settings(void) {
 	settings_screen = screen();
 	lv_obj_t *container = settingsrow_page(settings_screen, config, "subsonic_server_settings");
@@ -560,6 +592,10 @@ static void build_settings(void) {
 	settingsrow_add(container, "subsonic_username", &user_value, edit_cb, (void *)(intptr_t)1);
 	settingsrow_add(container, "password", NULL, edit_cb, (void *)(intptr_t)2);
 	settingsrow_toggle(container, "subsonic_remember", &remember_switch, remember_cb);
+	// Straight under the account, because it is what a self-hosted server needs
+	// before any of the above can work over https://.
+	settingsrow_toggle(container, "subsonic_allow_self_signed", &relaxed_switch, certificates_cb);
+	add_note(container, "subsonic_allow_self_signed_note");
 	row = settingsrow_action(container, "subsonic_connect_save", connect_cb, NULL);
 	settingsrow_add_icon(row, &icon_check, THEME_SEMANTIC_GREEN);
 	lv_obj_t *pills;
@@ -572,12 +608,7 @@ static void build_settings(void) {
 	bitrate_pills[1] = settingsrow_pill_text(pills, "320", 320, bitrate_cb);
 	row = settingsrow_action(container, "subsonic_forget_server", forget_cb, NULL);
 	settingsrow_add_icon(row, &icon_log_out, THEME_SEMANTIC_RED);
-	lv_obj_t *note = lv_label_create(container);
-	lv_obj_add_style(note, &theme_style_text_dim, 0);
-	lv_obj_set_style_text_font(note, &font_ui_18, 0);
-	lv_obj_set_width(note, lv_pct(100));
-	lv_label_set_long_mode(note, LV_LABEL_LONG_WRAP);
-	lv_label_set_text(note, tr("subsonic_settings_note"));
+	add_note(container, "subsonic_settings_note");
 	player_sheet_attach_drag(container, true);
 
 	edit_screen = screen();

@@ -14,7 +14,7 @@
 // build host, and it has a second virtue: a device whose rootfs lacks them
 // still runs the player, it just cannot open an https:// station and says so.
 //
-// Verification is not optional: the certificate chain is checked against a CA
+// Verification is on by default: the certificate chain is checked against a CA
 // bundle and the hostname against the certificate. A TLS connection that
 // checks neither is a slower plain socket with a false sense of security, and
 // the radio directory supplies URLs from strangers.
@@ -32,9 +32,16 @@
 // The bundle to use is Mozilla's, which is what a browser trusts. curl
 // publishes it, extracted from Firefox's own store, at
 // https://curl.se/ca/cacert.pem.
+//
+// [network] tls_verify lowers the chain requirement for a server the user owns
+// -- a Subsonic/Gonic box with a self-signed certificate, which no bundle can
+// ever validate. See tls_verify_t below for exactly how far it goes.
 
 // True when libssl and libcrypto were found and every symbol resolved. Cheap
-// to call repeatedly; the loading happens once.
+// to call repeatedly; the loading happens once. In strict mode this also means
+// a CA bundle was found: without one there is nothing to verify against, and
+// refusing is the honest answer. In relaxed mode a bundle is optional, because
+// the certificates that mode is for have no anchor to find.
 bool tls_available(void);
 
 // What OpenSSL says it is, for the log. Empty when unavailable.
@@ -49,6 +56,39 @@ const char *tls_ca_source(void);
 // startup, before the first connection. NULL or unset simply drops that entry
 // from the search.
 void tls_set_card_root(const char *sd_root);
+
+// How much of a server's certificate is demanded. One setting, two values,
+// [network] tls_verify in device_config.ini:
+//
+//   strict   (default, and what an absent setting means) the chain must end at
+//            a trust anchor from the CA bundle, the certificate must name the
+//            host from the URL, and its validity dates must cover now.
+//
+//   relaxed  a self-signed certificate, or one whose issuer is not in the
+//            bundle, is accepted instead of failing the handshake. The name and
+//            the dates are still enforced, so an expired certificate and a
+//            certificate for a different server are refused exactly as in
+//            strict mode.
+//
+// Relaxed is what makes a home server with its own certificate reachable at
+// all. It is a deliberate weakening and applies to every https:// the player
+// opens, radio stations included -- the same bundle and the same context serve
+// them all -- so it is off unless the user turns it on, from the switch on
+// Streaming > Subsonic > Server settings or by editing the file.
+typedef enum {
+	TLS_VERIFY_STRICT = 0,
+	TLS_VERIFY_RELAXED = 1,
+} tls_verify_t;
+
+// The mode configured right now. Cheap: one lookup in the settings already in
+// memory, so callers read it per connection rather than caching it.
+tls_verify_t tls_verify_mode(void);
+
+// Writes the mode to device_config.ini and re-applies it, so the very next
+// connection uses it. Connections already open are left alone (they hold their
+// own reference to the context they started with) and finish under the rules
+// they were opened with.
+void tls_set_verify_mode(tls_verify_t mode);
 
 typedef struct tls_conn tls_conn_t;
 

@@ -81,7 +81,10 @@ static void canceled_open(void) {
 
 int main(int argc, char **argv) {
 	setvbuf(stdout, NULL, _IONBF, 0);
-	assert(argc == 3);
+	// The same arguments as the core suite: the HTTPS servers after them are
+	// for the certificate cases, which have nothing to decode and live in
+	// test_subsonic.c.
+	assert(argc == 6);
 	signal(SIGPIPE, SIG_IGN);
 	streambridge_set_reader_abort(never_abort);
 	char path[1024];
