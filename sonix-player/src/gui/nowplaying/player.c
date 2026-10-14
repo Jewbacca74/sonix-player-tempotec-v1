@@ -353,6 +353,7 @@ static void align_title_with_star(void);
 // the artwork's own arrival turns on and off (cover_show).
 static void immersive_deck_clear(void);
 static void immersive_fades(bool over_art);
+static void immersive_blur_apply(void);
 static lv_obj_t *alt_text_col;	// the two pills, stacked at the foot of the sleeve
 static lv_obj_t *alt_title_pill;
 static lv_obj_t *alt_artist_pill;
@@ -391,6 +392,13 @@ static lv_style_t compact_clear_style; // the two surfaces the full blur shows t
 // has between the deck's shape and the screen's. `cover_shape_immersive` says
 // which of the two the picture on hand was asked for at.
 static bool cover_shape_immersive;
+
+// Immersive asks for the blurred copy as the FOOT of the photograph, at the
+// size of the deck, rather than as the whole screen: it stands over the part
+// of the picture it frosts, so the artwork stays there to be seen through it
+// instead of under a second, screen-sized blur. `backdrop_is_band` is the
+// shape the picture on hand was made at, as the two above are.
+static bool backdrop_is_band;
 
 static bool backdrop_fills_screen(void) { return layout_studio_now || backdrop_full; }
 
@@ -1426,6 +1434,18 @@ static int menu_height;
 // instead of being darkened with the picture; and the frame is what the words'
 // page slides out from under, so the scrim travels with the sleeve rather than
 // staying behind to darken the page it uncovers.
+//
+// Under the controls the scrim is not what the chrome stands on: the foot of
+// the photograph is there, blurred and dimmed the way every other blurred copy
+// in this player is, asked for at the size of the deck and cut out of the very
+// crop the picture above it was made from. The band is frosted glass rather
+// than a panel: the artwork stays where it is and is seen through it, softly,
+// which is what keeps the foot of the screen a photograph while the names, the
+// bar, the clocks and the transport are read on top of it. It is a child of
+// the artwork's frame too, built after the scrim, so it stands over the scrim
+// and under the deck -- and under the words' page, which is a later child of
+// the panel and slides over it. Where the band meets the sharp picture above
+// it is the one edge on the screen, and it is the edge of the frost.
 // ---------------------------------------------------------------------------
 
 // How much of the picture the scrim takes out. The whole screen is a large
@@ -1435,6 +1455,7 @@ static int menu_height;
 #define IMMERSIVE_SCRIM_OPA 128
 
 static lv_obj_t *immersive_scrim;
+static lv_obj_t *immersive_blur; // the frosted foot the deck stands on
 static bool immersive_up;
 // Where the controls' block sat among the page's children before this
 // arrangement lifted it to the front, so putting it down again is putting it
@@ -1838,6 +1859,9 @@ static void lyrics_look(bool on) {
 	lyrics_look_on = on;
 	// The V1 had the same blur up before the words came, and wants it back.
 	full_backdrop_apply();
+	// Immersive's frost likewise: down while the words' own blur is up, back
+	// at the foot of the picture when they go.
+	immersive_blur_apply();
 	// The words are white over a blurred sleeve, and in the theme's own
 	// colour over the page's own background where there is no picture.
 	lv_color_t ink = lyrics_backdrop() ? lv_color_white() : theme()->text_primary;
@@ -2741,6 +2765,30 @@ static void immersive_fades(bool over_art) {
 	lv_obj_set_hidden(immersive_scrim, !over_art);
 }
 
+// The frosted foot of the arrangement, up or down: the blurred band the worker
+// made for the deck's own rectangle, shown at exactly that rectangle -- the
+// foot of the screen -- over the scrim and under the controls. It wants three
+// things at once to be there: the arrangement in force, a band-shaped blur on
+// hand, and no words' page up over it (the words bring Studio's own blur and
+// the two would be two frosts on one screen). Anything less and the scrim
+// alone is what the chrome stands on, as it was before the band landed.
+static void immersive_blur_apply(void) {
+	if (!immersive_blur) {
+		return;
+	}
+	bool have = layout_immersive_now && !lyrics_look_on && backdrop_is_band && current_backdrop.pixels != NULL;
+	lv_image_set_src(immersive_blur, have ? &current_backdrop.dsc : NULL);
+	lv_obj_set_hidden(immersive_blur, !have);
+	if (have) {
+		// The deck's own rectangle: as wide as the page, as tall as the
+		// arrangement's rows, at the foot of the screen. Resized here rather
+		// than where the geometry moves, so a band on hand follows a deck that
+		// grew or shrank without waiting for the next track.
+		lv_obj_set_size(immersive_blur, cover_box_w, menu_height);
+		lv_obj_align(immersive_blur, LV_ALIGN_BOTTOM_MID, 0, 0);
+	}
+}
+
 // The sleeve over the whole screen, with the controls on the scrim over it.
 static void immersive_put(void) {
 	if (!immersive_scrim || !cover_art_group) {
@@ -2786,6 +2834,9 @@ static void immersive_put(void) {
 	if (player_menu) {
 		lv_obj_move_foreground(player_menu);
 	}
+	// The frosted foot, at the deck's new rectangle: up if a band is on hand,
+	// down until the worker brings one.
+	immersive_blur_apply();
 
 	// The picture or the note, and -- in cover_show(), which is the one place
 	// that knows either way -- the two fades, which are only there for a
@@ -2807,6 +2858,9 @@ static bool immersive_take_back(void) {
 	if (immersive_scrim) {
 		lv_obj_set_hidden(immersive_scrim, true);
 	}
+	// The frost goes with the scrim: what stands behind the controls from here
+	// is whichever blur the arrangement now in force asked for.
+	immersive_blur_apply();
 
 	// The sleeve's own corners: where it sits and how big it is belong to the
 	// geometry, which is asked for them again below.
@@ -3189,6 +3243,7 @@ static void reload_cover(const char *filepath) {
 	cover_free(&current_cover);
 	cover_free(&current_backdrop);
 	full_backdrop_apply(); // nothing to show behind the V1's page until the next one lands
+	immersive_blur_apply(); // and nothing for the frost to be made of, likewise
 
 	cover_show(false);
 	// Studio holds pointers to both of those, so it is told in the same breath:
@@ -3208,9 +3263,14 @@ static void reload_cover(const char *filepath) {
 
 	if (filepath && filepath[0]) {
 		backdrop_is_studio = layout_studio_now;
-		backdrop_is_full = backdrop_fills_screen();
+		backdrop_is_band = layout_immersive_now;
+		backdrop_is_full = backdrop_fills_screen() && !backdrop_is_band;
 		cover_shape_immersive = layout_immersive_now;
-		cover_set_backdrop_upright(backdrop_is_full);
+		// The band faces the way the picture does, like every blur that is
+		// looked at rather than looked through, and it is cut from the foot of
+		// the photograph -- the part of it the deck stands over.
+		cover_set_backdrop_upright(backdrop_is_full || backdrop_is_band);
+		cover_set_backdrop_from_bottom(backdrop_is_band);
 
 		// The sleeve is asked for at the size the arrangement in force will
 		// draw it. A picture that does not match its widget is resampled by
@@ -3338,7 +3398,12 @@ static void apply_cover_result(void) {
 		if (new_backdrop.pixels) {
 			current_backdrop = new_backdrop;
 			current_backdrop.dsc.data = current_backdrop.pixels;
-			if (backdrop_full) {
+			if (backdrop_is_band) {
+				// Immersive's frost: the band stands over the picture itself,
+				// at the foot of the screen under the deck, rather than behind
+				// a page or a block (immersive_blur_apply).
+				immersive_blur_apply();
+			} else if (backdrop_full) {
 				// The screen-sized copy goes behind the whole page; the deck
 				// is clear and shows it through (full_backdrop_apply).
 				full_backdrop_apply();
@@ -5123,6 +5188,8 @@ static void player_apply_geometry(bool force) {
 	if (layout_studio_now) {
 		studio_place();
 	}
+	// The frost follows the deck it stands under, which has just been measured.
+	immersive_blur_apply();
 }
 
 // Builds the player sheet: artwork, controls and the poll that drives them.
@@ -5765,6 +5832,19 @@ void player_init(gui_config_t *cfg) {
 	lv_obj_set_scrollable(immersive_scrim, false);
 	lv_obj_set_clickable(immersive_scrim, false);
 	lv_obj_set_hidden(immersive_scrim, true);
+
+	// Immersive's frosted foot: the image object the blurred band lands in,
+	// parked at the foot of the artwork's frame at the size of the deck. Built
+	// after the scrim, so over it; before the words' page -- a child of the
+	// panel, made below -- so under that. COVER and not STRETCH: between the
+	// change of arrangement and the band that follows it, the picture on hand
+	// is still the old shape, and stretching that is a visibly squashed sleeve.
+	immersive_blur = lv_image_create(cover_art_group);
+	lv_obj_set_size(immersive_blur, cover_box_w, menu_height);
+	lv_obj_align(immersive_blur, LV_ALIGN_BOTTOM_MID, 0, 0);
+	lv_image_set_inner_align(immersive_blur, LV_IMAGE_ALIGN_COVER);
+	lv_obj_set_clickable(immersive_blur, false);
+	lv_obj_set_hidden(immersive_blur, true);
 
 	// ---------------------------------------------------------------------
 	// Studio: the blurred sleeve behind the whole screen, and everything else

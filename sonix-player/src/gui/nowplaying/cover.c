@@ -38,10 +38,13 @@
 
 static bool backdrop_light;
 static bool backdrop_upright;
+static bool backdrop_from_bottom;
 
 void cover_set_backdrop_light(bool light) { backdrop_light = light; }
 
 void cover_set_backdrop_upright(bool upright) { backdrop_upright = upright; }
+
+void cover_set_backdrop_from_bottom(bool from_bottom) { backdrop_from_bottom = from_bottom; }
 
 // ---------------------------------------------------------------------------
 // raw (decoded, RGB888) images
@@ -717,16 +720,38 @@ static bool make_scaled(const raw_image_t *src, int box_w, int box_h, cover_fit_
 // Builds the upside-down, blurred, dimmed copy that sits behind the controls.
 // The blur is a shrink, box-blur passes, then an interpolated stretch: visually
 // a soft gaussian-like smear for a few hundred kilobytes of work.
-static bool make_backdrop(const raw_image_t *src, int box_w, int box_h, bool from_bottom, cover_image_t *out) {
+//
+// `over_w` x `over_h`, when given with from_bottom, is the box the picture this
+// band stands over was itself made at: the band is then cut out of THAT crop --
+// its bottom `box_h / over_h` -- rather than out of a crop of the band's own
+// aspect. The two are not the same rectangle: a crop aimed at a wide short box
+// takes in more of the source's sides than the crop aimed at the screen the
+// band frosts, and a blur whose colours come from pixels that are not on the
+// screen meets the photograph above it as a seam of the wrong colour.
+static bool make_backdrop(const raw_image_t *src, int box_w, int box_h, bool from_bottom, int over_w, int over_h,
+						  cover_image_t *out) {
 	memset(out, 0, sizeof(*out));
 	if (box_w < 1 || box_h < 1)
 		return false;
 
 	crop_t crop = crop_to_aspect(src->w, src->h, box_w, box_h);
 	if (from_bottom) {
-		crop.y = src->h - crop.h; // the band the block will be drawn over
-		if (crop.y < 0)
-			crop.y = 0;
+		if (over_w > 0 && over_h > 0) {
+			crop_t over = crop_to_aspect(src->w, src->h, over_w, over_h);
+			int band_h = (int)((int64_t)over.h * box_h / over_h);
+			if (band_h < 1)
+				band_h = 1;
+			if (band_h > over.h)
+				band_h = over.h;
+			crop.x = over.x;
+			crop.w = over.w;
+			crop.h = band_h;
+			crop.y = over.y + over.h - band_h; // the band the block will be drawn over
+		} else {
+			crop.y = src->h - crop.h; // the band the block will be drawn over
+			if (crop.y < 0)
+				crop.y = 0;
+		}
 	}
 
 	int small_w = box_w / BACKDROP_SCALE_DIVISOR;
@@ -994,11 +1019,16 @@ typedef struct {
 	cover_fit_t fit;
 	bool backdrop; // build the blurred, flipped copy instead of a plain scale
 	// The backdrop comes from the BOTTOM band of the source instead of a
-	// centred crop of it, and is not flipped. What the screensaver's
-	// full-screen picture wants: there the blurred block sits over the picture
-	// itself, so it has to be a blurred continuation of the part it covers --
+	// centred crop of it, and is not flipped. What a blurred block that sits
+	// ON the picture wants -- the screensaver's foot, and the player's
+	// Immersive deck: there the blur stands over the part of the photograph it
+	// frosts, so it has to be a blurred continuation of exactly those pixels;
 	// a mirrored centre crop would read as a different photograph.
 	bool from_bottom;
+	// The box the picture this band stands over was made at, with from_bottom:
+	// the band is cut from that crop's own foot so its colours continue the
+	// photograph above it (see make_backdrop). Zero when nobody asked for one.
+	int over_w, over_h;
 } image_request_t;
 
 // Decodes once and produces every requested image from that one decode. The
@@ -1036,7 +1066,8 @@ static bool build_images(const uint8_t *data, size_t size, const image_request_t
 	for (int i = 0; i < n; i++) {
 		bool ok;
 		if (reqs[i].backdrop) {
-			ok = make_backdrop(&raw, reqs[i].w, reqs[i].h, reqs[i].from_bottom, &outs[i]);
+			ok = make_backdrop(&raw, reqs[i].w, reqs[i].h, reqs[i].from_bottom, reqs[i].over_w, reqs[i].over_h,
+							   &outs[i]);
 		} else {
 			ok = make_scaled(&raw, reqs[i].w, reqs[i].h, reqs[i].fit, &outs[i]);
 		}
@@ -1338,7 +1369,14 @@ bool cover_load_player_images(const char *filepath, int cover_w, int cover_h, co
 	}
 	if (backdrop_out) {
 		backdrop_index = n;
-		reqs[n++] = (image_request_t){.w = backdrop_w, .h = backdrop_h, .fit = COVER_FIT_COVER, .backdrop = true};
+		// With from_bottom the band is cut out of the cover's own crop (see
+		// make_backdrop), so the cover's box travels with the request; without
+		// one asked for there is nothing to continue and the band takes the
+		// foot of the source whole.
+		reqs[n++] = (image_request_t){.w = backdrop_w, .h = backdrop_h, .fit = COVER_FIT_COVER, .backdrop = true,
+									  .from_bottom = backdrop_from_bottom,
+									  .over_w = backdrop_from_bottom && cover_out ? cover_w : 0,
+									  .over_h = backdrop_from_bottom && cover_out ? cover_h : 0};
 	}
 
 	cover_build_t built = build_from_sources(filepath, false, reqs, n, results);

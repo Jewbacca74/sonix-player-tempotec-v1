@@ -124,6 +124,14 @@ void cover_set_backdrop_light(bool light);
 // backdrop is built; the screensaver's bottom band is never flipped either way.
 void cover_set_backdrop_upright(bool upright);
 
+// Whether the blurred backdrop is the BOTTOM band of the picture rather than a
+// crop of its middle: what a blurred block that sits ON the photograph wants,
+// where a band from the middle would frost pixels that are not underneath it.
+// The band is cut from the foot of the crop the cover itself was made at, so
+// its colours continue the picture above it. Takes effect the next time a
+// backdrop is built.
+void cover_set_backdrop_from_bottom(bool from_bottom);
+
 // ---------------------------------------------------------------------------
 // Browser thumbnails
 //
