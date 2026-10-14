@@ -53,11 +53,10 @@
 // 0 is off and each step scales a channel's 0-255 value down to 0-79.
 static const int LADDER[11] = {0, 1, 3, 7, 15, 23, 31, 39, 47, 63, 79};
 
-// The brightness slider runs 1-7 and is the level index itself, exactly as the
-// doc's `led LEVEL ...` takes it: brightness 5 is `led 5`, brightness 7 is
-// `led 7`.
+// The brightness slider runs 1-5 and is the level index itself, exactly as the
+// doc's `led LEVEL ...` takes it: brightness 5 is `led 5`.
 #define BRIGHTNESS_MIN 1
-#define BRIGHTNESS_MAX 7
+#define BRIGHTNESS_MAX 5
 #define BRIGHTNESS_DEFAULT 5
 
 // The transition speed slider runs 20 ms to 2 s in 10 ms steps; this is the

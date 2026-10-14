@@ -23,7 +23,7 @@ lv_obj_t *powersettings_screen;
 // The two LED effect controls, shown only where the SGM31324 can be driven
 // directly (the V1 and the R3 Pro II; the R1's plain LEDs have no such knobs).
 #define LED_BRIGHTNESS_MIN 1
-#define LED_BRIGHTNESS_MAX 7
+#define LED_BRIGHTNESS_MAX 5
 #define LED_BRIGHTNESS_STEPS (LED_BRIGHTNESS_MAX - LED_BRIGHTNESS_MIN + 1)
 #define LED_TRANSITION_MIN_MS 20
 #define LED_TRANSITION_STEP_MS 10

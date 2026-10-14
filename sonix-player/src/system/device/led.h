@@ -131,10 +131,9 @@ void led_set_idle_off(bool enabled);
 // while the screen is off. Waking restarts the idle window.
 void led_set_standby(bool standby);
 
-// The brightness slider, 1-7, used as the level index itself -- the doc's
-// `led LEVEL ...`: brightness 5 is `led 5`, brightness 7 is `led 7`. Only the
-// direct path uses it; the R1's plain LEDs have no such control. Saved by the
-// caller.
+// The brightness slider, 1-5, used as the level index itself -- the doc's
+// `led LEVEL ...`: brightness 5 is `led 5`. Only the direct path uses it; the
+// R1's plain LEDs have no such control. Saved by the caller.
 void led_set_brightness(int brightness);
 
 // The transition speed, 20-2000 ms in 10 ms steps: how long a fade-in,
