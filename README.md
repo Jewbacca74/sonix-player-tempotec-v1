@@ -252,6 +252,7 @@ See [setup, design, limitations and the V1 validation checklist](docs/subsonic.m
 - `sonix-packer/` — stock-image preparation, firmware packaging and validation scripts.
 - `docs/collecting-logs.md` — which logs to send with a bug report, and how to take them.
 - `docs/subsonic.md` — Subsonic/Gonic setup, RAM transport and hardware validation.
+- `docs/sgm31324-led-control.md` — driving the RGB status LED directly over I²C.
 - `sonix-player/tools/sonix-bugreport.sh` — one-file diagnostic bundle, run on the device over ADB.
 - `FEATURES.md` — detailed feature notes.
 - `PATCHES.md` — device-porting and implementation notes.

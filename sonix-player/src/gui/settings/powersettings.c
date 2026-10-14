@@ -20,6 +20,15 @@ lv_obj_t *powersettings_screen;
 #define CHARGE_LIMIT_STEP 5
 #define CHARGE_LIMIT_COUNT 5 // 80, 85, 90, 95, 100
 
+// The two LED effect controls, shown only where the SGM31324 can be driven
+// directly (the V1 and the R3 Pro II; the R1's plain LEDs have no such knobs).
+#define LED_BRIGHTNESS_MIN 1
+#define LED_BRIGHTNESS_MAX 5
+#define LED_BRIGHTNESS_STEPS (LED_BRIGHTNESS_MAX - LED_BRIGHTNESS_MIN + 1)
+#define LED_TRANSITION_MIN_MS 20
+#define LED_TRANSITION_STEP_MS 10
+#define LED_TRANSITION_STEPS 199 // 20 ms to 2000 ms in 10 ms steps
+
 static const struct {
 	int minutes;
 	const char *label;
@@ -31,6 +40,8 @@ static const struct {
 static lv_obj_t *charge_value, *charge_slider;
 static lv_obj_t *auto_off_switch, *auto_off_value, *auto_off_slider, *auto_off_card;
 static lv_obj_t *led_on_switch, *led_off_switch, *led_off_card;
+static lv_obj_t *led_bright_value, *led_bright_slider;
+static lv_obj_t *led_trans_value, *led_trans_slider;
 static lv_obj_t *key_lock_switch;
 static lv_obj_t *standby_switch;
 static lv_obj_t *charge_note;
@@ -58,6 +69,29 @@ static int auto_off_index(void) {
 		}
 	}
 	return 1;
+}
+
+static int led_brightness_index(void) {
+	int brightness = (int)config_get_int("power", "led_brightness", 5);
+	if (brightness < LED_BRIGHTNESS_MIN) {
+		brightness = LED_BRIGHTNESS_MIN;
+	}
+	if (brightness > LED_BRIGHTNESS_MAX) {
+		brightness = LED_BRIGHTNESS_MAX;
+	}
+	return brightness - LED_BRIGHTNESS_MIN;
+}
+
+static int led_transition_index(void) {
+	int ms = (int)config_get_int("power", "led_transition_ms", 500);
+	int index = (ms - LED_TRANSITION_MIN_MS) / LED_TRANSITION_STEP_MS;
+	if (index < 0) {
+		index = 0;
+	}
+	if (index >= LED_TRANSITION_STEPS) {
+		index = LED_TRANSITION_STEPS - 1;
+	}
+	return index;
 }
 
 // --- applying them ---
@@ -90,6 +124,8 @@ void powersettings_apply(void) {
 	// on its own regardless.
 	led_set_enabled(config_get_bool("power", "led_on", true));
 	led_set_idle_off(config_get_bool("power", "led_off_standby", true));
+	led_set_brightness(LED_BRIGHTNESS_MIN + led_brightness_index());
+	led_set_transition_ms(LED_TRANSITION_MIN_MS + (led_transition_index() * LED_TRANSITION_STEP_MS));
 
 	input_set_key_lock(config_get_bool("power", "lock_keys_screen_off", false));
 }
@@ -118,6 +154,13 @@ static void refresh_labels(void) {
 		lv_obj_add_state(led_off_switch, LV_STATE_CHECKED);
 	} else {
 		lv_obj_remove_state(led_off_switch, LV_STATE_CHECKED);
+	}
+
+	if (led_bright_value) {
+		lv_label_set_text_fmt(led_bright_value, "%d", LED_BRIGHTNESS_MIN + led_brightness_index());
+	}
+	if (led_trans_value) {
+		lv_label_set_text_fmt(led_trans_value, "%d ms", LED_TRANSITION_MIN_MS + (led_transition_index() * LED_TRANSITION_STEP_MS));
 	}
 
 	if (led_on) {
@@ -177,6 +220,24 @@ static void auto_off_changed_cb(lv_event_t *e) {
 	config_set_int("power", "auto_off_minutes", AUTO_OFF[index].minutes);
 	config_save();
 	powersettings_apply();
+	refresh_labels();
+}
+
+static void led_brightness_cb(lv_event_t *e) {
+	(void)e;
+	int brightness = LED_BRIGHTNESS_MIN + (int)lv_slider_get_value(led_bright_slider);
+	config_set_int("power", "led_brightness", brightness);
+	config_save();
+	led_set_brightness(brightness);
+	refresh_labels();
+}
+
+static void led_transition_cb(lv_event_t *e) {
+	(void)e;
+	int ms = LED_TRANSITION_MIN_MS + ((int)lv_slider_get_value(led_trans_slider) * LED_TRANSITION_STEP_MS);
+	config_set_int("power", "led_transition_ms", ms);
+	config_save();
+	led_set_transition_ms(ms);
 	refresh_labels();
 }
 
@@ -259,6 +320,19 @@ void powersettings_init(gui_config_t *cfg) {
 
 	// The LED master switch, and the standby option that depends on it.
 	settingsrow_toggle(container, "power_led_on", &led_on_switch, led_on_toggled_cb);
+
+	// The two effect controls, only where the controller can be driven directly.
+	// On the R1 the LED is a plain on/off light and neither means anything.
+	if (led_effects_available()) {
+		settingsrow_slider(container, "power_led_brightness", LED_BRIGHTNESS_STEPS, &led_bright_value, &led_bright_slider,
+						   led_brightness_cb);
+		lv_slider_set_value(led_bright_slider, led_brightness_index(), LV_ANIM_OFF);
+
+		settingsrow_slider(container, "power_led_transition", LED_TRANSITION_STEPS, &led_trans_value, &led_trans_slider,
+						   led_transition_cb);
+		lv_slider_set_value(led_trans_slider, led_transition_index(), LV_ANIM_OFF);
+	}
+
 	led_off_card = settingsrow_toggle(container, "power_led_off_in_standby", &led_off_switch, led_off_toggled_cb);
 	// No "turn Wi-Fi off in standby" entry: parking the radio is automatic, and
 	// wifi_in_use() in power.c knows on its own when not to turn it off --

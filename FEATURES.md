@@ -167,6 +167,11 @@ certificate checking, and HLS.
 
 - **Power** - standby, LED behaviour, automatic power-off from thirty seconds to
   six hours, and a charge limit from 80 to 100 %.
+- **LED effects** - on the V1 and the R3 Pro II the status light is driven
+  directly rather than through the firmware's preset patterns: it fades in on
+  power-on, cross-fades between colours, breathes red while charging, turns
+  green when the charge is done and fades out on the way down. Brightness (1-5)
+  and transition speed (20 ms to 2 s) are set under Power.
 - **Date and time** - set by hand and written to the RTC, 24-hour clock, and a
   time zone with its own standard and daylight choice.
 - **Language** - English, Italiano, Deutsch, Español, Français, Russian, Chinese,

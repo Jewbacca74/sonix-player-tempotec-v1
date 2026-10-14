@@ -4168,6 +4168,7 @@ static void update_progress(void) {
 	// only comes round once a minute). Only writes when the colour changes.
 	// A podcast lights purple instead of the sample-rate colour.
 	led_update_playback(state.status == AUDIO_STATUS_PLAYING, state.stream_sample_rate,
+						audio_stream_is_lossy(), audio_get_stream_bits(),
 						!state.live && podcastcache_is_episode(state.current_file),
 						!state.live && audio_get_dsd_multiple() > 0);
 

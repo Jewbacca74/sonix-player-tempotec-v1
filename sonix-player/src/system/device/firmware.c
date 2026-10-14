@@ -11,6 +11,7 @@
 
 #include "src/system/audio/audio.h"
 #include "src/system/device/clock.h"
+#include "src/system/device/led.h"
 #include "src/system/core/config.h"
 #include "src/system/streaming/qobuzcache.h"
 #include "src/system/streaming/podcastcache.h"
@@ -111,6 +112,9 @@ void firmware_update_start(void) {
 	// follows holds this thread for seconds, and a frozen page reads as a
 	// device that has hung. A dark one reads as a device that is restarting.
 	power_screen_off();
+	// And the status LED with it, faded out like every other exit path -- without
+	// this it stayed lit through the whole recovery reboot.
+	led_shutdown();
 
 	// Playback down first: the card is about to be handed to the recovery
 	// kernel, and the decoder still has it open.
