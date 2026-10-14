@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/stat.h>
 
 // ---------------------------------------------------------------------------
@@ -27,6 +28,7 @@
 typedef struct ssl_ctx_st SSL_CTX;
 typedef struct ssl_st SSL;
 typedef struct ssl_method_st SSL_METHOD;
+typedef struct x509_store_ctx_st X509_STORE_CTX;
 
 #define SSL_VERIFY_PEER 0x01
 
@@ -58,6 +60,7 @@ typedef struct ssl_method_st SSL_METHOD;
 #define X509_V_ERR_UNABLE_TO_VERIFY_LEAF_SIGNATURE 21
 #define X509_V_ERR_CERT_UNTRUSTED 27
 #define X509_V_ERR_HOSTNAME_MISMATCH 62
+#define X509_V_ERR_IP_ADDRESS_MISMATCH 64
 
 struct openssl_api {
 	// libssl
@@ -70,6 +73,7 @@ struct openssl_api {
 	long (*SSL_CTX_ctrl)(SSL_CTX *, int cmd, long larg, void *parg);
 	SSL *(*SSL_new)(SSL_CTX *);
 	void (*SSL_free)(SSL *);
+	void (*SSL_set_verify)(SSL *, int mode, int (*cb)(int, X509_STORE_CTX *));
 	int (*SSL_set_fd)(SSL *, int fd);
 	long (*SSL_ctrl)(SSL *, int cmd, long larg, void *parg);
 	int (*SSL_set1_host)(SSL *, const char *hostname);
@@ -84,6 +88,8 @@ struct openssl_api {
 	unsigned long (*ERR_get_error)(void);
 	void (*ERR_error_string_n)(unsigned long e, char *buf, size_t len);
 	const char *(*X509_verify_cert_error_string)(long n);
+	long (*X509_STORE_CTX_get_error)(X509_STORE_CTX *);
+	void (*X509_STORE_CTX_set_error)(X509_STORE_CTX *, int);
 	const char *(*OpenSSL_version)(int type); // optional; NULL is fine
 };
 
@@ -102,6 +108,71 @@ static char card_root[256];
 struct tls_conn {
 	SSL *ssl;
 };
+
+// ---------------------------------------------------------------------------
+// How much verification is asked for
+// ---------------------------------------------------------------------------
+
+static tls_verify_t mode_from_config(void) {
+	const char *text = config_get("network", "tls_verify", NULL);
+	if (!text || !text[0] || strcasecmp(text, "strict") == 0) {
+		return TLS_VERIFY_STRICT;
+	}
+	if (strcasecmp(text, "relaxed") == 0) {
+		return TLS_VERIFY_RELAXED;
+	}
+	// A typo must not be the reason a setting silently means less than it says.
+	fprintf(stderr, "tls: [network] tls_verify = %s is neither strict nor relaxed; using strict\n", text);
+	return TLS_VERIFY_STRICT;
+}
+
+tls_verify_t tls_verify_mode(void) {
+	return mode_from_config();
+}
+
+// The verification errors a relaxed connection forgives: the trust ones, and
+// only those.
+//
+// An expired certificate, one that is not valid yet, and one whose name is not
+// the host's are absent from this list on purpose. They are not "a home server
+// with its own certificate"; they are the differences between the server the
+// user asked for and somebody else, which is exactly what a man in the middle
+// between the player and a public station would present. Chain errors are the
+// ones no bundle can ever validate for a private server, so they are the ones
+// the user is allowed to wave through.
+static bool forgiven_in_relaxed(long verify) {
+	switch (verify) {
+	case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT:
+	case X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT:
+	case X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN:
+	case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY:
+	case X509_V_ERR_UNABLE_TO_VERIFY_LEAF_SIGNATURE:
+	case X509_V_ERR_CERT_UNTRUSTED:
+		return true;
+	default:
+		return false;
+	}
+}
+
+// Installed on the connection, not on the shared context: the mode is read per
+// connection, so flipping the switch applies to the next one without touching
+// the context every existing connection is using.
+static int relaxed_verify_cb(int preverify_ok, X509_STORE_CTX *ctx) {
+	if (preverify_ok) {
+		return 1;
+	}
+	long verify = api.X509_STORE_CTX_get_error(ctx);
+	if (!forgiven_in_relaxed(verify)) {
+		return 0;
+	}
+	// Clearing the error is what makes the rest of OpenSSL agree: it is what
+	// SSL_get_verify_result() reports, and leaving it set would fail a
+	// handshake the callback has just allowed.
+	api.X509_STORE_CTX_set_error(ctx, X509_V_OK);
+	fprintf(stderr, "tls: accepting untrusted certificate (verify error %ld, [network] tls_verify = relaxed)\n",
+			verify);
+	return 1;
+}
 
 // ---------------------------------------------------------------------------
 // Loading
@@ -150,6 +221,7 @@ static bool load_symbols(void) {
 	BIND(lib_ssl, SSL_CTX_ctrl);
 	BIND(lib_ssl, SSL_new);
 	BIND(lib_ssl, SSL_free);
+	BIND(lib_ssl, SSL_set_verify);
 	BIND(lib_ssl, SSL_set_fd);
 	BIND(lib_ssl, SSL_ctrl);
 	BIND(lib_ssl, SSL_set1_host);
@@ -163,6 +235,8 @@ static bool load_symbols(void) {
 	BIND(lib_crypto, ERR_get_error);
 	BIND(lib_crypto, ERR_error_string_n);
 	BIND(lib_crypto, X509_verify_cert_error_string);
+	BIND(lib_crypto, X509_STORE_CTX_get_error);
+	BIND(lib_crypto, X509_STORE_CTX_set_error);
 
 	// Only for the log line, and its name changed between 1.0 and 1.1.
 	void *v = dlsym(lib_crypto, "OpenSSL_version");
@@ -266,17 +340,28 @@ static bool ensure_loaded(void) {
 	api.SSL_CTX_ctrl(shared_ctx, SSL_CTRL_SET_MIN_PROTO_VERSION, TLS1_2_VERSION, NULL);
 
 	if (!load_ca(shared_ctx)) {
-		fprintf(stderr, "tls: no CA bundle found -- put Mozilla's cacert.pem at\n");
-		fprintf(stderr, "tls:   /etc/ssl/cert.pem (firmware) or <card>/.local/cacert.pem\n");
-		api.SSL_CTX_free(shared_ctx);
-		shared_ctx = NULL;
-		pthread_mutex_unlock(&load_lock);
-		return false;
+		// Without a bundle, strict mode can only refuse: every certificate is
+		// untrusted to an empty store, and saying "cannot verify" is better
+		// than connecting to anybody at all. Relaxed mode has no such need --
+		// the certificates it accepts have no anchor to find in any bundle --
+		// so a firmware without one can still reach a private server.
+		if (mode_from_config() != TLS_VERIFY_RELAXED) {
+			fprintf(stderr, "tls: no CA bundle found -- put Mozilla's cacert.pem at\n");
+			fprintf(stderr, "tls:   /etc/ssl/cert.pem (firmware) or <card>/.local/cacert.pem\n");
+			api.SSL_CTX_free(shared_ctx);
+			shared_ctx = NULL;
+			pthread_mutex_unlock(&load_lock);
+			return false;
+		}
+		ca_source[0] = '\0';
+		fprintf(stderr, "tls: no CA bundle found; tls_verify = relaxed does not need one\n");
 	}
 
 	api.SSL_CTX_set_verify(shared_ctx, SSL_VERIFY_PEER, NULL);
 
-	fprintf(stderr, "tls: %s, certificates from %s\n", version_text, ca_source);
+	fprintf(stderr, "tls: %s, certificates from %s, verification %s\n", version_text,
+			ca_source[0] ? ca_source : "(none)",
+			mode_from_config() == TLS_VERIFY_RELAXED ? "relaxed (self-signed accepted)" : "strict");
 	load_state = LOAD_OK;
 	pthread_mutex_unlock(&load_lock);
 	return true;
@@ -284,6 +369,29 @@ static bool ensure_loaded(void) {
 
 bool tls_available(void) {
 	return ensure_loaded();
+}
+
+// Rebuilds the shared context, so a setting changed while the player is running
+// applies to the next connection rather than at the next boot. The old context
+// is not yanked out from under a connection that is using it: SSL_new() takes a
+// reference to its context, so SSL_CTX_free() here frees only what nobody else
+// holds. Connections in flight keep the rules they were opened with.
+static void reload(void) {
+	pthread_mutex_lock(&load_lock);
+	if (shared_ctx) {
+		api.SSL_CTX_free(shared_ctx);
+		shared_ctx = NULL;
+	}
+	ca_source[0] = '\0';
+	load_state = LOAD_UNTRIED;
+	pthread_mutex_unlock(&load_lock);
+	ensure_loaded();
+}
+
+void tls_set_verify_mode(tls_verify_t mode) {
+	config_set("network", "tls_verify", mode == TLS_VERIFY_RELAXED ? "relaxed" : "strict");
+	config_save();
+	reload();
 }
 
 const char *tls_version(void) {
@@ -326,6 +434,7 @@ static void explain_failure(SSL *ssl, int ret, char *err, size_t err_size) {
 					 tr("tls_cert_not_yet_valid"));
 			return;
 		case X509_V_ERR_HOSTNAME_MISMATCH:
+		case X509_V_ERR_IP_ADDRESS_MISMATCH:
 			snprintf(err, err_size, "%s", tr("tls_cert_name_mismatch"));
 			return;
 		case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT:
@@ -380,7 +489,12 @@ tls_conn_t *tls_client(int fd, const char *hostname, char *err, size_t err_size)
 		return NULL;
 	}
 
-	SSL *ssl = api.SSL_new(shared_ctx);
+	// Under the load lock because the context can be rebuilt by a settings
+	// change at any moment; taking the reference here is what makes it safe
+	// for that rebuild to free the one in the table.
+	pthread_mutex_lock(&load_lock);
+	SSL *ssl = shared_ctx ? api.SSL_new(shared_ctx) : NULL;
+	pthread_mutex_unlock(&load_lock);
 	if (!ssl) {
 		if (err) {
 			snprintf(err, err_size, "%s", tr("tls_no_memory"));
@@ -401,6 +515,15 @@ tls_conn_t *tls_client(int fd, const char *hostname, char *err, size_t err_size)
 	//   be pointless.
 	api.SSL_ctrl(ssl, SSL_CTRL_SET_TLSEXT_HOSTNAME, TLSEXT_NAMETYPE_host_name, (void *)hostname);
 	api.SSL_set1_host(ssl, hostname);
+
+	// The mode is read here, per connection, which is what lets the switch in
+	// the interface take effect on the next connection: in relaxed mode the
+	// chain errors are forgiven by the callback, while the hostname set just
+	// above and the certificate's dates are still enforced. In strict mode
+	// there is no callback at all and every error fails the handshake.
+	if (mode_from_config() == TLS_VERIFY_RELAXED) {
+		api.SSL_set_verify(ssl, SSL_VERIFY_PEER, relaxed_verify_cb);
+	}
 
 	if (api.SSL_set_fd(ssl, fd) != 1) {
 		api.SSL_free(ssl);

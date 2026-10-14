@@ -3,12 +3,15 @@
 import hashlib
 import json
 import pathlib
+import ssl
 import subprocess
 import sys
 import tempfile
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
+
+import tls_fixtures
 
 USER = "alice+user@example.com"
 PASSWORD = 'p &\\"ä'
@@ -28,13 +31,24 @@ class Server(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
-    def __init__(self):
+    def __init__(self, cert=None, key=None):
         super().__init__(("0.0.0.0", 0), Handler)
         self.stop = threading.Event()
         self.lock = threading.Lock()
         self.errors = []
         self.requests = []
+        self.paths = []
         self.media = {}
+        if cert:
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            context.load_cert_chain(cert, key)
+            self.socket = context.wrap_socket(self.socket, server_side=True)
+
+    # A client that refuses the certificate aborts the handshake, which is the
+    # test working as intended rather than a server fault; socketserver would
+    # otherwise print a traceback for each refusal.
+    def handle_error(self, request, client_address):
+        pass
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -71,6 +85,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def handle_get(self):
         request = urlsplit(self.path)
+        with self.server.lock:
+            self.server.paths.append(request.path)
         q = {key: values[0] for key, values in parse_qs(request.query).items()}
         path = request.path
         if path.startswith("/rest/"):
@@ -223,6 +239,26 @@ class Handler(BaseHTTPRequestHandler):
             self.body(b"not found", status=404)
 
 
+def start_https_servers(directory):
+    """One HTTPS server per certificate: a good self-signed one, one naming a
+    different server, and one that has expired."""
+    certificates = {
+        "good": (tls_fixtures.GOOD_CERT, tls_fixtures.GOOD_KEY),
+        "wrongname": (tls_fixtures.WRONG_NAME_CERT, tls_fixtures.WRONG_NAME_KEY),
+        "expired": (tls_fixtures.EXPIRED_CERT, tls_fixtures.EXPIRED_KEY),
+    }
+    started = []
+    for name, (certificate, key) in certificates.items():
+        cert_path = pathlib.Path(directory) / f"{name}.pem"
+        key_path = pathlib.Path(directory) / f"{name}.key"
+        cert_path.write_text(certificate, encoding="utf-8")
+        key_path.write_text(key, encoding="utf-8")
+        server = Server(str(cert_path), str(key_path))
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        started.append(server)
+    return started
+
+
 def main():
     binary = pathlib.Path(sys.argv[1]).resolve()
     server = Server()
@@ -233,11 +269,21 @@ def main():
     thread.start()
     try:
         with tempfile.TemporaryDirectory(prefix="sonix-subsonic-test-") as directory:
-            result = subprocess.run([str(binary), f"http://127.0.0.1:{server.server_port}", directory],
-                                    text=True, capture_output=True, timeout=45)
+            tls = start_https_servers(directory)
+            try:
+                bases = [f"https://127.0.0.1:{s.server_port}" for s in tls]
+                result = subprocess.run([str(binary), f"http://127.0.0.1:{server.server_port}", directory, *bases],
+                                        text=True, capture_output=True, timeout=45)
+            finally:
+                for s in tls:
+                    s.stop.set()
+                    s.shutdown()
+                    s.server_close()
         sys.stdout.write(result.stdout)
         sys.stderr.write(result.stderr)
         assert not server.errors, server.errors
+        for s in tls:
+            assert not s.errors, s.errors
         assert PASSWORD not in result.stderr and "&t=" not in result.stderr and "&s=" not in result.stderr
         if result.returncode:
             raise SystemExit(result.returncode if result.returncode > 0 else 1)
@@ -245,6 +291,10 @@ def main():
         failed = [q for _, q in server.requests if q.get("id") == "stream-fail"]
         if binary.name == "test_subsonic":
             assert len(failed) == 1, "failed pre-cache was repeatedly re-fetched"
+            # The relaxed-mode connection has to have reached the server: one
+            # request for the certificate test, one for the stream that outlives
+            # the switch back to strict. The two refusals never get this far.
+            assert tls[0].paths == ["/pattern", "/pattern"], tls[0].paths
         print(f"PASS mock server verified {len(server.requests)} authenticated requests; no credentials in logs")
     finally:
         server.stop.set()

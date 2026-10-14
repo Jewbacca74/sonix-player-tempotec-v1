@@ -27,8 +27,9 @@ Raw means the original compressed file, **not PCM**. Recognized suffixes are `fl
 - Authentication is Subsonic v1.16.1 token authentication: random 16-byte salt, `MD5(password + salt)`, `u/t/s`, `c=sonix`, `f=json`. The password is never put in a URL.
 - Credentials stay in memory unless **Remember credentials** is enabled. The optional `subsonic-credentials.json` beside `device_config.ini` is written atomically with mode **0600**. It contains the password **unencrypted**; do not share it or backups of it. Storage must support the requested permissions.
 - Clearing Remember and saving removes the old saved credentials. **Forget server?** stops this service and removes its account from memory and disk.
-- Prefer HTTPS with a trusted certificate and a correct player clock. A salted MD5 token can still be replayed and does not make HTTP private. HTTPS-to-HTTP redirects are refused; there is no silent TLS downgrade or certificate-verification bypass.
-- For a private certificate authority, use the existing `[network] ca_bundle` setting/trust store. See the [TLS troubleshooting section](../README.md#lastfm-sign-in-tls-certificate-error); it applies to Subsonic too. Do not replace the trust store with an untrusted certificate bundle.
+- Prefer HTTPS with a trusted certificate and a correct player clock. A salted MD5 token can still be replayed and does not make HTTP private. HTTPS-to-HTTP redirects are refused; there is no silent TLS downgrade.
+- A server with a self-signed certificate is refused by default. **Accept self-signed certificates** on this settings page (or `[network] tls_verify = relaxed` in `/usr/data/device_config.ini`) accepts a certificate from an authority no bundle knows, and only that: the certificate must still name the server being contacted and its dates must still cover the current date. An expired certificate, one issued to another name, and an HTTPS-to-HTTP redirect stay refusals, with a message saying which. The setting applies to every `https://` connection the player opens, radio included; the switch takes effect on the next connection, without a restart. See [your own server with a self-signed certificate](../README.md#your-own-server-with-a-self-signed-certificate).
+- For a private certificate authority, use the existing `[network] ca_bundle` setting/trust store instead: it keeps full verification on. See the [TLS troubleshooting section](../README.md#lastfm-sign-in-tls-certificate-error); it applies to Subsonic too. Do not replace the trust store with an untrusted certificate bundle.
 - Playback queue names are credential-free, ephemeral `subsonic://...` source IDs, not HTTP URLs. They and their positions are not restored after reboot. Generic HTTP diagnostic URLs have their query removed.
 
 ## Transport and playback
@@ -74,6 +75,7 @@ These are host tests, not hardware certification. Before shipping a firmware bui
 - pause/resume, rapid Next/Previous/Stop, switching to local/Tidal/Qobuz/podcast playback, and replacing a track during initial buffering;
 - temporary Wi-Fi stalls, server disconnects, malformed responses and a server ignoring the selected codec;
 - valid/expired/private-CA HTTPS, rejecting a downgrade redirect, and browsing-away during a pending connection;
+- a self-signed HTTPS server with the certificate switch off (refused), on (plays), and with a certificate that names another server or has expired (refused either way);
 - screen-off playback, automatic Wi-Fi/suspend policy, RAM and CPU use, ALSA underrun logs, and battery drain against a local-playback baseline.
 
 The repository's regular target build/packer discovers the new C sources automatically. The V1 inherits the R1 common language assets; strings are supplied in both the R1 and R3PII language trees.

@@ -78,7 +78,8 @@ shows kept on the device.
 - **Radio** - the radio-browser.info directory by language, country or genre,
 plus search, favourites, recently played, and **My stations** read from a
 `radio.txt` you write yourself in the card root. MP3 and AAC, HTTPS with real
-certificate checking, and HLS.
+certificate checking (plus an opt-in relaxed mode for a server of your own with
+a self-signed certificate), and HLS.
 
 
 ## Wireless
