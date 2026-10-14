@@ -14,6 +14,8 @@ The routines below do exactly that, from a shell on the device:
   itself, so it keeps running with no CPU involvement.
 - **Transition** (`xfade`) - a software cross-fade between two colours.
 - **Fade-in** (`fade_in`) - a software ramp from dark up to a colour.
+- **Fade-out** (`fade_out`) - a software ramp from the current colour back to
+  dark.
 
 ## Prerequisite: free the controller
 
@@ -82,7 +84,7 @@ third of the nominal range:
 
 ## Helpers
 
-The routines use two small helpers and the level ladder as a string.
+The routines share two small helpers and the level ladder.
 
 `_lp` formats a decimal byte as the `0xNN` string `i2cset` expects:
 
@@ -94,26 +96,45 @@ _lp(){ printf '0x%02x' "$1"; }
 the ladder. Argument one is the value, argument two the level:
 
 ```sh
-LS="00 01 03 07 0F 17 1F 27 2F 3F 4F"
-_ls(){ c=0x$(echo $LS | cut -d' ' -f$(($2 + 1))); echo $(( $1 * c / 255 )); }
+_ls() {
+  L_MAP="00 01 03 07 0F 17 1F 27 2F 3F 4F"
+  c=0x$(echo "$L_MAP" | cut -d' ' -f$(($2 + 1)))
+  echo $(( $1 * c / 255 ))
+}
 ```
+
+`L_MAP` is assigned inside `_ls`, but the shell has no `local`, so it lives on
+as a **global** once the function has run. Defining it once at the top of the
+script, rather than repeating the ladder string in every routine, keeps every
+function on the same curve. See [Notes](#notes).
 
 ## Static colour
 
 Picks one level and one RGB triple. Red is LED1, green LED2 and blue LED3, and
 only the channels that are actually used are enabled, so a red at level 5 does
-not leak a little green and blue.
+not leak a little green and blue. It also records the colour it set in the
+global tracking variables `CUR_R`, `CUR_G` and `CUR_B`, so a later `fade_out`
+can ramp back down from it.
 
 ```sh
 led() {
   # $1=level 0..10, $2..$4 = R,G,B 0..255
   L="00 01 03 07 0F 17 1F 27 2F 3F 4F"
   c=0x$(echo $L | cut -d' ' -f$(($1 + 1)))
-  r=$(( $2 * c / 255 )); g=$(( $3 * c / 255 )); b=$(( $4 * c / 255 ))
+  r=$(( $2 * c / 255 ))
+  g=$(( $3 * c / 255 ))
+  b=$(( $4 * c / 255 ))
+
+  # Update global tracking variables
+  CUR_R=$r
+  CUR_G=$g
+  CUR_B=$b
+
   m=0x40                                  # DEV_EN
   [ $r -gt 0 ] && m=$((m | 0x01))         # LED1 = red   -> always ON
   [ $g -gt 0 ] && m=$((m | 0x04))         # LED2 = green -> always ON
   [ $b -gt 0 ] && m=$((m | 0x10))         # LED3 = blue  -> always ON
+
   i2cset -y 0 0x30 0x04 $(printf '0x%02x' $m)
   i2cset -y 0 0x30 0x06 $(printf '0x%02x' $r)
   i2cset -y 0 0x30 0x07 $(printf '0x%02x' $g)
@@ -173,7 +194,10 @@ breathe 10 0 0 255 0x3F 0x7D 0xFF   # slow blue, long fade
 
 Cross-fades one colour to another in software, on a fixed number of steps with
 a computed per-step delay. Every channel lit at either end is enabled for the
-duration, and only the target's channels are left enabled at the end.
+duration, and only the target's channels are left enabled at the end. It also
+updates `CUR_R`, `CUR_G` and `CUR_B` on every step - not just at the end - so
+an interrupted fade still leaves the current colour recorded for `fade_out` to
+pick up.
 
 ```sh
 # xfade LEVEL R1 G1 B1 R2 G2 B2 [MS]
@@ -184,25 +208,42 @@ xfade() {
   b1=$(( $5*c/255 )); b2=$(( $6*c/255 )); b3=$(( $7*c/255 ))
   N=32; MS=${8:-1000}
   D=$(printf '%d.%03d' $(( MS/1000/N )) $(( (MS/N) % 1000 )))
-  # enable every channel lit at either end
+
+  # Enable every channel lit at either end
   m=0x40
   { [ $a1 -gt 0 ] || [ $b1 -gt 0 ]; } && m=$((m | 0x01))
   { [ $a2 -gt 0 ] || [ $b2 -gt 0 ]; } && m=$((m | 0x04))
   { [ $a3 -gt 0 ] || [ $b3 -gt 0 ]; } && m=$((m | 0x10))
   i2cset -y 0 0x30 0x04 $(printf '0x%02x' $m)
+
   i=0
   while [ $i -le $N ]; do
-    i2cset -y 0 0x30 0x06 $(printf '0x%02x' $(( a1 + (b1-a1)*i/N )))
-    i2cset -y 0 0x30 0x07 $(printf '0x%02x' $(( a2 + (b2-a2)*i/N )))
-    i2cset -y 0 0x30 0x08 $(printf '0x%02x' $(( a3 + (b3-a3)*i/N )))
+    cur_r=$(( a1 + (b1-a1)*i/N ))
+    cur_g=$(( a2 + (b2-a2)*i/N ))
+    cur_b=$(( a3 + (b3-a3)*i/N ))
+
+    # Keep track during intermediate steps in case interrupted
+    CUR_R=$cur_r
+    CUR_G=$cur_g
+    CUR_B=$cur_b
+
+    i2cset -y 0 0x30 0x06 $(printf '0x%02x' $cur_r)
+    i2cset -y 0 0x30 0x07 $(printf '0x%02x' $cur_g)
+    i2cset -y 0 0x30 0x08 $(printf '0x%02x' $cur_b)
     i=$((i + 1)); sleep $D
   done
-  # leave only the channels the target colour actually uses
+
+  # Leave only the channels the target colour actually uses
   m=0x40
   [ $b1 -gt 0 ] && m=$((m | 0x01))
   [ $b2 -gt 0 ] && m=$((m | 0x04))
   [ $b3 -gt 0 ] && m=$((m | 0x10))
   i2cset -y 0 0x30 0x04 $(printf '0x%02x' $m)
+
+  # Final target brightness state
+  CUR_R=$b1
+  CUR_G=$b2
+  CUR_B=$b3
 }
 ```
 
@@ -220,13 +261,13 @@ xfade 10 0 0 255 255 0 0 500      # blue -> red over 0.5s
 ## Fade-in
 
 Ramps a colour up from dark to its target level in software. It scales the
-inputs through the level ladder exactly as `led` does, enables the steady
-channels, then walks the channel levels from `0` up to the target over a fixed
-number of steps.
+inputs with `_ls`, enables the steady channels, and walks the channel levels
+from `0` up to the target over a fixed number of steps. As it goes it records
+the target colour in the globals `CUR_R`, `CUR_G` and `CUR_B`, which `fade_out`
+reads back.
 
 ```sh
 fade_in() {
-  # Usage: fade_in <level 0..10> <R 0..255> <G 0..255> <B 0..255> [STEPS] [TOTAL_MS]
   lvl=$1
   r_in=$2
   g_in=$3
@@ -234,32 +275,29 @@ fade_in() {
   steps=${5:-24}
   ms=${6:-800}
 
-  # Scale inputs by brightness curve
-  l_map="00 01 03 07 0F 17 1F 27 2F 3F 4F"
-  c=0x$(echo "$l_map" | cut -d' ' -f$((lvl + 1)))
-  R=$(( r_in * c / 255 ))
-  G=$(( g_in * c / 255 ))
-  B=$(( b_in * c / 255 ))
+  R=$(_ls "$r_in" "$lvl")
+  G=$(_ls "$g_in" "$lvl")
+  B=$(_ls "$b_in" "$lvl")
 
-  # Set initial current to 0
+  CUR_R=$R
+  CUR_G=$G
+  CUR_B=$B
+
   i2cset -y 0 0x30 0x06 0x00
   i2cset -y 0 0x30 0x07 0x00
   i2cset -y 0 0x30 0x08 0x00
 
-  # REG4: DEV_EN (0x40) | Always ON: D1=0x01, D2=0x04, D3=0x10
   m_on=64
   [ "$R" -gt 0 ] && m_on=$((m_on | 1))
   [ "$G" -gt 0 ] && m_on=$((m_on | 4))
   [ "$B" -gt 0 ] && m_on=$((m_on | 16))
   i2cset -y 0 0x30 0x04 $(printf '0x%02x' $m_on)
 
-  # Calculate delay per step
   delay_ms=$(( ms / steps ))
   sec=$(( delay_ms / 1000 ))
   rem_ms=$(( delay_ms % 1000 ))
   d_str=$(printf '%d.%03d' $sec $rem_ms)
 
-  # Ramp currents smoothly up from 0 to target
   i=1
   while [ "$i" -le "$steps" ]; do
     cur_r=$(( R * i / steps ))
@@ -270,7 +308,7 @@ fade_in() {
     [ "$G" -gt 0 ] && i2cset -y 0 0x30 0x07 $(printf '0x%02x' $cur_g)
     [ "$B" -gt 0 ] && i2cset -y 0 0x30 0x08 $(printf '0x%02x' $cur_b)
 
-    i=$((i + 1))
+    i=$(( i + 1 ))
     sleep "$d_str"
   done
 }
@@ -288,21 +326,90 @@ fade_in 5 255 0 0
 fade_in 5 255 0 255 30 1500
 ```
 
+## Fade-out
+
+Fades the current colour down to black, using the `CUR_R`, `CUR_G` and `CUR_B`
+globals that `led`, `xfade` or `fade_in` left behind, so it takes no colour
+arguments of its own. The fall is quadratic (`i²`) rather than linear, so it
+eases out instead of falling in a straight line; the last step disables the
+enable map entirely (`0x04` = `0x00`) and clears the globals. If they are unset
+or already zero it just turns the map off.
+
+```sh
+fade_out() {
+  steps=${1:-24}
+  ms=${2:-600}
+
+  R=${CUR_R:-0}
+  G=${CUR_G:-0}
+  B=${CUR_B:-0}
+
+  if [ $(( R | G | B )) -eq 0 ]; then
+    i2cset -y 0 0x30 0x04 0x00
+    return 0
+  fi
+
+  delay_ms=$(( ms / steps ))
+  sec=$(( delay_ms / 1000 ))
+  rem_ms=$(( delay_ms % 1000 ))
+  d_str=$(printf '%d.%03d' $sec $rem_ms)
+
+  i=$(( steps - 1 ))
+  while [ "$i" -ge 0 ]; do
+    cur_r=$(( R * i * i / (steps * steps) ))
+    cur_g=$(( G * i * i / (steps * steps) ))
+    cur_b=$(( B * i * i / (steps * steps) ))
+
+    [ "$R" -gt 0 ] && i2cset -y 0 0x30 0x06 $(printf '0x%02x' $cur_r)
+    [ "$G" -gt 0 ] && i2cset -y 0 0x30 0x07 $(printf '0x%02x' $cur_g)
+    [ "$B" -gt 0 ] && i2cset -y 0 0x30 0x08 $(printf '0x%02x' $cur_b)
+
+    i=$(( i - 1 ))
+    sleep "$d_str"
+  done
+
+  i2cset -y 0 0x30 0x04 0x00
+  CUR_R=0
+  CUR_G=0
+  CUR_B=0
+}
+```
+
+Arguments are `fade_out [STEPS] [TOTAL_MS]`, defaulting to `24` steps over
+`600` milliseconds. Read the pair together: `fade_in` sets the colour state,
+`fade_out` spends it.
+
+```sh
+fade_in 5 255 0 255 30 1500   # magenta up over 1.5s
+fade_out                      # the same magenta back down over 600ms
+
+fade_out 48 1200              # slower, finer steps
+```
+
 ## Notes
 
-- **Steady vs breathing mode.** `led`, `xfade` and `fade_in` write the enable
-  map (`0x04`) and levels (`0x06`-`0x08`) but do not touch the mode register
-  (`0x09`), and their enable bits are the *steady* bits. `breathe` sets
-  `0x09` to `0x06` and uses the *breathing* bits. Since unloading the module
-  leaves the last register values in place, run a steady routine on a
+- **Steady vs breathing mode.** `led`, `xfade`, `fade_in` and `fade_out` write
+  the enable map (`0x04`) and levels (`0x06`-`0x08`) but do not touch the mode
+  register (`0x09`), and their enable bits are the *steady* bits. `breathe`
+  sets `0x09` to `0x06` and uses the *breathing* bits. Since unloading the
+  module leaves the last register values in place, run a steady routine on a
   freshly-loaded controller, or write `0x09` = `0x00` first, so a static
   colour is not fighting a leftover breathing mode.
 - **The level ladder caps brightness.** The largest level is `0x4F` (79), not
   `0xFF`, so `led 10 ...` is the controller's full scale at roughly a third of
   the raw channel range.
-- **`xfade` and `fade_in` are CPU-driven.** Unlike `breathe`, they step the
-  levels from the shell with `sleep`, so they are only as smooth as the
-  scheduler allows.
+- **`xfade`, `fade_in` and `fade_out` are CPU-driven.** Unlike `breathe`, they
+  step the levels from the shell with `sleep`, so they are only as smooth as
+  the scheduler allows.
+- **Prefer globals over per-function locals.** The level ladder (`L_MAP`) and
+  the recorded colour (`CUR_R`, `CUR_G`, `CUR_B`) are shared state, not
+  per-call values: `_ls` seeds the ladder, `led`, `xfade` and `fade_in` record
+  the colour they set, and `fade_out` reads it back. Since the shell has no
+  `local`, assigning these inside a function already leaks them out - so define
+  the ladder and the current-colour state **once at the top of the script** and
+  let every routine share them, rather than repeating the string in each one.
+  This matters most for `fade_out`, which has no colour arguments and depends
+  entirely on what the previous routine left behind.
 - The routines are the userspace path, separate from the in-player LED
   handling in `sonix-player/src/system/device/led.c` and its header, which use
   the driver's registered patterns once the module is loaded.
