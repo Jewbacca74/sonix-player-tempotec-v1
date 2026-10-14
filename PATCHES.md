@@ -72,23 +72,49 @@ swipe and lyrics-gesture hit target.
 The fourth arrangement, **Immersive**, is the sleeve at the bezel: the cover
 panel, the clipped frame and the picture all take the size of the screen, the
 corners square off, and the deck is emptied of its own fill so what stands
-behind the controls is the artwork itself rather than a blurred copy of it. The
+behind the controls is the artwork itself rather than a panel of the theme's
+colour. The
 controls keep the rows they have in the standard arrangement -- the deck's
 height is the same, and the two clocks, the queue position and the transport do
-not move -- but every one of them is now over a picture, so one flat black
-scrim at half alpha covers the whole screen and everything is read on top of
-it. Flat, and not the bands of gradient that were tried first: a ramp's ends
-are a step in the alpha's slope, and on this panel each of them draws a
-visible line across the photograph. The scrim is a child of the artwork's
-frame, so the source badges -- which are children of that frame and are
-brought to its front when they appear -- keep their own colour over it rather
-than being darkened with the picture. The
+not move. The picture above the deck is left at its own brightness -- a veil
+over it is a veil over the thing the arrangement exists for -- and the chevron
+and the source marks are read on it in white, as they are over every sleeve in
+the player. A flat black scrim at half alpha used to cover the whole screen
+here, and bands of gradient were tried before it -- a ramp's ends are a step in
+the alpha's slope, and on this panel each of them draws a visible line across
+the photograph -- but both darken a picture that the deck's frost already
+carries the chrome on, so neither is part of the arrangement now. The
 picture is asked for at 240×320 with COVER fit and drawn one pixel to one, so
-the sleeve is not resampled on every frame. The blurred copy is still made --
-the words' page is drawn on it -- but the deck keeps neither it nor its own
-fill, and over a loaded picture the artwork covers it. With no artwork the
-scrim stays down and the page is its own colour with the theme's ink, exactly
-as the standard arrangement draws it.
+the sleeve is not resampled on every frame.
+
+What the controls stand on is a **frosted band**: the foot of the same
+photograph, blurred lighter than every other blurred copy in the player --
+`BACKDROP_BAND_BLUR_RADIUS` and `BACKDROP_BAND_BLUR_PASSES`, 4 and 2 against 9
+and 3, so the photograph's colour masses stay standing in the glass instead of
+washing out -- and dimmed to the darkness the type reads on
+(`IMMERSIVE_FROST_PCT`, 55, against the 42 the blurs a title is read on
+elsewhere get). The 80 the stock look glows at was tried first and turned a
+pale sleeve into a light wash on the device, with the cream title and the
+amber clocks floating on it; what the sleeve keeps of itself in the band at 55
+is hue rather than light, and a tint in `make_backdrop()` -- each channel
+pulled away from the pixel's own grey by `BACKDROP_BAND_SAT_PCT`, 140 -- sees
+to it that the hue survives the dim: a dark ground of some colour, which is
+what light type has always wanted here, and not a light ground of none.
+The band is asked for
+at the deck's own rectangle (240 wide by `compact_deck_height()` tall) and cut
+out of the very crop the screen-sized picture was made from -- `make_backdrop()`
+takes the band from the foot of that crop rather than from a crop of the band's
+own aspect, because a blur whose colours come from pixels that are not on the
+screen meets the photograph above it as a seam of the wrong colour. The band is
+an image object of the artwork's frame, built before the words' page: over the
+picture, under the source marks, under the deck, under the sheet the lyrics
+slide in on. It is frosted glass and not a panel -- the artwork stays where it
+is and is seen through it, softly -- and where it meets the sharp picture above
+it is the one edge on the screen, the edge of the frost. The words' page
+borrows Studio's look while it is up, and the band stays down under it: two
+frosts on one screen would be one too many. With no artwork the band stays down
+and the page is its own colour with the theme's ink, exactly as the standard
+arrangement draws it.
 
 The **screensaver** follows the same split. Dark and Light keep the arrangement
 they have always had: the artwork stops where the blurred strip begins, and the
