@@ -3671,8 +3671,8 @@ static void update_qobuz_badge(void) {
 	}
 }
 
-// Repaints the star from the database: filled yellow when the loaded track
-// is a favourite, quiet outline otherwise.
+// Repaints the star from the database: filled when the loaded track is a
+// favourite, outlined otherwise, in the theme-specific colour.
 static void update_fav_button(void) {
 	if (!fav_btn_icon) {
 		return;
@@ -3717,23 +3717,22 @@ static void update_fav_button(void) {
 	// last on every track change, so anything that tints the star elsewhere is
 	// overwritten.
 	//
-	// Amber's star stays in the subdued brown sampled from the reference,
-	// instead of competing with the cream title and playback accent.
-	if (starred) {
-		lv_image_set_src(fav_btn_icon, &icon_star_filled);
-		lv_obj_set_style_image_recolor(fav_btn_icon,
-									   theme_is_amber_on_black()
-										   ? theme_player_chrome_color(THEME_PLAYER_CHROME_MUTED)
-										   : lv_color_make(246, 211, 45),
-								   0); // Adwaita yellow outside Amber on Black
+	// Tokyo Night matches the artist line's cyan in both star states. Amber's
+	// star stays in the subdued brown sampled from the reference, instead of
+	// competing with the cream title and playback accent.
+	lv_color_t star_color;
+	if (theme_is_tokyo_night()) {
+		star_color = theme_semantic_color(THEME_SEMANTIC_CYAN);
+	} else if (theme_is_amber_on_black()) {
+		star_color = theme_player_chrome_color(THEME_PLAYER_CHROME_MUTED);
+	} else if (starred) {
+		star_color = lv_color_make(246, 211, 45); // Adwaita yellow
 	} else {
-		lv_image_set_src(fav_btn_icon, &icon_star);
-		lv_obj_set_style_image_recolor(fav_btn_icon,
-									   theme_is_amber_on_black()
-										   ? theme_player_chrome_color(THEME_PLAYER_CHROME_MUTED)
-										   : layout_alt_now ? alt_ink() : lv_color_make(150, 150, 150),
-								   0);
+		star_color = layout_alt_now ? alt_ink() : lv_color_make(150, 150, 150);
 	}
+
+	lv_image_set_src(fav_btn_icon, starred ? &icon_star_filled : &icon_star);
+	lv_obj_set_style_image_recolor(fav_btn_icon, star_color, 0);
 	lv_obj_set_style_image_recolor_opa(fav_btn_icon, LV_OPA_COVER, 0);
 }
 
