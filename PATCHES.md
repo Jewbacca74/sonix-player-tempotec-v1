@@ -88,9 +88,12 @@ picture is asked for at 240×320 with COVER fit and drawn one pixel to one, so
 the sleeve is not resampled on every frame.
 
 What the controls stand on is a **frosted band**: the foot of the same
-photograph, blurred like every other blurred copy in the player but kept at
-most of its own light (`IMMERSIVE_FROST_PCT`, 70, against the 42 the blurs a
-title is read on elsewhere get -- a frost is looked through, not at), asked for
+photograph, blurred lighter than every other blurred copy in the player --
+`BACKDROP_BAND_BLUR_RADIUS` and `BACKDROP_BAND_BLUR_PASSES`, 4 and 2 against 9
+and 3, so the photograph's colour masses stay standing in the glass instead of
+washing out -- and kept at most of its own light (`IMMERSIVE_FROST_PCT`, 80,
+against the 42 the blurs a title is read on elsewhere get: a frost is looked
+through, not at). It is asked for
 at the deck's own rectangle (240 wide by `compact_deck_height()` tall) and cut
 out of the very crop the screen-sized picture was made from -- `make_backdrop()`
 takes the band from the foot of that crop rather than from a crop of the band's

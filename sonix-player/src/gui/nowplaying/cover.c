@@ -32,6 +32,15 @@
 #define BACKDROP_BLUR_RADIUS 9
 #define BACKDROP_BLUR_PASSES 3
 
+// A frosted band keeps more of the picture than a blur a title is read on: it
+// is looked through, and what sells it as glass is the colour masses of the
+// photograph still standing in it -- the glow, the corner of green -- where the
+// stronger treatment above leaves a wash. So the band is blurred well under
+// half the radius and one pass fewer, which on the V1's deck leaves masses of
+// a dozen pixels or so, as in the look this follows.
+#define BACKDROP_BAND_BLUR_RADIUS 4
+#define BACKDROP_BAND_BLUR_PASSES 2
+
 // How far the backdrop is pushed towards black (dark theme) or white (light
 // theme) so the text on top of it stays readable. 100 = untouched.
 #define BACKDROP_BRIGHTNESS_PCT 42
@@ -777,8 +786,14 @@ static bool make_backdrop(const raw_image_t *src, int box_w, int box_h, bool fro
 
 	uint8_t *scratch = malloc((size_t)small_w * small_h * 3);
 	if (scratch) {
-		for (int i = 0; i < BACKDROP_BLUR_PASSES; i++) {
-			box_blur_pass(small, scratch, small_w, small_h, BACKDROP_BLUR_RADIUS);
+		// A frosted band -- from_bottom, with the box it stands over -- is
+		// blurred lighter and keeps more light than a blur a title is read
+		// on: see BACKDROP_BAND_* and cover_set_backdrop_band_brightness().
+		bool band = from_bottom && over_h > 0;
+		int radius = band ? BACKDROP_BAND_BLUR_RADIUS : BACKDROP_BLUR_RADIUS;
+		int passes = band ? BACKDROP_BAND_BLUR_PASSES : BACKDROP_BLUR_PASSES;
+		for (int i = 0; i < passes; i++) {
+			box_blur_pass(small, scratch, small_w, small_h, radius);
 		}
 		free(scratch);
 	}

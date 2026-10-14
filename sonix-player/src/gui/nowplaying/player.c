@@ -1445,7 +1445,7 @@ static int menu_height;
 // still a white to read white on. This is the most that still leaves the band
 // a window rather than a panel: the colours come through at most of their
 // strength, as they do in the look this arrangement follows.
-#define IMMERSIVE_FROST_PCT 70
+#define IMMERSIVE_FROST_PCT 80
 
 static lv_obj_t *immersive_blur; // the frosted foot the deck stands on
 static bool immersive_up;
