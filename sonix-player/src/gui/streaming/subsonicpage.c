@@ -258,12 +258,8 @@ static void edit_cb(lv_event_t *e) {
 	const size_t sizes[] = {sizeof(draft.server), sizeof(draft.username), sizeof(draft.password)};
 	lv_label_set_text(edit_title, tr(keys[editing]));
 	lv_textarea_set_max_length(edit_field, (uint32_t)sizes[editing] - 1);
-	lv_textarea_set_password_mode(edit_field, editing == 2);
-	if (editing == 2) {
-		keyboard_style_password(edit_field, 0);
-	} else {
-		keyboard_refresh_password(edit_field);
-	}
+	// Keep the password readable so it can be checked before connecting.
+	lv_textarea_set_password_mode(edit_field, false);
 	lv_textarea_set_text(edit_field, values[editing]);
 	lv_textarea_set_placeholder_text(edit_field, editing == 0 ? "https://music.example.com" : tr(keys[editing]));
 	keyboard_reset(keyboard);
