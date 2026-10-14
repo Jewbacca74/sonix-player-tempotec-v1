@@ -76,9 +76,9 @@ static const int LADDER[11] = {0, 1, 3, 7, 15, 23, 31, 39, 47, 63, 79};
 typedef enum {
 	LS_OFF,
 	LS_IDLE,
-	LS_PCM_48K,
-	LS_PCM_192K,
-	LS_PCM_HI,
+	LS_LOSSY, // mp3, aac, ogg, opus
+	LS_CD, // lossless, 16-bit at 48 kHz or below
+	LS_HIFI, // lossless above that
 	LS_DSD,
 	LS_PODCAST,
 	LS_WIFI,
@@ -132,6 +132,8 @@ static int s_transition_ms = TRANSITION_DEFAULT_MS;
 static bool s_charging;
 static bool s_playing;
 static int s_rate;
+static bool s_lossy; // the source is a lossy codec (mp3, aac, ogg, opus)
+static int s_bits;	 // the source bit depth, 0 while unknown
 static bool s_podcast;		 // what is playing is a podcast episode
 static bool s_dsd;			 // ...or a DSD file, whatever its carrier rate
 static bool s_wifi_transfer; // a Wi-Fi transfer is active
@@ -377,20 +379,22 @@ static void start_worker(void) {
 
 // --- state -> output -------------------------------------------------------
 
-static led_state_t rate_state(int sample_rate) {
-	// The same rate thresholds the stock player uses. A DSD file is told apart
-	// by its own flag (see led_update_playback): over DoP its rate is that of
-	// the PCM carrying it. A source at a DSD bit rate is white all the same.
-	if (sample_rate >= 2822400) {
+// The quality tier of what is playing, which is what the colour says: the same
+// four the library badges use. Keying on the tier rather than the bare sample
+// rate is what tells an MP3 and a FLAC of the same rate apart. A DSD file is
+// told apart by its own flag (see led_update_playback): over DoP its rate is
+// that of the PCM carrying it.
+static led_state_t quality_state(int sample_rate, bool lossy, int bits, bool dsd) {
+	if (dsd || sample_rate >= 2822400) {
 		return LS_DSD;
 	}
-	if (sample_rate > 192000) {
-		return LS_PCM_HI;
+	if (lossy) {
+		return LS_LOSSY;
 	}
-	if (sample_rate > 48000) {
-		return LS_PCM_192K;
+	if (sample_rate > 48000 || bits > 16) {
+		return LS_HIFI;
 	}
-	return LS_PCM_48K;
+	return LS_CD;
 }
 
 // The driver pattern a state falls back to. There is no green pattern
@@ -402,11 +406,11 @@ static int state_pattern(led_state_t s) {
 		return PATTERN_OFF;
 	case LS_IDLE:
 		return PATTERN_IDLE_AQUA;
-	case LS_PCM_48K:
+	case LS_LOSSY:
 		return PATTERN_PCM_48K;
-	case LS_PCM_192K:
+	case LS_CD:
 		return PATTERN_PCM_192K;
-	case LS_PCM_HI:
+	case LS_HIFI:
 		return PATTERN_PCM_HI;
 	case LS_DSD:
 		return PATTERN_DSD_WHITE;
@@ -437,15 +441,15 @@ static void build_render(led_state_t s, led_render_t *out) {
 		mode = LM_OFF;
 		break;
 	case LS_IDLE:
-	case LS_PCM_192K:
+	case LS_CD:
 		g = 255;
 		b = 255;
 		break;
-	case LS_PCM_48K:
+	case LS_LOSSY:
 		r = 255;
 		g = 255;
 		break;
-	case LS_PCM_HI:
+	case LS_HIFI:
 		r = 255;
 		g = 128;
 		break;
@@ -551,13 +555,14 @@ static void apply(void) {
 		// Playback always shows its colour. A podcast has its own colour, purple,
 		// whatever the sample rate: it says what is being listened to, not how it
 		// is sampled.
-		state = s_podcast ? LS_PODCAST : s_dsd ? LS_DSD : rate_state(s_rate);
+		state = s_podcast ? LS_PODCAST : quality_state(s_rate, s_lossy, s_bits, s_dsd);
 	} else if (s_dac_streaming && s_dac_rate > 0) {
 		// In DAC mode nothing plays through audio.c, so s_playing is false and
 		// the LED went dark twenty seconds after the screen did -- with the
 		// computer still sending music. The rate the host chose gets the same
-		// colour a local track of that rate would.
-		state = rate_state(s_dac_rate);
+		// colour a local track of that rate would; a USB host sends PCM, so it is
+		// never lossy.
+		state = quality_state(s_dac_rate, false, 0, false);
 	} else if (s_wifi_transfer) {
 		// A Wi-Fi transfer is running: its light stays lit even with the screen
 		// off, since it is the only sign the server is running, and it
@@ -662,9 +667,11 @@ void led_set_on_charger(bool present) {
 	apply();
 }
 
-void led_update_playback(bool playing, int sample_rate, bool podcast, bool dsd) {
+void led_update_playback(bool playing, int sample_rate, bool lossy, int bits, bool podcast, bool dsd) {
 	s_playing = playing && sample_rate > 0;
 	s_rate = sample_rate;
+	s_lossy = lossy;
+	s_bits = bits;
 	s_podcast = podcast;
 	s_dsd = dsd;
 	if (s_playing) {
