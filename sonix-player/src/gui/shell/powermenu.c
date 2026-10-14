@@ -14,6 +14,7 @@
 #include "src/gui/shell/icons.h"
 #include "src/gui/shell/theme.h"
 #include "src/system/device/clock.h"
+#include "src/system/device/led.h"
 #include "src/system/audio/audio.h"
 #include "src/system/playback/device_state.h"
 #include "src/system/core/lang.h"
@@ -121,6 +122,9 @@ static void do_reboot(void) {
 	printf("power: rebooting\n");
 	device_state_remember_flush();
 	power_screen_off();
+	// The status LED, faded out like the power-off path: the screen is already
+	// dark, so this is the last thing the device says before it restarts.
+	led_shutdown();
 	if (!audio_prepare_poweroff()) {
 		fprintf(stderr, "power: audio did not quiesce completely before reboot\n");
 	}

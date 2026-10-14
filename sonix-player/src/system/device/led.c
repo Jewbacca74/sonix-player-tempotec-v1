@@ -160,8 +160,10 @@ static time_t s_charger_since; // when that last changed
 static pthread_t led_thread;
 static pthread_mutex_t led_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t led_cond = PTHREAD_COND_INITIALIZER;
+static pthread_cond_t led_done_cond = PTHREAD_COND_INITIALIZER;
 static led_render_t led_target;
 static volatile unsigned led_seq;
+static unsigned led_done_seq; // the target seq the worker has finished (under led_lock)
 static bool led_thread_started;
 
 static void write_str(const char *path, const char *value) {
@@ -272,92 +274,93 @@ static void *led_worker(void *arg) {
 		seen = led_seq;
 		pthread_mutex_unlock(&led_lock);
 
-		if (!led_i2c_ready()) {
-			continue;
-		}
-
-		if (t.mode == LM_BREATHE) {
-			led_i2c_breathe(t.r, t.g, t.b, (unsigned char)t.period, (unsigned char)t.duty, (unsigned char)t.fade);
-			cur_r = t.r;
-			cur_g = t.g;
-			cur_b = t.b;
-			cur_ch = ch_mask(t.r, t.g, t.b);
-			continue;
-		}
-
-		if (t.mode == LM_BLINK) {
-			unsigned ch = ch_mask(t.r, t.g, t.b);
-			led_i2c_steady();
-			for (;;) {
-				led_i2c_levels(t.r, t.g, t.b, ch);
-				if (led_wait(seen, LED_BLINK_MS)) {
-					break;
+		if (led_i2c_ready()) {
+			if (t.mode == LM_BREATHE) {
+				led_i2c_breathe(t.r, t.g, t.b, (unsigned char)t.period, (unsigned char)t.duty, (unsigned char)t.fade);
+				cur_r = t.r;
+				cur_g = t.g;
+				cur_b = t.b;
+				cur_ch = ch_mask(t.r, t.g, t.b);
+			} else if (t.mode == LM_BLINK) {
+				unsigned ch = ch_mask(t.r, t.g, t.b);
+				led_i2c_steady();
+				for (;;) {
+					led_i2c_levels(t.r, t.g, t.b, ch);
+					if (led_wait(seen, LED_BLINK_MS)) {
+						break;
+					}
+					led_i2c_levels(0, 0, 0, ch);
+					if (led_wait(seen, LED_BLINK_MS)) {
+						break;
+					}
 				}
-				led_i2c_levels(0, 0, 0, ch);
-				if (led_wait(seen, LED_BLINK_MS)) {
-					break;
-				}
-			}
-			cur_r = 0;
-			cur_g = 0;
-			cur_b = 0;
-			cur_ch = ch;
-			continue;
-		}
-
-		// Steady or off: walk from whatever is on now to the target. From black
-		// this is a fade-in, to black a fade-out, and between two colours a
-		// cross-fade -- the same walk, only the endpoints differ. Every channel
-		// lit at either end stays enabled for the duration, so a channel that is
-		// dark at one end fades rather than snapping.
-		int tr = (t.mode == LM_OFF) ? 0 : t.r;
-		int tg = (t.mode == LM_OFF) ? 0 : t.g;
-		int tb = (t.mode == LM_OFF) ? 0 : t.b;
-		unsigned tch = (t.mode == LM_OFF) ? 0 : ch_mask(tr, tg, tb);
-		unsigned ramp_ch = cur_ch | tch;
-		int steps = t.transition_ms / LED_STEP_MS;
-		if (steps < 1) {
-			steps = 1;
-		}
-
-		int sr = cur_r, sg = cur_g, sb = cur_b;
-		led_i2c_steady();
-		bool cut = false;
-		for (int i = 1; i <= steps; i++) {
-			int r, g, b;
-			if (t.mode == LM_OFF) {
-				// The doc's fade_out: a quadratic fall, so it eases out rather
-				// than dropping in a straight line.
-				int k = steps - i;
-				r = sr * k * k / (steps * steps);
-				g = sg * k * k / (steps * steps);
-				b = sb * k * k / (steps * steps);
+				cur_r = 0;
+				cur_g = 0;
+				cur_b = 0;
+				cur_ch = ch;
 			} else {
-				r = sr + (tr - sr) * i / steps;
-				g = sg + (tg - sg) * i / steps;
-				b = sb + (tb - sb) * i / steps;
+				// Steady or off: walk from whatever is on now to the target. From
+				// black this is a fade-in, to black a fade-out, and between two
+				// colours a cross-fade -- the same walk, only the endpoints differ.
+				// Every channel lit at either end stays enabled for the duration,
+				// so a channel that is dark at one end fades rather than snapping.
+				int tr = (t.mode == LM_OFF) ? 0 : t.r;
+				int tg = (t.mode == LM_OFF) ? 0 : t.g;
+				int tb = (t.mode == LM_OFF) ? 0 : t.b;
+				unsigned tch = (t.mode == LM_OFF) ? 0 : ch_mask(tr, tg, tb);
+				unsigned ramp_ch = cur_ch | tch;
+				int steps = t.transition_ms / LED_STEP_MS;
+				if (steps < 1) {
+					steps = 1;
+				}
+
+				int sr = cur_r, sg = cur_g, sb = cur_b;
+				led_i2c_steady();
+				bool cut = false;
+				for (int i = 1; i <= steps; i++) {
+					int r, g, b;
+					if (t.mode == LM_OFF) {
+						// The doc's fade_out: a quadratic fall, so it eases out
+						// rather than dropping in a straight line.
+						int k = steps - i;
+						r = sr * k * k / (steps * steps);
+						g = sg * k * k / (steps * steps);
+						b = sb * k * k / (steps * steps);
+					} else {
+						r = sr + (tr - sr) * i / steps;
+						g = sg + (tg - sg) * i / steps;
+						b = sb + (tb - sb) * i / steps;
+					}
+					led_i2c_levels(r, g, b, ramp_ch);
+					cur_r = r;
+					cur_g = g;
+					cur_b = b;
+					if (i < steps && led_wait(seen, LED_STEP_MS)) {
+						cut = true;
+						break;
+					}
+				}
+				if (cut) {
+					cur_ch = ramp_ch;
+				} else {
+					if (t.mode == LM_OFF) {
+						// The map off entirely, as the doc's fade_out leaves it.
+						led_i2c_off();
+					}
+					cur_r = tr;
+					cur_g = tg;
+					cur_b = tb;
+					cur_ch = tch;
+				}
 			}
-			led_i2c_levels(r, g, b, ramp_ch);
-			cur_r = r;
-			cur_g = g;
-			cur_b = b;
-			if (i < steps && led_wait(seen, LED_STEP_MS)) {
-				cut = true;
-				break;
-			}
 		}
-		if (cut) {
-			cur_ch = ramp_ch;
-			continue;
-		}
-		if (t.mode == LM_OFF) {
-			// The map off entirely, as the doc's fade_out leaves it.
-			led_i2c_off();
-		}
-		cur_r = tr;
-		cur_g = tg;
-		cur_b = tb;
-		cur_ch = tch;
+
+		// This target is done (or was cut short by a newer one). Whoever is
+		// waiting for a fade to finish -- the shutdown path -- is told here.
+		pthread_mutex_lock(&led_lock);
+		led_done_seq = seen;
+		pthread_cond_broadcast(&led_done_cond);
+		pthread_mutex_unlock(&led_lock);
 	}
 	return NULL;
 }
@@ -771,19 +774,35 @@ bool led_effects_available(void) {
 	return access(PATTERN_NODE, F_OK) == 0;
 }
 
-// Posts a fade to black and waits for it to play. Shared by the power-off and
-// the suspend paths, both of which want the light gone before the power does.
+// Posts a fade to black and waits for the worker to actually finish it, rather
+// than sleeping for the nominal duration: the I2C writes make a fade take a
+// little longer than its length in steps, and a fixed sleep cut the last of it
+// off -- the light snapped out instead of reaching black. Shared by the
+// power-off and the suspend paths, both of which want the light gone before the
+// power does.
 static void fade_out_and_wait(void) {
 	if (!direct_mode) {
 		return;
 	}
-	led_render_t t;
-	memset(&t, 0, sizeof(t));
-	t.mode = LM_OFF;
-	t.transition_ms = s_transition_ms;
-	led_post(&t);
-	struct timespec ts = {0, (long)s_transition_ms * 1000000L};
-	nanosleep(&ts, NULL);
+
+	pthread_mutex_lock(&led_lock);
+	memset(&led_target, 0, sizeof(led_target));
+	led_target.mode = LM_OFF;
+	led_target.transition_ms = s_transition_ms;
+	led_seq++;
+	unsigned want = led_seq;
+	pthread_cond_signal(&led_cond);
+
+	// A safety net, not the expected path: the longest fade is two seconds.
+	struct timespec deadline;
+	clock_gettime(CLOCK_REALTIME, &deadline);
+	deadline.tv_sec += 3;
+	while (led_done_seq < want) {
+		if (pthread_cond_timedwait(&led_done_cond, &led_lock, &deadline) != 0) {
+			break;
+		}
+	}
+	pthread_mutex_unlock(&led_lock);
 }
 
 void led_shutdown(void) { fade_out_and_wait(); }
