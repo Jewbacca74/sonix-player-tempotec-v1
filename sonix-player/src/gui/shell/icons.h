@@ -152,6 +152,8 @@ extern const lv_image_dsc_t icon_shuffle_repeat;
 extern const lv_image_dsc_t icon_arrow_down_up;
 extern const lv_image_dsc_t icon_star;
 extern const lv_image_dsc_t icon_star_filled;
+extern const lv_image_dsc_t icon_heart_outline;
+extern const lv_image_dsc_t icon_heart_filled;
 extern const lv_image_dsc_t icon_star_corner;
 extern const lv_image_dsc_t icon_radio_recent;
 extern const lv_image_dsc_t icon_radio_custom;
