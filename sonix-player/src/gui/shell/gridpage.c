@@ -368,6 +368,17 @@ void gridpage_set_tile_orientation(lv_obj_t *grid, int index, bool horizontal) {
 	}
 }
 
+void gridpage_set_tile_label_hidden(lv_obj_t *grid, int index, bool hidden) {
+	if (!grid || index < 0 || index >= (int)lv_obj_get_child_count(grid)) {
+		return;
+	}
+
+	lv_obj_t *label = tile_label_object(lv_obj_get_child(grid, index));
+	if (label) {
+		lv_obj_set_hidden(label, hidden);
+	}
+}
+
 void gridpage_set_tile_label_lines(lv_obj_t *grid, int index, int lines) {
 	if (!grid || index < 0 || index >= (int)lv_obj_get_child_count(grid)) {
 		return;

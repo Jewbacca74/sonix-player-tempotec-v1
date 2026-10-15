@@ -48,6 +48,10 @@ void gridpage_set_tile_icon_style(lv_obj_t *grid, int index, const lv_image_dsc_
 // Tokyo Night home menu; existing themes keep their original construction.
 void gridpage_set_tile_orientation(lv_obj_t *grid, int index, bool horizontal);
 
+// Hides a tile caption without deleting its text or changing other grids.
+// Pair with the vertical orientation to center an icon on its own.
+void gridpage_set_tile_label_hidden(lv_obj_t *grid, int index, bool hidden);
+
 // Lets selected Tokyo Night captions use up to `lines` tidy lines instead of
 // the default one-line ellipsis (for labels such as File Manager and Album
 // artist). The caller restores one line when returning to Dark or Light.

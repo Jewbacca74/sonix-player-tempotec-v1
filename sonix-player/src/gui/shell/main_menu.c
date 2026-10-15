@@ -20,6 +20,7 @@
 #include "src/gui/shell/theme.h"
 #include "src/gui/streaming/streaming.h"
 #include "src/gui/wireless/wireless.h"
+#include "src/system/core/config.h"
 #include "src/system/core/lang.h"
 #include "src/system/playback/device_state.h"
 
@@ -137,6 +138,47 @@ static void set_label_if_changed(lv_obj_t *label, const char *text) {
 
 static bool home_header_shown(void) { return !theme_is_oled(); }
 
+bool main_menu_icons_only(void) { return config_get_bool("ui", "main_menu_icons_only", false); }
+
+// Only this grid opts into hidden captions. Reapply after its geometry changes
+// so the larger icons fit the space left by each theme, header and footer.
+static void main_menu_refresh_tiles(void) {
+	if (!menu_grid || !menu_cfg) {
+		return;
+	}
+
+	bool compact = bp_is_tempotec_v1();
+	bool tokyo = theme_uses_function_glyphs();
+	bool icons_only = main_menu_icons_only();
+	bool horizontal = compact && tokyo && !icons_only;
+	for (int i = 0; i < 6; i++) {
+		lv_obj_t *tile = lv_obj_get_child(menu_grid, i);
+		int icon_size = tokyo ? (compact ? 22 : 46) : (compact ? 46 : 0);
+		if (icons_only) {
+			// Leave room for the tile padding and the glyph's optional 6 px
+			// halo. Size both the image's drawing and its flex layout box.
+			icon_size = LV_MAX(1, LV_MIN(lv_obj_get_width(tile), lv_obj_get_height(tile)) - bp_pick(12, 24));
+		}
+
+		gridpage_set_tile_label_hidden(menu_grid, i, icons_only);
+		if (tokyo) {
+			gridpage_set_tile_icon_style(menu_grid, i, TOKYO_MENU_ICONS[i], icon_size, true,
+										 theme_semantic_color(TOKYO_MENU_TONES[i]), compact && i < 5 && i != 1 && i != 3);
+		} else {
+			gridpage_set_tile_icon_style(menu_grid, i, NORMAL_MENU_ICONS[i], icon_size, false,
+										 theme()->text_primary, false);
+		}
+		gridpage_set_tile_orientation(menu_grid, i, horizontal);
+
+		lv_obj_set_style_border_width(tile, 0, 0);
+		if (tokyo) {
+			lv_obj_set_style_outline_width(tile, 0, 0);
+		} else {
+			lv_obj_remove_local_style_prop(tile, LV_STYLE_OUTLINE_WIDTH, 0);
+		}
+	}
+}
+
 // Fit the V1's live strip around two fixed one-line labels. Explicitly sizing
 // the text column from the row's content width keeps both glyphs and ellipses
 // inside the card, including after a font-size or theme change.
@@ -171,9 +213,7 @@ static void main_menu_layout_tokyo_home(bool force) {
 	int bottom = (int)menu_cfg->padding + footer_height + 1;
 	int top = (int)menu_cfg->top_bar_height + (home_header_shown() ? HOME_HEADER_HEIGHT : 0);
 	gridpage_set_layout(menu_grid, menu_cfg, top, bottom, menu_cfg->padding, 6, 2, 3);
-	for (int i = 0; i < 6; i++) {
-		gridpage_set_tile_orientation(menu_grid, i, true);
-	}
+	main_menu_refresh_tiles();
 }
 
 // The mini-player shows the live title and artist only. LVGL owns its label
@@ -253,26 +293,6 @@ static void main_menu_refresh_theme(void) {
 	bool tokyo = theme_uses_function_glyphs();
 	bool prototype_layout = compact && tokyo;
 
-	for (int i = 0; i < 6; i++) {
-		if (tokyo) {
-			gridpage_set_tile_icon_style(menu_grid, i, TOKYO_MENU_ICONS[i], compact ? 22 : 46, true,
-										 theme_semantic_color(TOKYO_MENU_TONES[i]), prototype_layout && i < 5 && i != 1 && i != 3);
-		} else {
-			// The original Dark and Light menu art and its full V1 icon size are
-			// retained exactly; the glyph-only treatment is scoped to Tokyo Night.
-			gridpage_set_tile_icon_style(menu_grid, i, NORMAL_MENU_ICONS[i], compact ? 46 : 0, false,
-										 theme()->text_primary, false);
-		}
-
-		lv_obj_t *tile = lv_obj_get_child(menu_grid, i);
-		lv_obj_set_style_border_width(tile, 0, 0);
-		if (tokyo) {
-			lv_obj_set_style_outline_width(tile, 0, 0);
-		} else {
-			lv_obj_remove_local_style_prop(tile, LV_STYLE_OUTLINE_WIDTH, 0);
-		}
-	}
-
 	if (prototype_layout) {
 		lv_obj_set_hidden(home_header, !home_header_shown());
 		lv_obj_set_hidden(home_note, !home_header_shown());
@@ -299,9 +319,7 @@ static void main_menu_refresh_theme(void) {
 		lv_obj_set_hidden(home_note, true);
 		lv_obj_set_hidden(mini_player, true);
 		gridpage_set_layout(menu_grid, menu_cfg, menu_cfg->top_bar_height, 0, menu_cfg->padding, compact ? 6 : 14, 2, 3);
-		for (int i = 0; i < 6; i++) {
-			gridpage_set_tile_orientation(menu_grid, i, false);
-		}
+		main_menu_refresh_tiles();
 		lv_obj_set_style_bg_opa(home_header, LV_OPA_TRANSP, 0);
 		lv_obj_set_style_radius(home_header, 0, 0);
 		lv_obj_set_style_text_font(home_title, &font_ui_16, 0);
@@ -312,6 +330,15 @@ static void main_menu_refresh_theme(void) {
 	}
 
 	main_menu_refresh_now_playing();
+}
+
+void main_menu_set_icons_only(bool enabled) {
+	if (main_menu_icons_only() == enabled) {
+		return;
+	}
+	config_set_bool("ui", "main_menu_icons_only", enabled);
+	config_save();
+	main_menu_refresh_theme();
 }
 
 void main_menu_init(gui_config_t *cfg) {
@@ -440,4 +467,5 @@ void main_menu_init(gui_config_t *cfg) {
 
 	main_menu_refresh_theme();
 	theme_register_refresh(main_menu_refresh_theme);
+	fonts_register_change(main_menu_refresh_theme);
 }

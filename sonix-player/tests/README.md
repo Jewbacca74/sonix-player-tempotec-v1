@@ -49,3 +49,26 @@ Both sanitizer targets use AddressSanitizer and UndefinedBehaviorSanitizer. At `
 ## Limits
 
 The fixture proves transport, byte/sample counts and ownership behavior on the host. Scheduling helpers are stubs and there is **no ALSA/device loop** here, so these tests do not certify real-time scheduling, gapless analog output, Wi-Fi performance, target CPU use or battery life. The TLS cases run against the OpenSSL the host has (the player's own client code, `dlopen`ed exactly as on the device, sees the host's libssl 1.1/3.x); with no loadable OpenSSL they print `SKIP TLS` and the rest of the suite still runs. Real-network trust, redirects and certificate cancellation, plus UI interaction, should also be checked on hardware. See [the V1 checklist](../../docs/subsonic.md#validation).
+
+## Headless main-menu appearance tests
+
+```sh
+# Only needed if the player build has not already fetched LVGL:
+git clone --depth 1 -b v9.6.0 https://github.com/lvgl/lvgl.git sonix-player/lvgl
+make -C sonix-player/tests ui -j"$(nproc)"
+```
+
+This optional suite links the real LVGL layout engine, main menu, shared grid,
+Appearance controls, themes, language loader and configuration store. It uses
+`tests/ui/lv_conf.h` to disable SDL, FreeType and device drivers, so a compiler
+and the LVGL checkout are sufficient; no audio libraries or display are needed.
+Deterministic built-in font metrics and unrelated navigation/playback services
+are substituted, rather than running the player or touching device hardware.
+
+It checks the default and saved **Main menu icons only** setting on both panel
+sizes, all five themes, larger centered icons and halo bounds, unchanged
+secondary-menu tiles, restoration of the original labeled layout, real switch
+callbacks and config save/reload, theme/accent/tint/font changes, hidden-label
+translation, and the six tile destinations. Both language asset trees are used.
+The host-build workflow runs this suite as well. These are layout/behavior
+checks, not a replacement for visual and touch testing on a physical V1.

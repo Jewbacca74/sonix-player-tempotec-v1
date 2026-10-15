@@ -10,6 +10,7 @@
 #include "src/gui/fonts/fonts.h"
 #include "src/gui/nowplaying/player.h"
 #include "src/gui/shell/icons.h"
+#include "src/gui/shell/main_menu.h"
 #include "src/gui/shell/settingsrow.h"
 #include "src/gui/shell/switcher.h"
 #include "src/gui/shell/theme.h"
@@ -26,6 +27,7 @@ static lv_obj_t *btn_boot[4]; // Stock / Retrospace / Space / Travelling in spac
 static lv_obj_t *btn_clock[4]; // left / centre / right / hidden
 static lv_obj_t *btn_accent[THEME_ACCENT_COUNT]; // the coloured circles
 static lv_obj_t *tint_toggle;
+static lv_obj_t *main_menu_icons_toggle;
 static lv_obj_t *battery_percent_toggle;
 static lv_obj_t *text_size_pill[FONTS_TEXT_COUNT]; // normal / large / small
 static lv_obj_t *theme_palette_card;
@@ -49,6 +51,11 @@ static void battery_percent_cb(lv_event_t *e) {
 static void dynamic_tint_cb(lv_event_t *e) {
 	(void)e;
 	theme_set_dynamic_tint(lv_obj_has_state(tint_toggle, LV_STATE_CHECKED));
+}
+
+static void main_menu_icons_cb(lv_event_t *e) {
+	(void)e;
+	main_menu_set_icons_only(lv_obj_has_state(main_menu_icons_toggle, LV_STATE_CHECKED));
 }
 
 static void refresh_text_size_pills(void) {
@@ -563,6 +570,18 @@ void appearance_init(gui_config_t *cfg) {
 	// Black and OLED, immediately after the theme switch. Hidden for Dark/Light
 	// so their existing Appearance page remains unchanged.
 	build_theme_previews(container, compact);
+
+	settingsrow_toggle(container, "appearance_main_menu_icons_only", &main_menu_icons_toggle, main_menu_icons_cb);
+	if (main_menu_icons_only()) {
+		lv_obj_add_state(main_menu_icons_toggle, LV_STATE_CHECKED);
+	}
+
+	lv_obj_t *menu_note = lv_label_create(container);
+	lv_label_set_long_mode(menu_note, LV_LABEL_LONG_WRAP);
+	lv_obj_set_width(menu_note, lv_pct(100));
+	lv_obj_add_style(menu_note, &theme_style_text_dim, 0);
+	lv_obj_set_style_text_font(menu_note, &font_ui_22, 0);
+	lv_label_set_text(menu_note, tr("appearance_main_menu_icons_only_note"));
 
 	// A second card: which picture the next power-on shows. Unlike every
 	// other choice on this page it is not only a config value -- it also

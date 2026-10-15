@@ -49,3 +49,37 @@ sanitize-codecs:
 
 clean:
 	rm -rf $(BUILD)
+
+# Optional headless LVGL layout regression tests. Reuse the production config,
+# disabling SDL, FreeType and device drivers; no audio service is linked.
+UI_SRC = $(ROOT)/tests/ui/test_main_menu.c $(ROOT)/src/gui/shell/main_menu.c \
+         $(ROOT)/src/gui/shell/gridpage.c $(ROOT)/src/gui/settings/appearance.c \
+         $(ROOT)/src/gui/shell/settingsrow.c $(ROOT)/src/gui/shell/theme.c \
+         $(ROOT)/src/gui/shell/icons.c $(ROOT)/src/gui/board_profile.c \
+         $(ROOT)/src/system/core/config.c $(ROOT)/src/system/core/lang.c
+UI_LVGL_SRC = $(shell find $(ROOT)/lvgl/src -name '*.c' 2>/dev/null)
+UI_OBJ = $(patsubst $(ROOT)/%.c,$(BUILD)/ui/%.o,$(UI_SRC)) \
+         $(patsubst $(ROOT)/%.c,$(BUILD)/ui/%.o,$(UI_LVGL_SRC))
+UI_CPPFLAGS = $(CPPFLAGS) -I$(ROOT)/lvgl -DLV_CONF_PATH='"$(abspath ui/lv_conf.h)"'
+UI_CFLAGS = $(CFLAGS) -MMD -MP
+
+.PHONY: ui
+ui: $(BUILD)/test_main_menu
+	BOARD=tempotec_v1 $(BUILD)/test_main_menu ../../sonix-packer/assets/R1/usr/resource/sonix/language
+	BOARD=tempotec_v1 $(BUILD)/test_main_menu ../../sonix-packer/assets/R1/usr/resource/sonix/language saved
+	BOARD=hiby_r1 $(BUILD)/test_main_menu ../../sonix-packer/assets/R3PII/usr/resource/sonix/language
+	BOARD=hiby_r1 $(BUILD)/test_main_menu ../../sonix-packer/assets/R3PII/usr/resource/sonix/language saved
+
+$(BUILD)/test_main_menu: $(UI_OBJ)
+	$(CC) -o $@ $^ $(LDFLAGS) $(LDLIBS)
+
+$(BUILD)/ui/%.o: $(ROOT)/%.c ui/lv_conf.h $(ROOT)/lv_conf.h
+	@mkdir -p $(dir $@)
+	$(CC) $(UI_CPPFLAGS) $(UI_CFLAGS) -c $< -o $@
+
+# Upstream LVGL is not maintained here; keep its warnings nonfatal.
+$(BUILD)/ui/lvgl/%.o: $(ROOT)/lvgl/%.c ui/lv_conf.h $(ROOT)/lv_conf.h
+	@mkdir -p $(dir $@)
+	$(CC) $(UI_CPPFLAGS) $(filter-out -Werror,$(UI_CFLAGS)) -c $< -o $@
+
+-include $(UI_OBJ:.o=.d)

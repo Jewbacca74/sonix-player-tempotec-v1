@@ -162,6 +162,7 @@ a self-signed certificate), and HLS.
 ## Settings
 
 - **Appearance** - dark and light, plus the V1 palettes Tokyo Night, Amber on Black and OLED (true black with no grey cards, white as its accent, and a main menu without the title and tagline); twelve accent colors, clock position, a dynamic tint that borrows the accent's hue for backgrounds and cards, and a toggle to show/hide the battery percentage.
+- **Appearance → Main menu icons only** - optionally hide the six main-menu tile labels and show larger, centered icons. Applies immediately in every theme and is saved across restarts; other menus, the status bar and the now-playing strip are unchanged. Off by default.
 - **Appearance → Boot screen** - the picture the next power-on opens with: Retrospace (the default), Space, Travelling in space, or Stock, the firmware's own light and dark pictures. The choice is written to the flash marker the boot script reads, so it takes effect at the next boot.
 - **Appearance → Font** - the face the whole interface is drawn with: MiSans (the default), Neon 80s and, where the image carries them, Roboto Mono, Roboto Condensed, Inter and Barlow Semi Condensed. Text can also be sized Normal or Large. Any `.ttf` or `.otf` file put in the `Fonts` folder on the card is offered beside those, so people can install their own; a face without Cyrillic, Hangul, kanji or Greek still draws the whole interface, because MiSans stays behind it for the letters it does not have.
 - **Screen** - brightness, screen-off timeout, double-tap to wake, screensaver,
