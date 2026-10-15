@@ -48,7 +48,7 @@ jobs:
       - name: Build the host player
         run: make -C sonix-player host -j"$(nproc)"
 
-      - name: Check main-menu appearance layouts (headless LVGL)
+      - name: Check main-menu and screensaver layouts (headless LVGL)
         run: make -C sonix-player/tests ui -j"$(nproc)"
 
       - name: Run Subsonic and stream-bridge tests
