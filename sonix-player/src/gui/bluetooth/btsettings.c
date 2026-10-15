@@ -211,13 +211,22 @@ static void row_free_cb(lv_event_t *e) { free(lv_event_get_user_data(e)); }
 
 static void remember_mac(const char *mac) { snprintf(menu_mac, sizeof(menu_mac), "%s", mac); }
 
-static void show_device_menu(lv_obj_t *anchor, bool connected) {
-	if (connected) {
+static void show_device_menu(lv_obj_t *anchor, bool connected, bool audio_connected) {
+	if (audio_connected) {
 		static const popover_item_t items[] = {
 			{"disconnect", disconnect_action, NULL},
 			{"bt_forget", forget_action, NULL},
 		};
 		popover_show(anchor, items, 2);
+	} else if (connected) {
+		// The ACL link can remain up after A2DP has gone. Let the user request
+		// the audio profile again without cycling the whole Bluetooth radio.
+		static const popover_item_t items[] = {
+			{"connect", connect_action, NULL},
+			{"disconnect", disconnect_action, NULL},
+			{"bt_forget", forget_action, NULL},
+		};
+		popover_show(anchor, items, 3);
 	} else {
 		static const popover_item_t items[] = {
 			{"connect", connect_action, NULL},
@@ -227,9 +236,10 @@ static void show_device_menu(lv_obj_t *anchor, bool connected) {
 	}
 }
 
-// A tap on a paired device connects it. On the connected one a tap opens the
-// menu instead, since connecting again would be a no-op; the same menu is
-// reachable everywhere through the three dots or a long press.
+// A tap on a disconnected paired device connects it. A row with an ACL link
+// opens the menu, which still offers Connect when A2DP is missing; this keeps
+// control of ACL-only uses (such as SonixLink) explicit. The same menu is also
+// reachable through the three dots or a long press.
 static void paired_row_clicked_cb(lv_event_t *e) {
 	if (switcher_back_drag_active()) {
 		return;
@@ -242,8 +252,12 @@ static void paired_row_clicked_cb(lv_event_t *e) {
 	}
 	remember_mac(mac);
 
-	if (lv_obj_get_user_data(row) != NULL) {
-		show_device_menu(row, true);
+	bool connected = lv_obj_get_user_data(row) != NULL; // BlueZ ACL link
+	bool audio_connected = bluetooth_device_audio_connected(mac);
+	if (connected || audio_connected) {
+		// The Connect entry on this menu requests A2DP even if its ACL link is
+		// already up; users do not need to cycle Bluetooth to recover audio.
+		show_device_menu(row, connected || audio_connected, audio_connected);
 	} else {
 		last_action = ACTION_CONNECT;
 		bluetooth_connect(mac);
@@ -257,7 +271,9 @@ static void paired_row_long_pressed_cb(lv_event_t *e) {
 		return;
 	}
 	remember_mac(mac);
-	show_device_menu(row, lv_obj_get_user_data(row) != NULL);
+	bool connected = lv_obj_get_user_data(row) != NULL;
+	bool audio_connected = bluetooth_device_audio_connected(mac);
+	show_device_menu(row, connected || audio_connected, audio_connected);
 }
 
 static void row_menu_clicked_cb(lv_event_t *e) {
@@ -270,10 +286,12 @@ static void row_menu_clicked_cb(lv_event_t *e) {
 		return;
 	}
 	remember_mac(mac);
-	// The connected flag lives in the user data of the row the button sits on,
-	// and decides between a Disconnect and a Connect entry.
+	// The row records BlueZ's ACL link; the A2DP PCM is checked separately so
+	// a profile-disconnected device still offers Connect.
 	lv_obj_t *row = lv_obj_get_parent(button);
-	show_device_menu(button, row && lv_obj_get_user_data(row) != NULL);
+	bool connected = row && lv_obj_get_user_data(row) != NULL;
+	bool audio_connected = bluetooth_device_audio_connected(mac);
+	show_device_menu(button, connected || audio_connected, audio_connected);
 }
 
 static void found_row_clicked_cb(lv_event_t *e) {

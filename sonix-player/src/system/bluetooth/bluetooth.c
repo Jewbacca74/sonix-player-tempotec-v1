@@ -1815,24 +1815,26 @@ static bool second_connect_allowed(const char *mac) {
 	return true;
 }
 
+// Whether a failed Device1.Connect was answered with "the ACL link is already
+// up". BlueZ will not open a missing A2DP profile by repeating Connect; use
+// ConnectProfile directly instead.
+static bool connect_was_already_connected(const char *why) {
+	return why && strstr(why, "AlreadyConnected") != NULL;
+}
+
 // Whether a failed Connect was answered by the device itself, as opposed to the
 // device not being there at all. Only org.bluez.Error.Failed qualifies --
-// NotReady, InProgress, AlreadyConnected and the rest are about this side --
-// and of those, "Host is down" is the page timeout of a device that is switched
-// off or out of range, where asking again only repeats the five seconds. No
-// answer at all (an empty `why`) is a timeout of this side's own and does not
-// qualify either.
+// NotReady, InProgress and the rest are about this side -- and of those, "Host
+// is down" is the page timeout of a device that is switched off or out of
+// range, where asking again only repeats the five seconds. No answer at all
+// (an empty `why`) is a timeout of this side's own and does not qualify either.
 static bool connect_was_refused(const char *why) {
 	return strstr(why, "org.bluez.Error.Failed") != NULL && strstr(why, "Host is down") == NULL;
 }
 
 static bool connect_device(const char *mac) {
-	// Never on top of a link that is already up.
-	//
-	// Headphones often come back by themselves the instant the adapter is
-	// powered, and a Connect sent on top of that makes bluez pull the profile
-	// down; from there every attempt is refused. Read here, immediately before
-	// the command, which is the only place late enough.
+	// Never send Device1.Connect on top of a link or an A2DP profile that is
+	// already up. Connect can tear the working profile down on some speakers.
 	char sink[BT_MAC_MAX];
 	if (btstack_audio_sink(sink, sizeof(sink)) && strcasecmp(sink, mac) == 0) {
 		fprintf(stderr, "bluetooth: %s is already connected with audio; leaving it alone\n", mac);
@@ -1847,8 +1849,31 @@ static bool connect_device(const char *mac) {
 		sleep_ms(400);
 	}
 
-	char why[160];
-	bool ok = btstack_connect(mac, CONNECT_TIMEOUT_MS, why, sizeof(why));
+	// A Bluetooth device can keep its ACL connection after its A2DP profile
+	// disappears. In that state there is nothing to "connect" at Device1: the
+	// missing profile must be requested explicitly.
+	bool link_up = false;
+	if (!btstack_device_connected(mac, &link_up)) {
+		// Do not trust the refreshed row cache here: it can outlive the ACL
+		// link. A normal Connect is safe, and BlueZ's AlreadyConnected reply
+		// below handles the other side of a race.
+		link_up = false;
+	}
+	char why[160] = "";
+	bool ok = true;
+	if (link_up) {
+		fprintf(stderr, "bluetooth: %s has an ACL link but no audio; asking for A2DP directly\n", mac);
+	} else {
+		ok = btstack_connect(mac, CONNECT_TIMEOUT_MS, why, sizeof(why));
+		if (!ok && connect_was_already_connected(why)) {
+			// The device cache can lag behind bluez. Treat its authoritative
+			// AlreadyConnected reply as an existing link, not a failed attempt.
+			fprintf(stderr, "bluetooth: %s already has an ACL link; requesting its A2DP profile\n", mac);
+			ok = true;
+			link_up = true;
+		}
+	}
+
 	if (!ok && connect_was_refused(why)) {
 		// Not a speaker that is off or out of range -- that is a page
 		// timeout, "Host is down", five seconds of nothing. This one answered
@@ -1872,21 +1897,14 @@ static bool connect_device(const char *mac) {
 	fprintf(stderr, "bluetooth: connect %s -> %s\n", mac, ok ? "ok" : "FAILED");
 	if (ok) {
 		remember_last_device(mac);
-		// Device1.Connect returning says the ACL link is up. It does not say
-		// that the AUDIO profile came up, which is a separate and later event --
-		// bluealsa publishing the PCM. Reporting the first as success puts
-		// "connected" on screen over headphones that play nothing.
-		//
-		// A profile that does not arrive is NOT reported as a failed connection:
-		// the link is there, and answering false puts "make sure the headphones
-		// are in pairing mode" on the screen, which is advice for a problem the
-		// user does not have.
+		// The ACL reply is not the audio profile: bluealsa's PCM is the sign
+		// that there is actually somewhere to write. A missing profile is
+		// requested directly below, even when the ACL was already up.
+		if (link_up) {
+			btstack_connect_a2dp(mac, CONNECT_TIMEOUT_MS);
+		}
 		bool audio = wait_for_a2dp(mac, A2DP_CONFIRM_MS);
 		if (!audio) {
-			// A link that was already up when Connect came in: bluez answers
-			// it at once and brings up nothing. What is missing is the stream
-			// alone, and it can be asked for alone -- once the Connect is over,
-			// which it is by now.
 			fprintf(stderr, "bluetooth: asking %s for its A2DP stream by itself\n", mac);
 			if (btstack_connect_a2dp(mac, CONNECT_TIMEOUT_MS)) {
 				audio = wait_for_a2dp(mac, A2DP_CONFIRM_MS);
@@ -2713,12 +2731,39 @@ void bluetooth_receiver_command(const char *member) {
 }
 
 static void do_set_volume(int percent) {
-	// btvolume owns the level: it writes it on org.bluealsa.PCM1 and follows what
-	// the headphones send back, both over the bus. There is no command-line
-	// fallback any more, and none is needed -- the bus path exists exactly when
-	// bluealsa does, which is exactly when there is a stream to set a level on.
-	if (btvolume_available()) {
-		btvolume_notify_local(percent);
+	char mac[BT_MAC_MAX] = "";
+	pthread_mutex_lock(&lock);
+	if (g_enabled && g_a2dp_connected) {
+		snprintf(mac, sizeof(mac), "%s", g_a2dp_mac);
+	}
+	pthread_mutex_unlock(&lock);
+	if (!mac[0]) {
+		return;
+	}
+
+	// Keep the local change queued even while the bridge is opening its PCM:
+	// that lets it beat the initial headphone-volume adoption. If the bridge
+	// is not yet usable, also try the same properties through btstack's
+	// separately-owned D-Bus connection instead of dropping the volume key.
+	bool bridge_ready = btvolume_available();
+	btvolume_notify_local(percent);
+	if (bridge_ready) {
+		return;
+	}
+	if (percent < 0) {
+		percent = 0;
+	} else if (percent > 100) {
+		percent = 100;
+	}
+
+	int level = (percent * 127 + 50) / 100;
+	int packed = (level << 8) | level; // equal channels, neither muted
+	bool soft_volume = !bluetooth_volume_sync();
+	bool mode_ok = btstack_pcm_softvolume_set(mac, false, soft_volume);
+	bool volume_ok = btstack_pcm_volume_set(mac, false, packed);
+	if (!mode_ok || !volume_ok) {
+		fprintf(stderr, "bluetooth: volume fallback for %s failed (SoftVolume %s, Volume %s)\n", mac,
+				mode_ok ? "ok" : "failed", volume_ok ? "ok" : "failed");
 	}
 }
 
@@ -3353,6 +3398,16 @@ bool bluetooth_connected_device(bt_device_t *out) {
 bool bluetooth_audio_active(void) {
 	pthread_mutex_lock(&lock);
 	bool active = g_enabled && g_a2dp_connected;
+	pthread_mutex_unlock(&lock);
+	return active;
+}
+
+bool bluetooth_device_audio_connected(const char *mac) {
+	if (!mac || !mac[0]) {
+		return false;
+	}
+	pthread_mutex_lock(&lock);
+	bool active = g_enabled && g_a2dp_connected && strcasecmp(g_a2dp_mac, mac) == 0;
 	pthread_mutex_unlock(&lock);
 	return active;
 }

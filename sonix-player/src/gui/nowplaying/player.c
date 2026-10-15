@@ -576,17 +576,23 @@ static void apply_audiobook_mode(bool book, bool podcast) {
 	audiobook_skip_shown_forward = forward;
 	audiobook_mode_valid = true;
 
+	// The audiobook glyphs include a 50 px artwork canvas, wider than the
+	// compact player's 42 px skip buttons. Scale only those alternate glyphs
+	// on the V1; the regular 34 px track-skip icons keep their original size.
+	int skip_icon_scale = skips && bp_is_tempotec_v1() ? 192 : 256;
 	if (prev_icon) {
 		lv_image_set_src(prev_icon, !skips                            ? &icon_skip_back
 									: back == AUDIOBOOK_SKIP_HUGE ? &icon_prev_60
 									: back == AUDIOBOOK_SKIP_LONG ? &icon_prev_30
 																  : &icon_prev_10);
+		lv_image_set_scale(prev_icon, skip_icon_scale);
 	}
 	if (next_icon) {
 		lv_image_set_src(next_icon, !skips                               ? &icon_skip_forward
 									: forward == AUDIOBOOK_SKIP_HUGE ? &icon_next_60
 									: forward == AUDIOBOOK_SKIP_LONG ? &icon_next_30
 																	 : &icon_next_10);
+		lv_image_set_scale(next_icon, skip_icon_scale);
 	}
 	// A book has a menu of its own behind the usual glyph: chapters,
 	// bookmarks, summary. On a podcast the same button goes straight to the

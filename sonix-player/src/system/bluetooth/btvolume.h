@@ -31,8 +31,8 @@
 // line means asking every second and a half for as long as the music plays,
 // which is a fork and an exec each time on a device with one slow core. The bus
 // says so itself, through PropertiesChanged, the moment it happens. The command
-// line stays as the fallback for writing (see bluetooth.c) in case this path is
-// not there at all.
+// bluetooth.c falls back to a PCM-property write over btstack's separate
+// D-Bus connection if this bridge is unavailable.
 //
 // Threading: one worker owns every call, so no other thread ever blocks on the
 // bus. Signals arrive on the dbuslite reader thread and are only recorded.
@@ -57,7 +57,7 @@ void btvolume_set_sync(bool on);
 void btvolume_notify_local(int percent);
 
 // Whether the bus path is up and can carry a volume. False means the caller
-// should fall back to bluealsa-cli.
+// should use the independent PCM-property write path.
 bool btvolume_available(void);
 
 #endif /* BTVOLUME_H */

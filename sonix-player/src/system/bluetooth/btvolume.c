@@ -143,8 +143,7 @@ static bool get_stream_volume(dbus_conn_t *c, const char *path, int *out) {
 
 static void handle_properties_changed(const dbus_msg_t *m) {
 	pthread_mutex_lock(&lock);
-	bool ours = have_path[0] && strcmp(m->path, have_path) == 0;
-	bool soft_wanted = !have_sync;
+	bool ours = want_path[0] && strcmp(m->path, want_path) == 0;
 	pthread_mutex_unlock(&lock);
 	if (!ours) {
 		return;
@@ -175,10 +174,12 @@ static void handle_properties_changed(const dbus_msg_t *m) {
 			}
 			int left = (both >> 8) & 0x7f;
 			pthread_mutex_lock(&lock);
+			// Recheck the desired device after parsing: set_device() can switch
+			// paths while this signal is being decoded.
 			// A write from this side comes back as a change like any other.
 			// Recognising it by the value is what keeps the two sides from
 			// pushing each other around for ever.
-			if (left != last_bt) {
+			if (strcmp(m->path, want_path) == 0 && left != last_bt) {
 				last_bt = left;
 				pending_remote = left;
 				pthread_cond_signal(&wake);
@@ -189,12 +190,12 @@ static void handle_properties_changed(const dbus_msg_t *m) {
 			if (!dbus_r_bool(&r, &soft)) {
 				return;
 			}
-			if (soft != soft_wanted) {
-				pthread_mutex_lock(&lock);
+			pthread_mutex_lock(&lock);
+			if (strcmp(m->path, want_path) == 0 && soft != !want_sync) {
 				bus_reset = true; // something else moved it: write it again
 				pthread_cond_signal(&wake);
-				pthread_mutex_unlock(&lock);
 			}
+			pthread_mutex_unlock(&lock);
 		} else if (!dbus_r_skip(&r, sig)) {
 			return;
 		}
@@ -262,6 +263,8 @@ static void *btvolume_worker(void *unused) {
 	// so far.
 	uint32_t adopt_deadline = 0;
 	int adopt_seen = -1;
+	int deferred_local = -1;  // player change while the output still points at the jack
+	int deferred_remote = -1; // headphone change during the same route transition
 
 	for (;;) {
 		char path[PATH_MAX_LEN];
@@ -285,16 +288,29 @@ static void *btvolume_worker(void *unused) {
 		// A different stream, or synchronisation just switched on, are the two
 		// cases where the headphones' level has to be taken again from scratch.
 		// A bus_reset on its own is not: there the stream is the same as before.
-		if (strcmp(path, have_path) != 0 || sync_on != have_sync) {
+		bool path_changed = strcmp(path, have_path) != 0;
+		bool sync_changed = sync_on != have_sync;
+		if (path_changed || sync_changed) {
 			adopted_path[0] = '\0';
 		}
-		if (strcmp(path, have_path) != 0 || sync_on != have_sync || reset) {
+		if (path_changed || sync_changed || reset) {
 			snprintf(have_path, sizeof(have_path), "%s", path);
 			have_sync = sync_on;
 			last_bt = -1;
 			bus_broken = false;
 			state = path[0] ? BTV_SETUP : BTV_IDLE;
-			local = -1; // whatever was queued belonged to the old arrangement
+			// A pending player volume is global to the output and remains a
+			// deliberate choice for the new stream. Keep it through setup so
+			// it can beat the initial headphone-volume adoption; discard only
+			// when there is no Bluetooth stream to receive it.
+			if (!path[0]) {
+				local = -1;
+				deferred_local = -1;
+			}
+			deferred_remote = !reset && path[0] ? remote : -1;
+			if (deferred_remote >= 0) {
+				last_bt = deferred_remote;
+			}
 			remote = -1;
 		}
 		bool broken = bus_broken;
@@ -324,98 +340,129 @@ static void *btvolume_worker(void *unused) {
 					state = BTV_SETUP;
 				}
 			}
-			// The long wait is for a failed attempt, not a successful one: as soon
-			// as the connection exists the setup has to happen at once. Sleeping
-			// here means the headphones announce their level -- the AVRCP
-			// volume-changed arrives right after the transport comes up -- while
-			// have_path is still empty, so the notification is discarded and the
-			// only value left on the stream is bluealsa's starting one, the
-			// maximum.
+			// The long wait is only for a failed connection attempt. Once the
+			// bus is open, configure the PCM immediately rather than delaying the
+			// volume bridge while the new stream is already active.
 			wait_ms = conn ? 0 : RETRY_MS;
 		} else if (broken) {
 			// The stream is on the bus but did not answer about its volume, so
-			// this is not the interface it was taken for. Nothing more is tried
-			// here: bluetooth.c falls back to bluealsa-cli, and a reconnection
-			// or a restart of bluealsa gives this another go.
+			// this is not the interface it was taken for. bluetooth.c uses its
+			// independent BlueALSA D-Bus connection as a fallback.
 			wait_ms = RETRY_MS;
 		} else {
 			if (state == BTV_SETUP) {
 				// Synchronised means bluealsa hands the level to the headphones
 				// as an AVRCP absolute volume; separate means it attenuates the
 				// stream here and they never hear about it.
-				set_property_bool(conn, have_path, "SoftVolume", !sync_on);
-				printf("btvolume: %s for %s\n", sync_on ? "native volume (synchronised)" : "software volume (separate)",
-					   have_path);
-
-				pthread_mutex_lock(&lock);
-				bool already_adopted = strcmp(adopted_path, have_path) == 0;
-				pthread_mutex_unlock(&lock);
-
-				if (sync_on && !already_adopted) {
-					state = BTV_ADOPT;
-					adopt_deadline = 0;
-					adopt_seen = -1;
-				} else {
-					// Nothing to adopt: either the volume is separate, or this
-					// stream has already been adopted and what counts now is the
-					// player's level, which has to be put back on the stream.
+				if (!set_property_bool(conn, have_path, "SoftVolume", !sync_on)) {
+					pthread_mutex_lock(&lock);
+					bus_broken = true;
+					pthread_mutex_unlock(&lock);
 					state = BTV_READY;
-					local = get_volume_percent();
+					local = -1;
+					deferred_local = -1;
+					deferred_remote = -1;
+				} else {
+					printf("btvolume: %s for %s\n",
+						   sync_on ? "native volume (synchronised)" : "software volume (separate)", have_path);
+
+					pthread_mutex_lock(&lock);
+					bool already_adopted = strcmp(adopted_path, have_path) == 0;
+					pthread_mutex_unlock(&lock);
+
+					if (sync_on && !already_adopted) {
+						state = BTV_ADOPT;
+						adopt_deadline = 0;
+						adopt_seen = -1;
+					} else {
+						// Nothing to adopt: either the volume is separate, or this
+						// stream has already been adopted and what counts now is the
+						// player's level, which has to be put back on the stream.
+						deferred_local = -1;
+						deferred_remote = -1;
+						state = BTV_READY;
+						local = get_volume_percent();
+					}
 				}
 			}
 
 			if (state == BTV_ADOPT) {
-				// Not before the output has actually moved over: the level read
-				// here is applied through the player's volume, and until the
-				// swap has happened that level belongs to the jack's profile.
+				// The adopted level is applied through the player, so wait until
+				// the output has actually moved from the jack to Bluetooth.
 				if (!volume_profile_is_bluetooth()) {
+					if (local >= 0) {
+						deferred_local = local;
+					}
+					if (remote >= 0) {
+						deferred_remote = remote;
+					}
 					wait_ms = TICK_MS;
-				} else if (adopt_deadline == 0) {
+				} else {
+					if (local >= 0) {
+						deferred_local = local;
+					}
+					if (remote >= 0) {
+						deferred_remote = remote;
+					}
+					if (deferred_local >= 0) {
+						// A player-side change made while the stream was being set up
+						// wins, even if the initial AVRCP notification arrived at the
+						// same time. Keep it until the Bluetooth output is ready.
+						local = deferred_local;
+						deferred_local = -1;
+						deferred_remote = -1;
+						printf("btvolume: volume turned by hand; not adopting the headphones' level\n");
+						remote = -1;
+						state = BTV_READY;
+					} else if (deferred_remote >= 0) {
+						// A headphone change may have arrived before the output was
+						// routed here; keep it instead of waiting for a duplicate.
+						adopt_seen = deferred_remote;
+						deferred_remote = -1;
+						printf("btvolume: the headphones are at %d/127; the player follows them\n", adopt_seen);
+						apply_local(bt_to_local(adopt_seen));
+						state = BTV_READY;
+						local = -1;
+						remote = -1;
+					} else if (adopt_deadline == 0) {
 						// The first read serves two purposes: knowing what is on
 						// the stream now, and telling this side's own writes from
 						// the headphones'. It is not applied yet.
-					int volume = 0;
-					if (get_stream_volume(conn, have_path, &volume)) {
-						pthread_mutex_lock(&lock);
-						last_bt = volume;
-						pthread_mutex_unlock(&lock);
-						adopt_seen = volume;
-						adopt_deadline = now_ms() + ADOPT_SETTLE_MS;
-						wait_ms = TICK_MS;
-					} else {
-						pthread_mutex_lock(&lock);
-						bus_broken = true;
-						pthread_mutex_unlock(&lock);
+						int volume = 0;
+						if (get_stream_volume(conn, have_path, &volume)) {
+							pthread_mutex_lock(&lock);
+							last_bt = volume;
+							pthread_mutex_unlock(&lock);
+							adopt_seen = volume;
+							adopt_deadline = now_ms() + ADOPT_SETTLE_MS;
+							wait_ms = TICK_MS;
+						} else {
+							pthread_mutex_lock(&lock);
+							bus_broken = true;
+							pthread_mutex_unlock(&lock);
+							state = BTV_READY;
+							local = -1;
+						}
+					} else if (remote >= 0) {
+						// The headphones have said their level: this is the value
+						// the wait was for.
+						adopt_seen = remote;
+						printf("btvolume: the headphones are at %d/127; the player follows them\n", adopt_seen);
+						apply_local(bt_to_local(adopt_seen));
 						state = BTV_READY;
-						local = -1;
+						local = -1; // the adopted level is the level; nothing to push back
+					} else if ((int32_t)(now_ms() - adopt_deadline) >= 0) {
+						// No notification in time. What the stream declares is not
+						// the headphones' level: it is bluealsa's starting value,
+						// which is the maximum. The player's level wins instead.
+						printf("btvolume: the headphones did not say their level (the stream is at %d/127); "
+							   "keeping the player's\n",
+							   adopt_seen);
+						state = BTV_READY;
+						local = get_volume_percent();
+					} else {
+						wait_ms = TICK_MS;
 					}
-				} else if (local >= 0) {
-					// The volume was turned by hand during the wait: the hand
-					// beats the adoption.
-					printf("btvolume: volume turned by hand; not adopting the headphones' level\n");
-					state = BTV_READY;
-				} else if (remote >= 0) {
-					// The headphones have said their level: this is the value
-					// the wait was for.
-					adopt_seen = remote;
-					printf("btvolume: the headphones are at %d/127; the player follows them\n", adopt_seen);
-					apply_local(bt_to_local(adopt_seen));
-					state = BTV_READY;
-					local = -1; // the adopted level is the level; nothing to push back
-				} else if ((int32_t)(now_ms() - adopt_deadline) >= 0) {
-					// No notification in time. What the stream declares is not
-					// the headphones' level: it is bluealsa's starting value,
-					// which is the maximum. Taking it at face value would turn
-					// the volume to full scale in the face of someone who has
-					// just put the headphones on. The player's level wins
-					// instead, and is written to the stream.
-					printf("btvolume: the headphones did not say their level (the stream is at %d/127); "
-						   "keeping the player's\n",
-						   adopt_seen);
-					state = BTV_READY;
-					local = get_volume_percent();
-				} else {
-					wait_ms = TICK_MS;
 				}
 
 				if (state == BTV_READY) {
@@ -526,6 +573,13 @@ void btvolume_set_device(const char *mac) {
 	pthread_mutex_lock(&lock);
 	if (strcmp(path, want_path) != 0) {
 		snprintf(want_path, sizeof(want_path), "%s", path);
+		// The old path may still be live in the worker's local state, but it
+		// no longer belongs to the active headphones. Drop its pending remote
+		// event, reset loop suppression, and do not route volume there while
+		// the new PCM is being adopted.
+		path_live = false;
+		pending_remote = -1;
+		last_bt = -1;
 		pthread_cond_signal(&wake);
 	}
 	pthread_mutex_unlock(&lock);
@@ -549,7 +603,7 @@ void btvolume_notify_local(int percent) {
 
 bool btvolume_available(void) {
 	pthread_mutex_lock(&lock);
-	bool live = path_live;
+	bool live = path_live && want_path[0] && strcmp(want_path, have_path) == 0 && want_sync == have_sync && !bus_broken;
 	pthread_mutex_unlock(&lock);
 	return live;
 }
