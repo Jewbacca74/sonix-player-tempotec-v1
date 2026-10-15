@@ -13,6 +13,22 @@ on:
         required: true
         type: boolean
         default: false
+      # What to build, and what to do with it, said out loud. A run's artifact
+      # is named after the commit it was built from, but which commit that is
+      # has always been the ref the run was started on -- so a release cut from
+      # "the newest artifact" could be an image of a branch that predates a
+      # merge, which is exactly how the 1.3.1.1 image came to be missing the
+      # Immersive work its own tag carried. These two inputs make the answer a
+      # decision rather than a guess: build this ref, and if it is a release's
+      # own commit, put it on that release.
+      build_ref:
+        description: Ref to build (branch, tag or commit). Empty builds the ref this was dispatched from.
+        required: false
+        type: string
+      publish_release_tag:
+        description: Release tag to upload the built image to, replacing its assets (v1.upt, v1_md5.txt). Empty publishes nothing.
+        required: false
+        type: string
   pull_request:
     paths:
       - .github/workflows/build-tempotec-v1.yml
@@ -24,9 +40,19 @@ on:
   # layout change on the device, and a dispatch needs a token that can write
   # to Actions. No path filter here on purpose - a session branch has to be
   # able to produce an image on request, not only when a build input changed.
+  #
+  # main builds too, and tags build: a merge is a tree nobody has built yet,
+  # and it is the tree a release is cut from. What this cannot fix -- a
+  # release taken from whichever artifact happens to be newest -- it makes
+  # visible instead: the artifact is named after the commit it really holds
+  # (see "Record the revision being built"), so an image can be checked
+  # against the tag it claims to be before anybody flashes it.
   push:
     branches:
+      - main
       - arena/**
+    tags:
+      - '*'
 
 permissions:
   # write: the last step publishes the boot-script report back to the
@@ -57,6 +83,31 @@ jobs:
 
       - name: Check out source
         uses: actions/checkout@v5
+        with:
+          # The ref asked for, when one was: a run started on a working branch
+          # with build_ref set to a tag builds the tag, not the branch. Left
+          # empty, this is the run's own ref, as it always was.
+          ref: ${{ inputs.build_ref || github.sha }}
+
+      # The one line every later step and every report reads. GITHUB_SHA is
+      # the ref the run was STARTED on, which is not the ref that was built
+      # once build_ref is in play; the checkout is the truth, so the artifact
+      # name, the build report and the release upload all take it from here.
+      - name: Record the revision being built
+        id: source
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          subject="$(git log -1 --format=%s)"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "Building $sha"
+          echo "  $subject"
+          {
+            echo "### Built revision"
+            echo '```'
+            echo "$sha  $subject"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Install build and firmware tools
         run: |
@@ -136,6 +187,8 @@ jobs:
       - name: Assemble downloadable artifact
         env:
           KERNEL_SHA256: ${{ steps.stock.outputs.kernel_sha256 }}
+          BUILT_SHA: ${{ steps.source.outputs.sha }}
+          BUILT_REF: ${{ github.ref_type }} ${{ inputs.build_ref || github.ref_name }}
         run: |
           set -euo pipefail
           out="$RUNNER_TEMP/sonix-tempotec-v1"
@@ -156,7 +209,8 @@ jobs:
           cat > "$out/BUILD-REPORT.txt" <<EOF
           COMMUNITY TEMPOTEC V1 FIRMWARE BUILD
 
-          Commit: ${GITHUB_SHA}
+          Commit: ${BUILT_SHA}
+          Built from: ${BUILT_REF}
           Actions run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
           Stock firmware source: ${STOCK_FIRMWARE_URL}
           Stock/output kernel SHA-256: ${KERNEL_SHA256}
@@ -173,13 +227,58 @@ jobs:
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v5
         with:
-          name: sonix-tempotec-v1-${{ github.sha }}
+          # The commit the image was built from, not the ref the run was
+          # started on: this name is what says which of the artifacts in the
+          # list holds which tree.
+          name: sonix-tempotec-v1-${{ steps.source.outputs.sha }}
           path: ${{ runner.temp }}/sonix-tempotec-v1/
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
 
+      # A tag is a promise that the image under it was built from the commit
+      # that tag names. It is checked and only then kept: a run asked for a
+      # release's own commit puts the image on that release, replacing whatever
+      # is there -- which is how an image built from a branch that predated a
+      # merge gets corrected rather than published as the version it is not.
+      - name: Publish the image to its release
+        if: github.ref_type == 'tag' || inputs.publish_release_tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUILT_SHA: ${{ steps.source.outputs.sha }}
+          RELEASE_TAG: ${{ inputs.publish_release_tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          tag_sha="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${RELEASE_TAG}" --jq .sha)"
+          echo "release $RELEASE_TAG is $tag_sha; this image is $BUILT_SHA"
+          if [ "$tag_sha" != "$BUILT_SHA" ]; then
+            echo "::error::the image was built from $BUILT_SHA and $RELEASE_TAG names $tag_sha. Nothing was published."
+            exit 1
+          fi
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "$RELEASE_TAG has no release yet; the artifact above carries the image."
+            echo "Create the release, then run this workflow again with publish_release_tag=$RELEASE_TAG."
+            exit 0
+          fi
+          gh release upload "$RELEASE_TAG" sonix-packer/v1.upt sonix-packer/v1_md5.txt --clobber
+          local_size="$(stat -c%s sonix-packer/v1.upt)"
+          remote_size="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" \
+            --jq '.assets[] | select(.name == "v1.upt") | .size')"
+          [ "$local_size" = "$remote_size" ] || {
+            echo "::error::the release holds a $remote_size byte v1.upt and this build made $local_size bytes."
+            exit 1
+          }
+          {
+            echo "### Published to release $RELEASE_TAG"
+            echo "v1.upt, $local_size bytes, built from $BUILT_SHA."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Working branches only: main is not a branch anybody builds as a
+      # scratch pad, and a report pushed there would be a commit on main for
+      # every merge into it. Nor after a run that built somebody else's ref --
+      # its report is that ref's, and this checkout is not where it belongs.
       - name: Publish the boot-script report to the branch
+        if: github.ref_type == 'branch' && github.ref_name != 'main' && inputs.build_ref == ''
         run: |
           [ -f sonix-packer/boot-script-report.txt ] || exit 0
           mkdir -p docs/ci
