@@ -14,6 +14,7 @@
 #include "src/gui/shell/gridpage.h"
 #include "src/gui/shell/gui.h"
 #include "src/gui/shell/icons.h"
+#include "src/gui/shell/main_menu_icons.h"
 #include "src/gui/shell/morepage.h"
 #include "src/gui/settings/settings.h"
 #include "src/gui/shell/switcher.h"
@@ -168,14 +169,26 @@ static void main_menu_refresh_tiles(void) {
 			icon_size = LV_MAX(1, (icon_size * 95 + 50) / 100);
 		}
 
+		const lv_image_dsc_t *source = tokyo ? TOKYO_MENU_ICONS[i] : NORMAL_MENU_ICONS[i];
+		if (icons_only) {
+			// Use art pre-rasterized at the final pixel size, not stretched
+			// toolbar glyphs or colored art filtered for a second time.
+			// Matching source/layout sizes also avoids LVGL's fractional image
+			// transform and its extra edge interpolation. Other menus and the
+			// labeled layout continue to use their original sources and sizes.
+			const lv_image_dsc_t *native = main_menu_icon_native(i, tokyo, icon_size);
+			if (native) {
+				source = native;
+			}
+		}
 		gridpage_set_tile_label_hidden(menu_grid, i, icons_only);
 		if (tokyo) {
 			// Keep the decorative left-column glow only in the labeled layout.
 			bool glow = !icons_only && compact && (i % 2 == 0);
-			gridpage_set_tile_icon_style(menu_grid, i, TOKYO_MENU_ICONS[i], icon_size, true,
+			gridpage_set_tile_icon_style(menu_grid, i, source, icon_size, true,
 										 theme_semantic_color(TOKYO_MENU_TONES[i]), glow);
 		} else {
-			gridpage_set_tile_icon_style(menu_grid, i, NORMAL_MENU_ICONS[i], icon_size, false,
+			gridpage_set_tile_icon_style(menu_grid, i, source, icon_size, false,
 										 theme()->text_primary, false);
 		}
 		gridpage_set_tile_orientation(menu_grid, i, horizontal);

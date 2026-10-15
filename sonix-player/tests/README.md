@@ -69,7 +69,22 @@ It checks the default and saved **Main menu icons only** setting on both panel
 sizes, all five themes, exact icon sizes and centering, glow-free icon-only
 tiles, unchanged secondary-menu tiles, restoration of the labeled layout and
 its decorative glows, real switch callbacks and config save/reload,
-theme/accent/tint/font changes, hidden-label
-translation, and the six tile destinations. Both language asset trees are used.
-The host-build workflow runs this suite as well. These are layout/behavior
-checks, not a replacement for visual and touch testing on a physical V1.
+theme/accent/tint/font changes, hidden-label translation, and the six tile
+destinations. Both language asset trees are used. Icon-only images must have
+native-size sources and no scaling transform, including after font-metric
+reflows. Actual LVGL snapshots verify pixel-for-pixel alpha edges, theme tints
+and opaque pixels in ARGB8888 and the panel's RGB565 format; geometry alone
+cannot catch a small bitmap being enlarged into a blurry icon.
+
+To inspect rendered screens, optionally set `SONIX_MENU_SNAPSHOTS` to an output
+prefix (its parent directory must exist), for example:
+
+```sh
+SONIX_MENU_SNAPSHOTS=.build/menu make -C sonix-player/tests ui
+```
+
+This writes ignored `.build/menu-<width>-theme<kind>.ppm` files using LVGL's
+software renderer. To regenerate the main-menu-only native art, see
+`tools/main_menu_icons.py`; Python image tools are not required to build or
+run the player/tests. The host-build workflow runs this suite as well. These
+checks do not replace visual and touch testing on a physical V1.
