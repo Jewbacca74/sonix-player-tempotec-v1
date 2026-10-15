@@ -122,9 +122,38 @@ shifted, not resampled. The test pictures are one-pixel checkerboards, so any
 scaling fails. The three new texts are checked in every language file, and
 the captioned pill row is checked to relabel on a language switch.
 
+The same test checks the size limit the screensaver hands the Screensaver
+folder. It reads the size the empty-folder note promises from every language
+file, requires them all to agree, and requires the limit to match: 480x800 on
+the V1, which ships the R1's texts, and the panel's own size elsewhere.
+
 Set `SONIX_SCREENSAVER_SNAPSHOTS` to an output prefix to keep the rendered
 screens as ignored `.ppm` files, for example:
 
 ```sh
 SONIX_SCREENSAVER_SNAPSHOTS=.build/saver make -C sonix-player/tests ui
 ```
+
+## Screensaver folder rules
+
+`make -C sonix-player/tests pictures` builds and runs `test_screensaverpics`,
+plain C with no LVGL. It links the real folder code (`screensaverpics.c`) and
+JPEG header reader (`jpeginfo.c`), and checks them on synthetic JPEGs in a
+temporary card. Only headers matter here, so each file has a JPEG's segment
+structure, with filler where the picture data would be.
+
+- **Headers:** the size and coding are read even when the frame header sits
+  behind about 93 KB of an editor's metadata (Exif with a thumbnail, a colour
+  profile, XMP, Photoshop resources). The metadata filler contains frame
+  markers of its own, as a real Exif thumbnail does, so a reader that looked
+  inside a segment would be caught. Fill bytes, truncated files, scans with no
+  frame, non-JPEGs and both extensions in either case are covered too.
+- **Folder rules:** pictures over the limit, landscape or progressive are
+  turned away, and so are hidden files (including a Mac's `._` companions),
+  other names and missing files. Pictures made to the V1's note (480x800) are
+  found with the V1's limit and not with its panel size, which is the fault
+  this guards against.
+- **Random pick:** it only ever returns a usable picture and reaches all of
+  them. It avoids the picture already up while there is another, and falls
+  back to it when it is the only one. Twenty `._` files beside one picture
+  never make it miss.

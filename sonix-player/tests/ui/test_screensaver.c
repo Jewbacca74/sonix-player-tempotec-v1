@@ -76,17 +76,24 @@ bool power_screen_is_on(void) { return screen_on; }
 void power_notify_activity(void) {}
 void power_pause_in_standby(lv_timer_t *timer) { (void)timer; }
 void screensaverpics_set_root(const char *card_root) { (void)card_root; }
+// The largest picture the screensaver last asked the folder for, and how many
+// times it has asked. The folder itself is tested on its own
+// (tests/test_screensaverpics.c); what is checked here is the limit it is
+// handed.
+static int folder_max_w, folder_max_h, folder_asks;
 bool screensaverpics_any(int max_w, int max_h) {
-	(void)max_w;
-	(void)max_h;
+	folder_max_w = max_w;
+	folder_max_h = max_h;
+	folder_asks++;
 	return false;
 }
 bool screensaverpics_pick(const char *current, int max_w, int max_h, char *out, size_t out_size) {
 	(void)current;
-	(void)max_w;
-	(void)max_h;
 	(void)out;
 	(void)out_size;
+	folder_max_w = max_w;
+	folder_max_h = max_h;
+	folder_asks++;
 	return false;
 }
 const char *metadata_shown_artist(const song_metadata_t *m) { return m->artist; }
@@ -511,6 +518,60 @@ static void check_settings_card(const char *language_dir) {
 	lv_obj_delete(page);
 }
 
+/* ---- the Screensaver folder's size limit ---------------------------------- */
+
+static int note_max_w, note_max_h; // the size the empty-folder note promises
+
+// The size the note shown for an empty folder promises, in WxH form, or false.
+static bool note_size(const char *note, int *w, int *h) {
+	for (const char *p = note; *p; p++) {
+		if (*p >= '0' && *p <= '9' && (p == note || p[-1] < '0' || p[-1] > '9') && sscanf(p, "%dx%d", w, h) == 2) {
+			return true;
+		}
+	}
+	return false;
+}
+
+// The limit the screensaver hands the folder is the one its own note states, in
+// every language. Until this was checked, the V1 told people pictures could be
+// up to 480x800, from the R1 texts it ships, while it allowed nothing larger
+// than its 240x320 panel and so turned away every picture made to the note.
+static void check_picture_limit(const char *language_dir) {
+	DIR *dir = opendir(language_dir);
+	assert(dir);
+	int languages = 0;
+	struct dirent *entry;
+	while ((entry = readdir(dir)) != NULL) {
+		if (!is_ini(entry->d_name)) {
+			continue;
+		}
+		char name[256];
+		snprintf(name, sizeof(name), "%.*s", (int)(strlen(entry->d_name) - 4), entry->d_name);
+		assert(lang_set(name));
+		int w = 0, h = 0;
+		assert(note_size(tr("screensaver_empty_note"), &w, &h));
+		if (languages == 0) {
+			note_max_w = w;
+			note_max_h = h;
+		}
+		assert(w == note_max_w && h == note_max_h); // one promise, in every language
+		languages++;
+	}
+	closedir(dir);
+	assert(languages == 11);
+	assert(lang_set("English"));
+
+	int asks = folder_asks;
+	assert(!screensaver_has_images());
+	assert(folder_asks == asks + 1);
+	assert(folder_max_w == note_max_w && folder_max_h == note_max_h);
+	if (bp_is_tempotec_v1()) {
+		// Larger than the panel, so the loader is asked for the panel's size
+		// and brings the picture down to it.
+		assert(note_max_w > screen_w && note_max_h > screen_h);
+	}
+}
+
 int main(int argc, char **argv) {
 	assert(argc == 2 || argc == 3);
 	bool saved_framed = argc == 3 && strcmp(argv[2], "saved") == 0;
@@ -563,6 +624,7 @@ int main(int argc, char **argv) {
 	screensaver_init(&cfg);
 	assert(screensaver_get_enabled());
 	assert(screensaver_source() == SCREENSAVER_SOURCE_ALBUM);
+	check_picture_limit(argv[1]);
 	assert(screensaver_style() == (saved_framed ? SCREENSAVER_STYLE_FRAMED : SCREENSAVER_STYLE_FILL));
 	assert(lv_obj_check_type(placeholder(), &lv_image_class));
 	assert(lv_obj_check_type(picture(), &lv_image_class));
@@ -742,7 +804,10 @@ int main(int argc, char **argv) {
 	/* Pictures from the folder are drawn the one way, whatever the style. */
 	go_dark();
 	assert(frame_job.pending);
+	int asks = folder_asks;
 	screensaver_set_source(SCREENSAVER_SOURCE_IMAGES);
+	assert(folder_asks == asks + 1); // the first pick, asked for at once
+	assert(folder_max_w == note_max_w && folder_max_h == note_max_h);
 	assert(!frame_job.pending);
 	check_nothing_held();
 	wake();

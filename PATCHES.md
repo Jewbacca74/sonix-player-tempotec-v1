@@ -182,6 +182,30 @@ Light lay the frame on the player's full-screen blurred copy when it has one,
 which is every arrangement but Immersive. The palettes use their own page
 colour and their own ink.
 
+**Pictures from the card.** The Screensaver folder only accepts pictures no
+larger than the panel. That rule was written for the HiBy players, where the
+panel is also the size the note promises: 480x800 on the R1, 480x720 on the R3
+Pro II. The V1 ships the R1's resource tree, texts included. So its note
+promised pictures up to 480x800, while its 240x320 panel let nothing that
+large through, and "No pictures to show" came up over a folder of pictures
+made exactly to the note.
+
+On the V1 the limit is now the note's 480x800. The cover loader crops and
+scales each picture to fill the panel, through the same scaled decode album
+covers use. The screensaver test reads the size from the note in every
+language and checks the limit against it.
+
+Two smaller fixes go with it:
+
+- The header check read only the first 8 KB of each file. An editor or phone
+  that keeps its metadata (Exif with its thumbnail, a colour profile, XMP)
+  puts the image size further in than that, so such pictures were turned away
+  whatever their size. The check now steps from segment to segment with
+  seeks, however far in the frame header sits.
+- Names starting with a dot are skipped. A Mac leaves a "._" file beside every
+  picture it copies to a FAT card, and each one cost a read and one of the
+  random pick's eight tries.
+
 **OLED** is the third palette added for the V1: true black, white type, white
 as its accent and `#a0a0a0` for the second line, with nothing filled grey. The
 page, the status bar, the Now Playing deck, the cards and the idle pills and

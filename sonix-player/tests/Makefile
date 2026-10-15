@@ -27,6 +27,19 @@ $(BUILD)/test_subsonic: test_subsonic.c support.c $(CORE) $(shell find $(ROOT)/s
 sanitize:
 	$(MAKE) BUILD=.build/sanitize CFLAGS='-O1 -g -std=gnu11 -Wall -Wextra -Werror -D_FILE_OFFSET_BITS=64 -ffunction-sections -fdata-sections -fno-omit-frame-pointer -fsanitize=address,undefined' LDFLAGS='-Wl,--gc-sections -fsanitize=address,undefined' test
 
+# The Screensaver folder's rules: which files are pictures, judged from their
+# JPEG headers, and the random pick between them. Plain C, no LVGL.
+PICS_SRC = test_screensaverpics.c $(ROOT)/src/system/device/screensaverpics.c \
+           $(ROOT)/src/system/library/jpeginfo.c
+.PHONY: pictures
+pictures: $(BUILD)/test_screensaverpics
+	$(BUILD)/test_screensaverpics
+
+$(BUILD)/test_screensaverpics: $(PICS_SRC) $(ROOT)/src/system/device/screensaverpics.h \
+                               $(ROOT)/src/system/library/jpeginfo.h
+	@mkdir -p $(BUILD)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(PICS_SRC) $(LDFLAGS) $(LDLIBS)
+
 # Optional real-codec integration: the usual host development packages are
 # sufficient. No fake MP3/FLAC/Opus decoder is used. See tests/README.md.
 CODEC = $(filter-out %/wavpackdec.c %/opusdec.c,$(wildcard $(ROOT)/src/system/decode/*.c)) \

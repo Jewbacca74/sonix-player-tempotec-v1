@@ -85,6 +85,23 @@ static int strip_h;
 // ---------------------------------------------------------------------------
 
 static screensaver_source_t source;
+
+// The largest picture the folder is read for. Elsewhere that is the panel
+// itself, so a picture is drawn as it was made and never shrunk (see
+// screensaverpics.h).
+//
+// The V1 is the exception. Its firmware carries the R1's resource tree, texts
+// included, and the note shown when the folder holds nothing usable says
+// pictures may be up to the R1's 480x800. With its own 240x320 panel as the
+// limit, the V1 turned every such picture away, and the note sent people
+// looking for a mistake that was not theirs. So the V1 takes what the note
+// promises. The cover loader brings each picture down to the panel, cropped to
+// fill it like an album cover, through the scaled decode album covers use. At
+// that size a picture is about 1.1 MB decoded.
+#define V1_PICTURE_MAX_W 480
+#define V1_PICTURE_MAX_H 800
+static int picture_max_w, picture_max_h;
+
 // The picture on screen and, outside the V1 palettes, the blurred block over
 // its lower part. Owned here, not by the player: freed here whenever a
 // different one is chosen or the screensaver goes away.
@@ -220,7 +237,7 @@ void screensaver_set_style(screensaver_style_t chosen) {
 
 void screensaver_set_card_root(const char *root) { screensaverpics_set_root(root); }
 
-bool screensaver_has_images(void) { return screensaverpics_any(screen_w, screen_h); }
+bool screensaver_has_images(void) { return screensaverpics_any(picture_max_w, picture_max_h); }
 
 // Picks the next picture and puts it out to decode. Called as the panel goes
 // dark, which is the whole point: the card read and the JPEG happen on the
@@ -233,7 +250,7 @@ static void request_next(void) {
 		return;
 	}
 	char chosen[sizeof(next_file)];
-	if (!screensaverpics_pick(image_file, screen_w, screen_h, chosen, sizeof(chosen))) {
+	if (!screensaverpics_pick(image_file, picture_max_w, picture_max_h, chosen, sizeof(chosen))) {
 		// The folder gave nothing at all -- emptied, or the card taken out.
 		// What is already up stays up: it is still a picture, and black is not.
 		return;
@@ -963,6 +980,8 @@ void screensaver_init(gui_config_t *cfg) {
 	screen_w = cfg->screen_width;
 	screen_h = cfg->screen_height;
 	strip_h = DEFAULT_STRIP_H;
+	picture_max_w = bp_pick(V1_PICTURE_MAX_W, screen_w);
+	picture_max_h = bp_pick(V1_PICTURE_MAX_H, screen_h);
 
 	screensaver_set_card_root(cfg->sd_root_path);
 	enabled = config_get_bool("screen", "screensaver", false);
