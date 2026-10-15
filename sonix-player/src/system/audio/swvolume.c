@@ -143,7 +143,11 @@ typedef enum {
 
 static sw_action_t gain_now(int64_t *gain) {
 	*gain = 0;
-	if (!table_ready || !swvolume_active()) {
+	// Built here as well as from the setters: the very first buffers can
+	// arrive before anybody has walked the index curve, and a volume that
+	// waits for a side effect to be remembered is a volume that can fail to.
+	build_table();
+	if (!swvolume_active()) {
 		return SW_PASS;
 	}
 
@@ -179,11 +183,48 @@ static sw_action_t gain_now(int64_t *gain) {
 	return SW_SCALE;
 }
 
-// Truncating, because that is what the stock binary does: the product is shifted
-// down by 31 with nothing added first. Rounding to nearest would cost one
-// instruction and be marginally more correct, and would also stop the output
-// being the stock player's sample for sample.
-#define SWVOLUME_SCALE(sample, gain) (((int64_t)(sample) * (gain)) >> 31)
+// How a sample is scaled. The product is Q31; the answer sits at the top of it.
+//
+// Truncating is what the stock binary does to its own curve, and this curve
+// was first reproduced sample for sample. But on this route -- the whole
+// volume law for a USB DAC with no control of its own -- truncation is heard
+// for what it is: past about -50 dB the error left behind is correlated with
+// the music, and the bottom of the scale becomes grit, garble and whistling
+// where the level should only be quiet. So the products are rounded to
+// nearest, and on the low-depth outputs (16-bit and 8-bit) a TPDF dither of
+// one LSB either side is added before the shift, which replaces that
+// distortion with ordinary hiss underneath the music. The 24- and 32-bit
+// paths are deep enough that rounding alone leaves nothing to hear.
+//
+// The dither is the difference of two uniform draws -- a triangle spanning
+// one LSB either side of zero. One xorshift state serves whichever threads
+// apply the volume; zero is a fixed point of xorshift and the state is seeded
+// non-zero, so it can never die, and the worst a race between two threads can
+// do is make them draw matching sequences for one sample. Noise uncorrelated
+// with the signal either way.
+static uint32_t dither_state = 0x2545F491u;
+
+static inline int32_t dither_uniform(void) {
+	uint32_t x = dither_state;
+	x ^= x << 13;
+	x ^= x >> 17;
+	x ^= x << 5;
+	dither_state = x;
+	return (int32_t)(x & 0x7FFFFFFFu);
+}
+
+// `dither` true: TPDF noise spanning one LSB either side, then round to
+// nearest -- the error is then independent of the signal and unbiased, which
+// is what turns deep attenuation into hiss rather than grit. `dither` false:
+// round only.
+static inline int32_t swvolume_scale(int32_t sample, int64_t gain, bool dither) {
+	int64_t product = (int64_t)sample * gain;
+	product += (int64_t)1 << 30; // round to nearest
+	if (dither) {
+		product += (int64_t)dither_uniform() - (int64_t)dither_uniform();
+	}
+	return (int32_t)(product >> 31);
+}
 
 void swvolume_apply_u8(unsigned char *samples, int count) {
 	int64_t gain = 0;
@@ -198,7 +239,16 @@ void swvolume_apply_u8(unsigned char *samples, int count) {
 	}
 	for (int i = 0; i < count; i++) {
 		int sample = (int)samples[i] - 128;
-		samples[i] = (unsigned char)(SWVOLUME_SCALE(sample, gain) + 128);
+		int scaled = swvolume_scale(sample, gain, true);
+		// Clamped and not cast: at a gain close to unity the dither can carry
+		// a full-scale sample one LSB past the end of the range, and a wrap
+		// there is a click, not a rounding.
+		if (scaled < -128) {
+			scaled = -128;
+		} else if (scaled > 127) {
+			scaled = 127;
+		}
+		samples[i] = (unsigned char)(scaled + 128);
 	}
 }
 
@@ -213,7 +263,14 @@ void swvolume_apply_s16(short *samples, int count) {
 		return;
 	}
 	for (int i = 0; i < count; i++) {
-		samples[i] = (short)SWVOLUME_SCALE(samples[i], gain);
+		int32_t scaled = swvolume_scale(samples[i], gain, true);
+		// As above: dithered output clamps instead of wrapping.
+		if (scaled < -32768) {
+			scaled = -32768;
+		} else if (scaled > 32767) {
+			scaled = 32767;
+		}
+		samples[i] = (short)scaled;
 	}
 }
 
@@ -238,7 +295,7 @@ void swvolume_apply_s24_3le(unsigned char *samples, int count) {
 		if (sample & 0x800000) {
 			sample -= 0x1000000;
 		}
-		int32_t scaled = (int32_t)SWVOLUME_SCALE(sample, gain);
+		int32_t scaled = swvolume_scale(sample, gain, false);
 		p[0] = (unsigned char)(scaled & 0xFF);
 		p[1] = (unsigned char)((scaled >> 8) & 0xFF);
 		p[2] = (unsigned char)((scaled >> 16) & 0xFF);
@@ -256,6 +313,6 @@ void swvolume_apply_s32(int32_t *samples, int count) {
 		return;
 	}
 	for (int i = 0; i < count; i++) {
-		samples[i] = (int32_t)SWVOLUME_SCALE(samples[i], gain);
+		samples[i] = swvolume_scale(samples[i], gain, false);
 	}
 }

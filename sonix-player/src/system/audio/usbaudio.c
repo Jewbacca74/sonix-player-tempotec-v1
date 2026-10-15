@@ -56,8 +56,15 @@ static char volume_control[64];			// the control the level is written to
 static long volume_min, volume_max;
 static unsigned int volume_count = 1; // how many channels that control carries
 // The control's dB scale, read from its TLV; volume_has_db is false when the
-// device publishes none.
-static unsigned int volume_tlv[64];
+// device publishes none, and it is dropped again below when what the device
+// publishes cannot be a volume control's scale at all.
+//
+// 256 words and not 64: a scale can be a DB_RANGE holding one sub-scale per
+// region of the control's range, and a device with finely stepped volume
+// publishes dozens of them. A buffer cut short mid-entry leaves the TLV
+// describing nothing, and the conversions below then answer with whatever the
+// bytes past the end happened to hold.
+static unsigned int volume_tlv[256];
 static bool volume_has_db;
 
 // Which of the two controls the port has. Decided at the first question and
@@ -142,6 +149,40 @@ static bool host_bus_has_device(void) {
 			continue;
 		}
 		found = true;
+	}
+	closedir(dir);
+	return found;
+}
+
+// Whether anything on the host bus is a USB audio device. Checked from the
+// interfaces' own class numbers -- "1-1:1.0/bInterfaceClass" is 01 for Audio
+// -- which sysfs holds from the moment the device is enumerated, long before
+// snd-usb-audio has finished probing it into a sound card. The sound card is
+// what find_usb_card() looks for; this is the same thing seen earlier, and the
+// difference is seconds a slow probe can need and a handover must not be
+// allowed to take away.
+static bool bus_has_audio_device(void) {
+	DIR *dir = opendir("/sys/bus/usb/devices");
+	if (!dir) {
+		return false;
+	}
+	bool found = false;
+	struct dirent *de;
+	while (!found && (de = readdir(dir)) != NULL) {
+		if (!strchr(de->d_name, ':')) {
+			continue; // the device's own entry says nothing of its classes
+		}
+		char path[160];
+		char line[16];
+		snprintf(path, sizeof(path), "/sys/bus/usb/devices/%s/bInterfaceClass", de->d_name);
+		FILE *f = fopen(path, "r");
+		if (!f) {
+			continue;
+		}
+		if (fgets(line, sizeof(line), f)) {
+			found = strtol(line, NULL, 16) == 1; // USB_CLASS_AUDIO
+		}
+		fclose(f);
 	}
 	closedir(dir);
 	return found;
@@ -380,10 +421,10 @@ static void read_card_id(int card, char *out, size_t out_size) {
 //
 // USB audio devices name it themselves -- "PCM Playback Volume" is the usual
 // one, but headsets ship "Speaker Playback Volume" and "Headphone Playback
-// Volume" too -- so the control is found by shape rather than by name: the
-// first integer control whose name ends in "Playback Volume". Its range and
-// its channel count come with it, because a USB device's are its own and
-// nothing like the CS43198's.
+// Volume" too -- so the control is found by shape rather than by name: an
+// integer control whose name ends in "Playback Volume", the standard UAC one
+// preferred when the device carries both. Its range and its channel count come
+// with it, because a USB device's are its own and nothing like the CS43198's.
 //
 // Writable is part of the shape. A control that only reports a level is not a
 // volume control for this purpose, and taking it for one would stand the
@@ -415,38 +456,72 @@ static void find_volume_control(int card) {
 	}
 
 	static const char SUFFIX[] = "Playback Volume";
-	for (unsigned int i = 0; i < count && !volume_control[0]; i++) {
-		snd_ctl_elem_id_t *id;
-		snd_ctl_elem_info_t *info;
+	static const char STANDARD[] = "PCM Playback Volume";
+	// Two passes over the same list: the standard UAC name first -- "PCM
+	// Playback Volume", the feature unit the audio actually passes through --
+	// and any other name ending in "Playback Volume" only when there is no
+	// standard one. A device can publish several (headsets ship Speaker and
+	// Headphone both, and some DACs a second unit the stream never sees), and
+	// whichever the list happened to carry first must not decide where the
+	// level goes.
+	for (int pass = 0; pass < 2 && !volume_control[0]; pass++) {
+		for (unsigned int i = 0; i < count && !volume_control[0]; i++) {
+			snd_ctl_elem_id_t *id;
+			snd_ctl_elem_info_t *info;
 
-		snd_ctl_elem_id_alloca(&id);
-		snd_ctl_elem_info_alloca(&info);
-		snd_ctl_elem_list_get_id(list, i, id);
-		snd_ctl_elem_info_set_id(info, id);
-		if (snd_ctl_elem_info(ctl, info) < 0 ||
-			snd_ctl_elem_info_get_type(info) != SND_CTL_ELEM_TYPE_INTEGER ||
-			!snd_ctl_elem_info_is_writable(info)) {
-			continue;
-		}
+			snd_ctl_elem_id_alloca(&id);
+			snd_ctl_elem_info_alloca(&info);
+			snd_ctl_elem_list_get_id(list, i, id);
+			snd_ctl_elem_info_set_id(info, id);
+			if (snd_ctl_elem_info(ctl, info) < 0 ||
+				snd_ctl_elem_info_get_type(info) != SND_CTL_ELEM_TYPE_INTEGER ||
+				!snd_ctl_elem_info_is_writable(info)) {
+				continue;
+			}
 
-		const char *elem = snd_ctl_elem_info_get_name(info);
-		size_t elen = strlen(elem);
-		size_t slen = sizeof(SUFFIX) - 1;
-		if (elen < slen || strcmp(elem + elen - slen, SUFFIX) != 0) {
-			continue;
-		}
+			const char *elem = snd_ctl_elem_info_get_name(info);
+			size_t elen = strlen(elem);
+			size_t slen = sizeof(SUFFIX) - 1;
+			if (elen < slen || strcmp(elem + elen - slen, SUFFIX) != 0) {
+				continue;
+			}
+			if (pass == 0 && strcmp(elem, STANDARD) != 0) {
+				continue;
+			}
 
-		snprintf(volume_control, sizeof(volume_control), "%s", elem);
-		volume_min = snd_ctl_elem_info_get_min(info);
-		volume_max = snd_ctl_elem_info_get_max(info);
-		volume_count = snd_ctl_elem_info_get_count(info);
-		if (volume_count < 1 || volume_count > 8) {
-			volume_count = 1;
+			snprintf(volume_control, sizeof(volume_control), "%s", elem);
+			volume_min = snd_ctl_elem_info_get_min(info);
+			volume_max = snd_ctl_elem_info_get_max(info);
+			volume_count = snd_ctl_elem_info_get_count(info);
+			if (volume_count < 1 || volume_count > 8) {
+				volume_count = 1;
+			}
+			long db_min = 0, db_max = 0;
+			volume_has_db = snd_ctl_elem_info_is_tlv_readable(info) &&
+							snd_ctl_elem_tlv_read(ctl, id, volume_tlv, sizeof(volume_tlv)) >= 0 &&
+							snd_tlv_get_dB_range(volume_tlv, volume_min, volume_max, &db_min, &db_max) >= 0;
+
+			// A scale that cannot be a volume control's is a descriptor bug, and
+			// one that is met in the wild: dongles reporting -128..-127 dB over
+			// 256 steps, or topping out tens of decibels under zero. Trusted, the
+			// level math below walks off with it -- the control's top is then read
+			// as deep attenuation and the software share is cancelled out against
+			// it, so every index lands at full scale (or, the mirror image, the
+			// control is driven to its minimum and the stream goes quiet with it).
+			// The listener hears a volume control that has lost its meaning on a
+			// good day and full blast at index 1 on a bad one.
+			//
+			// The bounds are deliberately loose -- they only reject what no real
+			// control claims. A real scale tops out somewhere between -20 dB (a
+			// control that can only attenuate) and +24 dB (a control with real
+			// gain on tap), and spans at least 10 dB across its range.
+			if (volume_has_db && (db_max < -2000 || db_max > 2400 || db_max - db_min < 1000)) {
+				fprintf(stderr,
+						"usbaudio: '%s' reports an implausible dB scale (%.2f..%.2f dB); ignoring the scale\n",
+						elem, db_min / 100.0, db_max / 100.0);
+				volume_has_db = false;
+			}
 		}
-		long db_min = 0, db_max = 0;
-		volume_has_db = snd_ctl_elem_info_is_tlv_readable(info) &&
-						snd_ctl_elem_tlv_read(ctl, id, volume_tlv, sizeof(volume_tlv)) >= 0 &&
-						snd_tlv_get_dB_range(volume_tlv, volume_min, volume_max, &db_min, &db_max) >= 0;
 	}
 
 	snd_ctl_elem_list_free_space(list);
@@ -478,7 +553,9 @@ static void find_volume_control(int card) {
 //     when it has no dB scale) and all of the level goes on the samples. It is
 //     what a phone does. A dongle's own control can be coarser than it
 //     declares -- a whole run of indices landing on one step -- or stop well
-//     above silence, and neither can be seen from here;
+//     above silence, and neither can be seen from here. What the device claims
+//     its 0 dB step is worth is not believed either way: a descriptor that
+//     lies about gain must not cancel the software attenuation;
 //   * with [usb] hardware_volume = 1 and a dB scale, the control takes the
 //     nearest step at or above the target and the samples the difference, so
 //     a coarse or shallow control still moves smoothly all the way down.
@@ -526,7 +603,14 @@ void usbaudio_apply_volume(int percent) {
 			hw_db = 0;
 		}
 	}
-	long rest = target - hw_db;
+	long rest = hardware ? target - hw_db : target;
+	// ...and only hardware mode splits the level with the control at all.
+	// By default the control sits at its 0 dB step and the samples take the
+	// whole level, and what the device claims that step is worth must not
+	// enter the arithmetic: a descriptor that lies would cancel the software
+	// attenuation against a gain the device does not have, and the index
+	// would stop meaning anything. Hardware mode is where the scale is
+	// followed -- and then only after find_volume_control() has believed it.
 	swvolume_set_usb_gain(rest < 0 ? rest : 0, mute);
 
 	snd_ctl_t *ctl;
@@ -649,6 +733,18 @@ static void arbitrate_port(bool audio_present) {
 
 	if (partner_present()) {
 		empty_at = 0;
+		// Something that is a USB audio device -- or is becoming one -- is
+		// given as long as the probe takes. Its interfaces are on the bus
+		// before snd-usb-audio has built the sound card, and on this hardware
+		// a many-interface device can spend longer than HANDOVER_SECS being
+		// probed; taken for a phone in that gap, the port goes sink and the
+		// kernel drops the connection under it. Whether such a DAC is ever
+		// seen would then be a matter of timing -- of luck. The three
+		// seconds are for things that are plainly not sound cards.
+		if (bus_has_audio_device()) {
+			attached_at = 0;
+			return;
+		}
 		if (attached_at == 0) {
 			attached_at = now;
 		} else if (now - attached_at >= HANDOVER_SECS) {
@@ -673,10 +769,28 @@ static void arbitrate_port(bool audio_present) {
 	}
 }
 
+// How many empty polls in a row it takes to believe a card really left. A
+// dongle that re-enumerates out of its own power saving -- and some do, mid
+// track -- drops its card from /sys/class/sound for a moment and puts it back
+// with the same number. One empty poll must not reroute the sound to the jacks
+// and back; holding the route for one more second costs nothing like what a
+// flip costs.
+#define CARD_GRACE_POLLS 2
+
 void usbaudio_poll(void) {
 	// Who owns the port comes first, and is asked whatever playback is doing:
 	// the arbitration is about the socket, not about where the sound goes.
+	static int empty_polls;
 	int card = find_usb_card();
+	if (card >= 0) {
+		empty_polls = 0;
+	} else if (active_card >= 0 && empty_polls < CARD_GRACE_POLLS) {
+		// Still routed, and the gap is young: keep the card in play for this
+		// poll -- for the arbitration and for the route -- and see it go only
+		// if it stays gone.
+		empty_polls++;
+		card = active_card;
+	}
 	arbitrate_port(card >= 0);
 
 	// Bluetooth wins outright over where playback goes. Both would be pointing
