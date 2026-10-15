@@ -1033,6 +1033,22 @@ void settingsrow_name_lines(lv_obj_t *row, int lines) {
 // Pill cards
 // ---------------------------------------------------------------------------
 
+// The row the pills of every card below wrap in. One place, so a card's first
+// row and a group's second (settingsrow_pills_group) cannot drift apart.
+static lv_obj_t *pill_row(lv_obj_t *parent) {
+	lv_obj_t *pills = lv_obj_create(parent);
+	lv_obj_set_size(pills, lv_pct(100), LV_SIZE_CONTENT);
+	lv_obj_set_style_bg_opa(pills, 0, 0);
+	lv_obj_set_style_border_width(pills, 0, 0);
+	lv_obj_set_style_pad_all(pills, 0, 0);
+	lv_obj_set_style_pad_gap(pills, compact_rows() ? 6 : 12, 0);
+	lv_obj_set_scrollable(pills, false);
+	lv_obj_set_event_bubble(pills, true);
+	lv_obj_set_flex_flow(pills, LV_FLEX_FLOW_ROW_WRAP);
+	lv_obj_set_flex_align(pills, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START);
+	return pills;
+}
+
 // A toggle card with its choices on pills underneath, shown only while the
 // switch is on. The same shape the audiobook options page uses, and here for
 // the same reason: "track or album" means nothing while ReplayGain is off.
@@ -1078,19 +1094,8 @@ lv_obj_t *settingsrow_toggle_pills(lv_obj_t *parent, const char *title, lv_event
 	theme_apply_switch(toggle);
 	lv_obj_add_event_cb(toggle, toggle_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
-	lv_obj_t *pills = lv_obj_create(card);
-	lv_obj_set_size(pills, lv_pct(100), LV_SIZE_CONTENT);
-	lv_obj_set_style_bg_opa(pills, 0, 0);
-	lv_obj_set_style_border_width(pills, 0, 0);
-	lv_obj_set_style_pad_all(pills, 0, 0);
-	lv_obj_set_style_pad_gap(pills, compact_rows() ? 6 : 12, 0);
-	lv_obj_set_scrollable(pills, false);
-	lv_obj_set_event_bubble(pills, true);
-	lv_obj_set_flex_flow(pills, LV_FLEX_FLOW_ROW_WRAP);
-	lv_obj_set_flex_align(pills, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START);
-
 	*switch_out = toggle;
-	*pills_out = pills;
+	*pills_out = pill_row(card);
 	return card;
 }
 
@@ -1117,19 +1122,37 @@ lv_obj_t *settingsrow_pills(lv_obj_t *parent, const char *title, lv_obj_t **pill
 	lv_obj_add_style(name, &theme_style_text, 0);
 	lv_obj_set_style_text_font(name, &font_ui_24, 0);
 
-	lv_obj_t *pills = lv_obj_create(card);
-	lv_obj_set_size(pills, lv_pct(100), LV_SIZE_CONTENT);
-	lv_obj_set_style_bg_opa(pills, 0, 0);
-	lv_obj_set_style_border_width(pills, 0, 0);
-	lv_obj_set_style_pad_all(pills, 0, 0);
-	lv_obj_set_style_pad_gap(pills, compact_rows() ? 6 : 12, 0);
-	lv_obj_set_scrollable(pills, false);
-	lv_obj_set_event_bubble(pills, true);
-	lv_obj_set_flex_flow(pills, LV_FLEX_FLOW_ROW_WRAP);
-	lv_obj_set_flex_align(pills, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START);
-
-	*pills_out = pills;
+	*pills_out = pill_row(card);
 	return card;
+}
+
+// The caption is set in the dim secondary ink a step below the card's own
+// name, so the card still reads as one setting with a detail under it rather
+// than as two settings sharing a box. The gap between caption and pills is
+// half the card's row gap: the caption belongs to the pills under it, not to
+// the row above.
+lv_obj_t *settingsrow_pills_group(lv_obj_t *card, const char *caption, lv_obj_t **pills_out) {
+	lv_obj_t *group = lv_obj_create(card);
+	lv_obj_set_size(group, lv_pct(100), LV_SIZE_CONTENT);
+	lv_obj_set_style_bg_opa(group, 0, 0);
+	lv_obj_set_style_border_width(group, 0, 0);
+	lv_obj_set_style_pad_all(group, 0, 0);
+	lv_obj_set_style_pad_row(group, compact_rows() ? 4 : 9, 0);
+	lv_obj_set_scrollable(group, false);
+	lv_obj_set_event_bubble(group, true);
+	lv_obj_set_flex_flow(group, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_flex_align(group, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+
+	lv_obj_t *label = lv_label_create(group);
+	lv_label_set_text(label, tr(caption));
+	lv_obj_add_style(label, &theme_style_text_dim, 0);
+	lv_obj_set_style_text_font(label, &font_ui_20, 0);
+	// Wrapped inside the card, never under its edge, in whatever language.
+	lv_obj_set_width(label, lv_pct(100));
+	lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
+
+	*pills_out = pill_row(group);
+	return group;
 }
 
 static lv_obj_t *pill_make(lv_obj_t *parent, const char *label_text, int value, lv_event_cb_t cb) {

@@ -62,6 +62,18 @@ static id_job_t player_id_job;
 
 static dual_job_t player_job;
 static dual_job_t saver_job;
+static dual_job_t frame_job; // one picture, the second slot stays empty
+
+// The framed screensaver's loader, in the dual job's shape. The second image
+// is never asked for; it is zeroed so the shared bookkeeping can free it like
+// any other without looking.
+static bool load_framed(const char *path, int w, int h, cover_image_t *first_out, int second_w, int second_h,
+						cover_image_t *second_out) {
+	(void)second_w;
+	(void)second_h;
+	memset(second_out, 0, sizeof(*second_out));
+	return cover_load_for_file(path, w, h, COVER_FIT_CONTAIN, first_out);
+}
 
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t wakeup = PTHREAD_COND_INITIALIZER;
@@ -147,7 +159,8 @@ static void *worker(void *arg) {
 		pthread_mutex_lock(&lock);
 
 		while (next_pending() < 0 && !(player_id_job.pending && !player_id_job.running) &&
-			   !(player_job.pending && !player_job.running) && !(saver_job.pending && !saver_job.running)) {
+			   !(player_job.pending && !player_job.running) && !(saver_job.pending && !saver_job.running) &&
+			   !(frame_job.pending && !frame_job.running)) {
 			pthread_cond_wait(&wakeup, &lock);
 		}
 
@@ -178,6 +191,16 @@ static void *worker(void *arg) {
 		// at; it goes before any list thumbnail.
 		if (player_job.pending && !player_job.running) {
 			run_dual_job(&player_job, cover_load_player_images); // returns unlocked
+			continue;
+		}
+
+		// Then the framed screensaver's copy of that same picture. It is asked
+		// for either as the panel goes dark or while the screensaver is up, and
+		// in both cases what it replaces is on (or about to be on) the only
+		// screen there is; a list thumbnail queued before the screen went dark
+		// is for a page nobody can see until it is dismissed.
+		if (frame_job.pending && !frame_job.running) {
+			run_dual_job(&frame_job, load_framed); // returns unlocked
 			continue;
 		}
 
@@ -463,5 +486,24 @@ bool coverloader_take_screensaver(cover_image_t *image, cover_image_t *strip, bo
 void coverloader_release_screensaver(void) {
 	pthread_mutex_lock(&lock);
 	dual_discard(&saver_job);
+	pthread_mutex_unlock(&lock);
+}
+
+void coverloader_request_frame(const char *path, int w, int h) { dual_request(&frame_job, path, w, h, 0, 0); }
+
+bool coverloader_take_frame(cover_image_t *image, bool *finished) {
+	cover_image_t unused = {0};
+	bool found = dual_take(&frame_job, image, &unused, finished);
+	// Empty by construction (see load_framed), and freed regardless: the job
+	// keeps nothing once a result has been handed over, and neither may this.
+	if (found) {
+		cover_free(&unused);
+	}
+	return found;
+}
+
+void coverloader_release_frame(void) {
+	pthread_mutex_lock(&lock);
+	dual_discard(&frame_job);
 	pthread_mutex_unlock(&lock);
 }

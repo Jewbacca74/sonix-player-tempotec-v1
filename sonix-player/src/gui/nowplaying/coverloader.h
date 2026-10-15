@@ -107,4 +107,32 @@ bool coverloader_take_screensaver(cover_image_t *image, cover_image_t *strip, bo
 // Abandons anything in flight and frees anything already decoded for it.
 void coverloader_release_screensaver(void);
 
+// ---------------------------------------------------------------------------
+// The screensaver's framed artwork -- the playing track's picture, decoded once
+// more at exactly the size the Framed style draws it.
+//
+// The player's own copy is made for the player: cropped to the sleeve, or to
+// the whole screen in Immersive, and enlarged to fill it when the file only
+// carries a small picture. Framing that copy would mean either enlarging it
+// again or showing the player's crop. This decodes the same sources in the
+// same order (embedded first, then a cover file beside the track) straight to
+// the frame: the whole picture, fitted inside w x h and never enlarged
+// (COVER_FIT_CONTAIN), so it is drawn one pixel to one.
+//
+// Its own job rather than a mode of the photograph's: the two belong to
+// different sources, and a request of one kind must never be collected as the
+// other. Same newest-wins discipline as everything else here.
+// ---------------------------------------------------------------------------
+
+// Asks for the artwork of `path` fitted inside w x h. Returns immediately; any
+// earlier framed request is abandoned.
+void coverloader_request_frame(const char *path, int w, int h);
+
+// Collects the finished picture. `finished` goes true exactly once per
+// request; the return value says whether there was artwork.
+bool coverloader_take_frame(cover_image_t *image, bool *finished);
+
+// Abandons anything in flight and frees anything already decoded for it.
+void coverloader_release_frame(void);
+
 #endif /* COVERLOADER_H */

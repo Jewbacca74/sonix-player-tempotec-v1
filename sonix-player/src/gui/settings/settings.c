@@ -66,6 +66,9 @@ static lv_obj_t *screensaver_switch;
 static lv_obj_t *screensaver_pills;
 static lv_obj_t *screensaver_album_pill;
 static lv_obj_t *screensaver_images_pill;
+static lv_obj_t *screensaver_style_group; // "Album art", under the pills above
+static lv_obj_t *screensaver_fill_pill;
+static lv_obj_t *screensaver_framed_pill;
 static lv_obj_t *rotate_switch;
 
 static void doubletap_toggle_cb(lv_event_t *e) {
@@ -78,7 +81,8 @@ static void doubletap_toggle_cb(lv_event_t *e) {
 
 // The two pills under the switch, and which of them is lit. Hidden with the
 // screensaver off: "album or pictures" means nothing when there is no
-// screensaver to show either.
+// screensaver to show either. Likewise the album's Fill and Framed under them,
+// which mean nothing unless it is the album being shown.
 static void screensaver_refresh(void) {
 	if (!screensaver_switch) {
 		return;
@@ -94,6 +98,14 @@ static void screensaver_refresh(void) {
 	screensaver_source_t source = screensaver_source();
 	settingsrow_pill_active(screensaver_album_pill, source == SCREENSAVER_SOURCE_ALBUM);
 	settingsrow_pill_active(screensaver_images_pill, source == SCREENSAVER_SOURCE_IMAGES);
+
+	// How the album is drawn, under its pill: only while the album is what
+	// the screensaver shows. A folder picture is made for the screen and is
+	// always drawn the one way.
+	lv_obj_set_hidden(screensaver_style_group, !on || source != SCREENSAVER_SOURCE_ALBUM);
+	screensaver_style_t style = screensaver_style();
+	settingsrow_pill_active(screensaver_fill_pill, style == SCREENSAVER_STYLE_FILL);
+	settingsrow_pill_active(screensaver_framed_pill, style == SCREENSAVER_STYLE_FRAMED);
 }
 
 static void screensaver_toggle_cb(lv_event_t *e) {
@@ -121,6 +133,16 @@ static void screensaver_source_cb(lv_event_t *e) {
 	}
 
 	screensaver_set_source(chosen);
+	screensaver_refresh();
+}
+
+// Fill or Framed. Nothing to judge first, unlike Pictures: either one draws
+// whatever artwork the playing track has.
+static void screensaver_style_cb(lv_event_t *e) {
+	if (player_sheet_drag_active() || switcher_back_drag_active()) {
+		return;
+	}
+	screensaver_set_style((screensaver_style_t)(intptr_t)lv_event_get_user_data(e));
 	screensaver_refresh();
 }
 
@@ -318,12 +340,21 @@ static void build_screen_page(gui_config_t *cfg) {
 	// the moment the panel lights back up. A swipe up puts it away. The pills
 	// say where the picture comes from -- the record being played, or the
 	// card's own Screensaver folder.
-	settingsrow_toggle_pills(container, "screensaver", screensaver_toggle_cb, &screensaver_switch,
-							 &screensaver_pills);
+	lv_obj_t *screensaver_card = settingsrow_toggle_pills(container, "screensaver", screensaver_toggle_cb,
+														  &screensaver_switch, &screensaver_pills);
 	screensaver_album_pill =
 		settingsrow_pill(screensaver_pills, "screensaver_source_album", SCREENSAVER_SOURCE_ALBUM, screensaver_source_cb);
 	screensaver_images_pill =
 		settingsrow_pill(screensaver_pills, "screensaver_source_images", SCREENSAVER_SOURCE_IMAGES, screensaver_source_cb);
+	// And how the album is drawn: filling the screen, enlarged to do it, or
+	// framed with margins at its own resolution. In the same card, since it
+	// is a detail of the Album pill above it rather than a setting of its own.
+	lv_obj_t *style_pills = NULL;
+	screensaver_style_group = settingsrow_pills_group(screensaver_card, "screensaver_album_art", &style_pills);
+	screensaver_fill_pill =
+		settingsrow_pill(style_pills, "screensaver_style_fill", SCREENSAVER_STYLE_FILL, screensaver_style_cb);
+	screensaver_framed_pill =
+		settingsrow_pill(style_pills, "screensaver_style_framed", SCREENSAVER_STYLE_FRAMED, screensaver_style_cb);
 	screensaver_refresh();
 
 	// Upside down, for holding the player the other way up.

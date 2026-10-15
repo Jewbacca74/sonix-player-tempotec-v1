@@ -64,14 +64,30 @@ UI_OBJ = $(patsubst $(ROOT)/%.c,$(BUILD)/ui/%.o,$(UI_SRC)) \
 UI_CPPFLAGS = $(CPPFLAGS) -I$(ROOT)/lvgl -DLV_CONF_PATH='"$(abspath ui/lv_conf.h)"'
 UI_CFLAGS = $(CFLAGS) -MMD -MP
 
+# The screensaver's Framed style on the same renderer; shares the objects above.
+SAVER_SRC = $(ROOT)/tests/ui/test_screensaver.c $(ROOT)/src/gui/settings/screensaver.c \
+            $(ROOT)/src/gui/shell/scrolltext.c $(ROOT)/src/gui/shell/settingsrow.c \
+            $(ROOT)/src/gui/shell/theme.c $(ROOT)/src/gui/shell/icons.c \
+            $(ROOT)/src/gui/board_profile.c \
+            $(ROOT)/src/system/core/config.c $(ROOT)/src/system/core/lang.c
+SAVER_OBJ = $(patsubst $(ROOT)/%.c,$(BUILD)/ui/%.o,$(SAVER_SRC)) \
+            $(patsubst $(ROOT)/%.c,$(BUILD)/ui/%.o,$(UI_LVGL_SRC))
+
 .PHONY: ui
-ui: $(BUILD)/test_main_menu
+ui: $(BUILD)/test_main_menu $(BUILD)/test_screensaver
 	BOARD=tempotec_v1 $(BUILD)/test_main_menu ../../sonix-packer/assets/R1/usr/resource/sonix/language
 	BOARD=tempotec_v1 $(BUILD)/test_main_menu ../../sonix-packer/assets/R1/usr/resource/sonix/language saved
 	BOARD=hiby_r1 $(BUILD)/test_main_menu ../../sonix-packer/assets/R3PII/usr/resource/sonix/language
 	BOARD=hiby_r1 $(BUILD)/test_main_menu ../../sonix-packer/assets/R3PII/usr/resource/sonix/language saved
+	BOARD=tempotec_v1 $(BUILD)/test_screensaver ../../sonix-packer/assets/R1/usr/resource/sonix/language
+	BOARD=tempotec_v1 $(BUILD)/test_screensaver ../../sonix-packer/assets/R1/usr/resource/sonix/language saved
+	BOARD=hiby_r1 $(BUILD)/test_screensaver ../../sonix-packer/assets/R3PII/usr/resource/sonix/language
+	BOARD=hiby_r1 $(BUILD)/test_screensaver ../../sonix-packer/assets/R3PII/usr/resource/sonix/language saved
 
 $(BUILD)/test_main_menu: $(UI_OBJ)
+	$(CC) -o $@ $^ $(LDFLAGS) $(LDLIBS)
+
+$(BUILD)/test_screensaver: $(SAVER_OBJ)
 	$(CC) -o $@ $^ $(LDFLAGS) $(LDLIBS)
 
 $(BUILD)/ui/%.o: $(ROOT)/%.c ui/lv_conf.h $(ROOT)/lv_conf.h
@@ -83,4 +99,4 @@ $(BUILD)/ui/lvgl/%.o: $(ROOT)/lvgl/%.c ui/lv_conf.h $(ROOT)/lv_conf.h
 	@mkdir -p $(dir $@)
 	$(CC) $(UI_CPPFLAGS) $(filter-out -Werror,$(UI_CFLAGS)) -c $< -o $@
 
--include $(UI_OBJ:.o=.d)
+-include $(sort $(UI_OBJ:.o=.d) $(SAVER_OBJ:.o=.d))

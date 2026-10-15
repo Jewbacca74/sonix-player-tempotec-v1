@@ -88,3 +88,43 @@ software renderer. To regenerate the main-menu-only native art, see
 `tools/main_menu_icons.py`; Python image tools are not required to build or
 run the player/tests. The host-build workflow runs this suite as well. These
 checks do not replace visual and touch testing on a physical V1.
+
+## Headless screensaver artwork tests
+
+The same `ui` target also builds `test_screensaver`, which links the real
+screensaver, scrolling labels, themes, settings card helpers, language loader
+and configuration store. The player that lends the artwork, the cover loader
+and the device services are substituted. The test drives the loader by hand,
+so it decides when a decode lands, what size it is, or that it found nothing.
+
+It checks the **Album art: Fill / Framed** choice on both panel sizes, default
+and saved:
+
+- Fill is unchanged: the sleeve still covers its whole area, and it never
+  asks for a decode. On the V1 that always means enlarging it.
+- Framed asks for one copy of the artwork at exactly the frame's size (160 px
+  on the V1, 400 px on the 480-wide panels), from the path the player read
+  the artwork from. It asks as the panel goes dark, once the player has the
+  artwork, and never again after a theme change or a failed decode.
+- Until that copy lands, the player's sleeve stands in, never enlarged; a
+  non-square Immersive crop is not used as a stand-in.
+- The frame is centred in the area above the strip, with the margins, the
+  player's rounded corners and no strip backdrop.
+- The page behind the frame is right in all five themes.
+- Small pictures are shown at their own size.
+- Track changes, abandoned decodes, switching back to Fill, switching to
+  Pictures, dismissing and switching off release every borrowed and owned
+  buffer.
+
+Rendered RGB565 snapshots verify that every pixel of the frame outside its
+rounded corners is the decoded picture's own pixel: drawn one to one, not
+shifted, not resampled. The test pictures are one-pixel checkerboards, so any
+scaling fails. The three new texts are checked in every language file, and
+the captioned pill row is checked to relabel on a language switch.
+
+Set `SONIX_SCREENSAVER_SNAPSHOTS` to an output prefix to keep the rendered
+screens as ignored `.ppm` files, for example:
+
+```sh
+SONIX_SCREENSAVER_SNAPSHOTS=.build/saver make -C sonix-player/tests ui
+```
