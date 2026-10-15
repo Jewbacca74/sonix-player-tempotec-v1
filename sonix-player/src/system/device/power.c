@@ -131,27 +131,23 @@ static uint32_t since(uint32_t mark, uint32_t now) {
 //      has reached the glass (WAKE_HOLD_LEVEL). Nothing is visible while the
 //      panel is white, whatever the kernel does on the way through;
 //   2. the panel's own init is waited out, still dark, before a frame is
-//      pushed to it (WAKE_PANEL_SETTLE_MS);
-//   3. a frame is pushed *after* the unblank, and the hold spans it, ending
-//      only once the controller has scanned two whole frames out to the panel
-//      (FBIO_WAITFORVSYNC, see display_wait_vsync) or the fallback has run
-//      out. The hold level is re-asserted every WAKE_HOLD_STEP_MS, in case the
-//      unblank path restores a level of its own along the way.
-//
-// The push is done twice, WAKE_PUSH_SETTLE_MS apart, because a push that
-// arrives before the panel is listening is lost in silence and there is no way
-// to ask whether it was. The second one is what covers an init that ran longer
-// than the settle before the first.
+//      pushed to it. Allow the documented 120 ms plus a short margin, so the
+//      frame is drawn once, after the panel is ready;
+//   3. the hold spans that frame, ending only once the controller has scanned
+//      two whole frames out to the panel (FBIO_WAITFORVSYNC, see
+//      display_wait_vsync) or the fallback has run out. The hold level is
+//      re-asserted every WAKE_HOLD_STEP_MS in case unblank restores its own
+//      backlight level along the way.
 //
 // The vsync answer is only believed when it cost what two scan-outs cost: some
 // fb drivers return from FBIO_WAITFORVSYNC at once (or error out only on the
 // second call), and counting that as having watched two frames ends the hold
 // while the panel is still coming up. A too-fast answer falls through to the
 // same long wait as no answer at all. The fallback is short because the panel
-// has had its settle and two pushes by then -- it stands in for the two
+// has had its settle and the fresh frame by then -- it stands in for the two
 // scan-outs, not for the wake.
 #define WAKE_PANEL_SETTLE_MS 120
-#define WAKE_PUSH_SETTLE_MS 60
+#define WAKE_PANEL_MARGIN_MS 60
 // Two credible vsync waits already prove that the freshly drawn frame has
 // reached the panel. Keep a short minimum total hold around that check, but
 // avoid the old 90 ms minimum on the normal page-flipping path; unsupported or
@@ -1674,20 +1670,15 @@ void power_screen_on(void) {
 	// never over the panel's reset white (see WAKE_PANEL_SETTLE_MS).
 	backlight_hold();
 
-	// Resume the timers and repaint the entire interface into the framebuffer
-	// BEFORE unblanking the panel. Two reasons. The frame is ready the moment
-	// the controller can carry it, and it is the *new* frame: presenting the
-	// old buffer for the panel settle was the brief static-looking wake
-	// flash. Each painting timer runs once straight away, so the frame already
-	// has the right time, the right battery and the right playback position.
+	// Resume the timers first, so the one frame we draw below has the right
+	// time, battery, playback position and audio-output state.
 	standby_timers_set_paused(false);
 
 	// The jack poll is slowed while the screen is dark. Read it synchronously
-	// now, before the repaint, so an unplugged headphone cannot survive in the
+	// before the repaint, so an unplugged headphone cannot survive in the
 	// first status-bar frame after wake.
 	topbar_refresh_audio_outputs();
 
-	// resume ongoing refresh (if it was paused) ...
 	if (g_refr_timer) {
 		lv_timer_resume(g_refr_timer);
 	}
@@ -1695,11 +1686,11 @@ void power_screen_on(void) {
 	if (anim_timer) {
 		lv_timer_resume(anim_timer);
 	}
-	wake_repaint();
 
 	// Unblank: the panel resets to white, re-initialises and re-arms the
-	// controller's scan-out -- from the framebuffer, which already holds the
-	// frame above.
+	// controller's scan-out. Keep the backlight held down through that init;
+	// unlike an ordinary refresh, the frame has to be pushed after the panel
+	// is listening or the SLCD silently loses it.
 	screen_power(true);
 
 	// Say so if the unblank lit the backlight on its way through. The read is
@@ -1713,30 +1704,17 @@ void power_screen_on(void) {
 		}
 	}
 
-	// The hold again at once -- and then the panel's own init waited out,
-	// still dark. A frame pushed before the panel is listening is lost, and
-	// the glass stays on its reset white however long the backlight is held
-	// down afterwards.
-	backlight_hold_for(WAKE_PANEL_SETTLE_MS);
-
-	// A frame, now that the panel is listening -- and only now. This is the
-	// part that was missing: a repaint that happens only *before* the unblank
-	// leaves the controller nothing to carry to the glass, so the panel keeps
-	// its reset white until something unrelated (the clock, a keypress) next
-	// paints. The backlight is at zero across it, so the frame can be drawn at
-	// leisure, and it is the frame the fade below will come up over.
+	// The hold again at once -- then leave the panel dark through its full
+	// init window and a small safety margin. Drawing once, after that window,
+	// avoids spending two full-screen renders on the single-core audio path
+	// while still ensuring the SLCD gets a frame after it is ready.
+	if (g_cfg.blank_path) {
+		backlight_hold_for(WAKE_PANEL_SETTLE_MS + WAKE_PANEL_MARGIN_MS);
+	}
 	wake_repaint();
 
-	// And again, a moment later. A push that landed before the panel was
-	// ready is gone without a word -- the init runs on the driver's own
-	// schedule and cannot be asked -- so the cheap insurance is a second whole
-	// frame one settle further on. The backlight is still at zero, so this is
-	// CPU, not light.
-	backlight_hold_for(WAKE_PUSH_SETTLE_MS);
-	wake_repaint();
-
-	// And held at zero until the controller has carried *that* frame out to
-	// the panel -- the moment before this is when the white used to show.
+	// Hold at zero until the controller has carried the fresh frame out to
+	// the panel -- the moment before this is when the reset white could show.
 	backlight_hold_until_panel_shows();
 	set_indevs_enabled(true);
 	indev_timers_set_paused(false);

@@ -113,6 +113,10 @@ bool btstack_discovery(bool on);
 // anybody's output.
 int btstack_devices(btstack_device_t *out, int max);
 
+// Device1's live Connected property. False means the ACL link is down; a true
+// return means the property query succeeded (as distinct from `*out == false`).
+bool btstack_device_connected(const char *address, bool *out);
+
 // Device1.Pair(). The agent registered by btstack_open() answers the
 // confirmation, so this returns when the pairing has finished one way or the
 // other and not when a prompt appeared.
@@ -266,6 +270,9 @@ bool btstack_select_codec_dir(const char *address, bool receiving, const char *c
 // nothing resends what the other end had already set.
 bool btstack_pcm_volume_get(const char *address, bool receiving, int *out);
 bool btstack_pcm_volume_set(const char *address, bool receiving, int volume);
+// Whether bluealsa applies the PCM's Volume locally or forwards it as AVRCP
+// absolute volume to the remote A2DP endpoint.
+bool btstack_pcm_softvolume_set(const char *address, bool receiving, bool enabled);
 bool btstack_select_codec(const char *address, const char *codec);
 
 // One line describing the audio path bluealsa has actually built: the codec it

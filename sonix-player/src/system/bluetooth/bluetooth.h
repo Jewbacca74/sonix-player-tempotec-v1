@@ -149,6 +149,9 @@ void bluetooth_power_down_stack(void);
 // output, and a toggle that leaves the music in the jack while they are
 // connected only confuses.
 bool bluetooth_audio_active(void);
+// Whether this particular paired device owns the A2DP sink PCM. Connected is
+// only the BlueZ ACL link and can remain up after its audio profile has dropped.
+bool bluetooth_device_audio_connected(const char *mac);
 
 // The rate the A2DP stream to the headphones runs at, in Hz, as bluealsa chose
 // it when the link came up (or when the codec was last changed); 0 when there

@@ -2388,6 +2388,7 @@ static lv_obj_t *corner_button(lv_obj_t *parent, const lv_image_dsc_t *glyph, lv
 	lv_image_set_src(image, glyph);
 	lv_obj_add_style(image, &theme_style_icon, 0);
 	lv_obj_set_style_image_recolor_opa(image, LV_OPA_COVER, 0);
+	settingsrow_scale_corner_icon(image, p->cfg);
 	lv_obj_center(image);
 	return btn;
 }
@@ -3001,15 +3002,17 @@ static void play_menu_dismiss_cb(lv_event_t *e) {
 	play_menu_hide();
 }
 
-static lv_obj_t *play_menu_row(lv_obj_t *parent, const char *text, lv_event_cb_t cb) {
+static lv_obj_t *play_menu_row(lv_obj_t *parent, const char *text, lv_event_cb_t cb, bool compact) {
 	lv_obj_t *row = lv_btn_create(parent);
-	lv_obj_set_size(row, lv_pct(100), 76);
+	lv_obj_set_size(row, lv_pct(100), LV_SIZE_CONTENT);
+	lv_obj_set_style_min_height(row, compact ? 56 : 76, 0);
 	lv_obj_add_style(row, &theme_style_card, 0);
 	lv_obj_add_style(row, &theme_style_card_pressed, LV_STATE_PRESSED);
-	lv_obj_set_style_radius(row, 12, 0);
+	lv_obj_set_style_radius(row, compact ? 10 : 12, 0);
 	lv_obj_set_style_border_width(row, 0, 0);
 	lv_obj_set_style_shadow_width(row, 0, 0);
-	lv_obj_set_style_pad_hor(row, 16, 0);
+	lv_obj_set_style_pad_hor(row, compact ? 10 : 16, 0);
+	lv_obj_set_style_pad_ver(row, compact ? 8 : 12, 0);
 	lv_obj_set_scrollable(row, false);
 	lv_obj_add_event_cb(row, cb, LV_EVENT_CLICKED, NULL);
 
@@ -3019,14 +3022,28 @@ static lv_obj_t *play_menu_row(lv_obj_t *parent, const char *text, lv_event_cb_t
 	lv_obj_set_width(label, lv_pct(100));
 	lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
 	lv_obj_add_style(label, &theme_style_text, 0);
-	lv_obj_set_style_text_font(label, &font_ui_22, 0);
+	lv_obj_set_style_text_font(label, compact ? &font_ui_14 : &font_ui_22, 0);
 	lv_obj_center(label);
 
 	return row;
 }
 
-// Built once, on the artist-records screen, and shown and hidden from there.
+// Built once on the list page and kept inside that panel on both screen sizes.
 static void play_menu_build(panel_t *p) {
+	bool compact = p->cfg->screen_width < 320;
+	int margin = compact ? 12 : 16;
+	int card_w = (int)p->cfg->screen_width - 2 * margin;
+	if (card_w > 380) {
+		card_w = 380;
+	}
+	if (card_w < 1) {
+		card_w = 1;
+	}
+	int max_card_h = (int)p->cfg->screen_height - 2 * margin;
+	if (max_card_h < 1) {
+		max_card_h = 1;
+	}
+
 	p->play_menu = lv_obj_create(p->screen);
 	lv_obj_remove_style_all(p->play_menu);
 	lv_obj_set_size(p->play_menu, lv_pct(100), lv_pct(100));
@@ -3038,22 +3055,25 @@ static void play_menu_build(panel_t *p) {
 	lv_obj_add_event_cb(p->play_menu, play_menu_dismiss_cb, LV_EVENT_CLICKED, NULL);
 
 	lv_obj_t *card = lv_obj_create(p->play_menu);
-	lv_obj_set_size(card, 380, LV_SIZE_CONTENT);
+	lv_obj_set_size(card, card_w, LV_SIZE_CONTENT);
+	lv_obj_set_style_max_height(card, max_card_h, 0);
 	lv_obj_center(card);
 	lv_obj_add_style(card, &theme_style_screen, 0);
 	lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
-	lv_obj_set_style_radius(card, 18, 0);
+	lv_obj_set_style_radius(card, compact ? 14 : 18, 0);
 	lv_obj_set_style_border_width(card, 0, 0);
 	lv_obj_set_style_shadow_width(card, 0, 0);
-	lv_obj_set_style_pad_all(card, 16, 0);
-	lv_obj_set_style_pad_gap(card, 10, 0);
-	lv_obj_set_scrollable(card, false);
+	lv_obj_set_style_pad_all(card, compact ? 10 : 16, 0);
+	lv_obj_set_style_pad_gap(card, compact ? 6 : 10, 0);
+	lv_obj_set_scrollable(card, true);
+	lv_obj_set_scroll_dir(card, LV_DIR_VER);
+	lv_obj_set_scrollbar_mode(card, LV_SCROLLBAR_MODE_AUTO);
 	lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
 	lv_obj_set_flex_align(card, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-	play_menu_row(card, "medialist_play_in_random_order", play_menu_shuffle_cb);
-	play_menu_row(card, "medialist_play_in_sequence", play_menu_sequence_cb);
-	play_menu_row(card, "medialist_queue_random_track", play_menu_random_track_cb);
+	play_menu_row(card, "medialist_play_in_random_order", play_menu_shuffle_cb, compact);
+	play_menu_row(card, "medialist_play_in_sequence", play_menu_sequence_cb, compact);
+	play_menu_row(card, "medialist_queue_random_track", play_menu_random_track_cb, compact);
 }
 
 static void play_menu_clicked_cb(lv_event_t *e) {

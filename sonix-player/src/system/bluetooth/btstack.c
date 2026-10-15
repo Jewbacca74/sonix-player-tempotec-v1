@@ -1059,6 +1059,17 @@ static bool device_call(const char *address, const char *member, int timeout_ms)
 	return device_call_why(address, member, timeout_ms, NULL, 0);
 }
 
+bool btstack_device_connected(const char *address, bool *out) {
+	if (!out) {
+		return false;
+	}
+	char path[OBJECT_PATH_MAX];
+	if (!device_path(address, path, sizeof(path))) {
+		return false;
+	}
+	return get_bool_property(path, BLUEZ_DEVICE_IFACE, "Connected", out);
+}
+
 bool btstack_pair(const char *address, int timeout_ms) { return device_call(address, "Pair", timeout_ms); }
 
 bool btstack_connect(const char *address, int timeout_ms, char *err_out, size_t err_size) {
@@ -1823,6 +1834,29 @@ bool btstack_pcm_volume_set(const char *address, bool receiving, int volume) {
 	bool ok = dbus_call_send(c, CALL_MS, err, sizeof(err));
 	if (!ok) {
 		fprintf(stderr, "btstack: volume not restored on %s: %s\n", path, err[0] ? err : "no reply");
+	}
+	return ok;
+}
+
+bool btstack_pcm_softvolume_set(const char *address, bool receiving, bool enabled) {
+	pthread_mutex_lock(&lock);
+	dbus_conn_t *c = conn;
+	pthread_mutex_unlock(&lock);
+
+	char path[OBJECT_PATH_MAX];
+	if (!c || !pcm_path_dir(address, receiving, path, sizeof(path))) {
+		return false;
+	}
+
+	dbus_writer_t *w = dbus_call_begin(c, BALSA_SERVICE, path, PROPS_IFACE, "Set", "ssv");
+	dbus_w_string(w, BALSA_PCM_IFACE);
+	dbus_w_string(w, "SoftVolume");
+	dbus_w_variant_bool(w, enabled);
+
+	char err[DBUS_NAME_MAX];
+	bool ok = dbus_call_send(c, CALL_MS, err, sizeof(err));
+	if (!ok) {
+		fprintf(stderr, "btstack: SoftVolume not set on %s: %s\n", path, err[0] ? err : "no reply");
 	}
 	return ok;
 }
