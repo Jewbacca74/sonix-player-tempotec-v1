@@ -260,6 +260,10 @@ ICONS = [
     ("arrow-down-up.svg", "arrow_down_up", 34),
     ("star.svg", "star", 32),
     ("star-filled.svg", "star_filled", 32),
+    # Immersive uses a heart for the same favourite button; other layouts keep
+    # their stars. The filled heart is also used by the coffee QR animation.
+    ("heart-outline.svg", "heart_outline", 32),
+    ("heart.svg", "heart_filled", 32),
     ("star.svg", "star_corner", 34),
     ("radio-recent.svg", "radio_recent", 34), # stations played most recently
     ("custom-radio.svg", "radio_custom", 34), # the stations written into radio.txt

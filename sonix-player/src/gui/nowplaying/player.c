@@ -63,8 +63,8 @@ static lv_obj_t *song_title_label;
 static lv_obj_t *song_artist_label;
 static lv_obj_t *format_label; // "16/44.1 FLAC", right of the artist line
 static lv_obj_t *fav_btn_obj;  // the button it sits on, hidden on a book
-static lv_obj_t *controls_row; // transport row: where the ellipsis lives, and the star in Studio
-static lv_obj_t *fav_btn_icon; // the star above it
+static lv_obj_t *controls_row; // transport row: where the ellipsis lives, and the favourite button in Studio
+static lv_obj_t *fav_btn_icon; // the star, or the heart in Immersive
 
 static void update_fav_button(void);
 static void update_speed_button(void);
@@ -1409,8 +1409,8 @@ static int menu_height;
 // screen rather than at the square every other arrangement shows it in, and
 // cropped to fill it: a cover is square and the screen is not, so what the crop
 // takes is the two sides. Nothing else is laid out any differently -- the
-// title, the star, the format, the bar, the clocks and the transport stay
-// exactly where the standard arrangement keeps them -- but the ground under
+// title, the favourite button, the format, the bar, the clocks and the transport
+// stay exactly where the standard arrangement keeps them -- but the ground under
 // them is the artwork, which reaches the bezel on all four sides with square
 // corners.
 //
@@ -3717,8 +3717,8 @@ static void update_qobuz_badge(void) {
 	}
 }
 
-// Repaints the star from the database: filled when the loaded track is a
-// favourite, outlined otherwise, in the theme-specific colour.
+// Repaints the favourite marker: filled when the loaded track is a favourite,
+// outlined otherwise, in the theme-specific colour (a heart in Immersive).
 static void update_fav_button(void) {
 	if (!fav_btn_icon) {
 		return;
@@ -3759,26 +3759,29 @@ static void update_fav_button(void) {
 		starred = state.current_file[0] && library_fav_contains(state.current_file);
 	}
 
-	// The star's colour is decided here and nowhere else. This function runs
-	// last on every track change, so anything that tints the star elsewhere is
-	// overwritten.
+	// The favorite marker's colour is decided here and nowhere else. This
+	// function runs last on every track change, so anything that tints it
+	// elsewhere is overwritten.
 	//
-	// Tokyo Night matches the artist line's cyan in both star states. Amber's
-	// star stays in the subdued brown sampled from the reference, instead of
+	// Tokyo Night matches the artist line's cyan in both states. Amber's marker
+	// stays in the subdued brown sampled from the reference, instead of
 	// competing with the cream title and playback accent.
-	lv_color_t star_color;
+	lv_color_t favorite_color;
 	if (theme_is_tokyo_night()) {
-		star_color = theme_semantic_color(THEME_SEMANTIC_CYAN);
+		favorite_color = theme_semantic_color(THEME_SEMANTIC_CYAN);
 	} else if (theme_is_amber_on_black()) {
-		star_color = theme_player_chrome_color(THEME_PLAYER_CHROME_MUTED);
+		favorite_color = theme_player_chrome_color(THEME_PLAYER_CHROME_MUTED);
 	} else if (starred) {
-		star_color = lv_color_make(246, 211, 45); // Adwaita yellow
+		favorite_color = lv_color_make(246, 211, 45); // Adwaita yellow
 	} else {
-		star_color = layout_alt_now ? alt_ink() : lv_color_make(150, 150, 150);
+		favorite_color = layout_alt_now ? alt_ink() : lv_color_make(150, 150, 150);
 	}
 
-	lv_image_set_src(fav_btn_icon, starred ? &icon_star_filled : &icon_star);
-	lv_obj_set_style_image_recolor(fav_btn_icon, star_color, 0);
+	const lv_image_dsc_t *favorite_icon = layout_immersive_now
+			? (starred ? &icon_heart_filled : &icon_heart_outline)
+			: (starred ? &icon_star_filled : &icon_star);
+	lv_image_set_src(fav_btn_icon, favorite_icon);
+	lv_obj_set_style_image_recolor(fav_btn_icon, favorite_color, 0);
 	lv_obj_set_style_image_recolor_opa(fav_btn_icon, LV_OPA_COVER, 0);
 }
 
