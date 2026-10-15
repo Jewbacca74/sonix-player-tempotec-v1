@@ -646,13 +646,14 @@ void switch_screen_cb(lv_event_t *e) {
 }
 
 // Amber on Black uses the more restrained chevron color sampled from the
-// reference screen. Other themes retain the white, slightly translucent mark
-// over cover art and inherit their normal icon colour everywhere else.
+// reference screen, and OLED its own chevron role in the same place. Other
+// themes retain the white, slightly translucent mark over cover art and
+// inherit their normal icon colour everywhere else.
 static void chevron_apply_color(void) {
 	if (!back_btn_icon) {
 		return;
 	}
-	if (theme_is_amber_on_black()) {
+	if (theme_is_monochrome()) {
 		lv_obj_set_style_image_recolor(back_btn_icon,
 									   theme_player_chrome_color(THEME_PLAYER_CHROME_CHEVRON), 0);
 		lv_obj_set_style_image_recolor_opa(back_btn_icon, LV_OPA_COVER, 0);

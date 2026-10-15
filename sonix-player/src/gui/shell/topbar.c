@@ -237,15 +237,15 @@ static void remember_timer_cb(lv_timer_t *timer) {
 	clock_remember();
 }
 
-// Amber on Black maps the battery's semantic colours to its signal orange.
-// Give these two status glyphs that same colour; in every other theme they
-// continue to inherit the regular icon style.
+// Amber on Black and OLED map the battery's semantic colours to their accent
+// (signal orange, white). Give these two status glyphs that same colour; in
+// every other theme they continue to inherit the regular icon style.
 static void refresh_status_icon_color(lv_obj_t *icon) {
 	if (!icon) {
 		return;
 	}
 
-	if (theme_is_amber_on_black()) {
+	if (theme_is_monochrome()) {
 		lv_obj_set_style_image_recolor(icon, theme_semantic_color(THEME_SEMANTIC_GREEN), 0);
 		lv_obj_set_style_image_recolor_opa(icon, LV_OPA_COVER, 0);
 	} else {
@@ -358,10 +358,10 @@ static void refresh_headphone_icon(bool force) {
 
 	lv_obj_set_hidden(hp_icon, false);
 	if (state == JACK_BALANCED) {
-		// Gold marks the balanced output; in Amber on Black it uses the palette's
-		// signal amber rather than introducing a second gold.
+		// Gold marks the balanced output; the monochrome palettes use their
+		// accent rather than introducing a second hue.
 		lv_obj_set_style_image_recolor(hp_icon,
-									   theme_is_amber_on_black() ? theme()->accent : lv_color_make(212, 175, 55), 0);
+									   theme_is_monochrome() ? theme()->accent : lv_color_make(212, 175, 55), 0);
 		lv_obj_set_style_image_recolor_opa(hp_icon, LV_OPA_COVER, 0);
 	} else if (theme_uses_function_glyphs()) {
 		// Cyan marks the listening/output glyph in Tokyo Night.
@@ -502,9 +502,9 @@ void topbar_refresh_radios(void) {
 			char codec[BT_CODEC_MAX];
 			lv_color_t color;
 			bt_current_codec(codec, sizeof(codec));
-			// Amber on Black stays monochrome even when codec metadata is known;
-			// Tokyo Night keeps its codec-family colors.
-			if (codec[0] && !theme_is_amber_on_black() && bt_codec_color(codec, &color)) {
+			// Amber on Black and OLED stay monochrome even when codec metadata
+			// is known; Tokyo Night keeps its codec-family colors.
+			if (codec[0] && !theme_is_monochrome() && bt_codec_color(codec, &color)) {
 				lv_obj_set_style_image_recolor(bt_icon, color, 0);
 				lv_obj_set_style_image_recolor_opa(bt_icon, LV_OPA_COVER, 0);
 			} else if (theme_uses_function_glyphs()) {
@@ -618,9 +618,9 @@ static void refresh_play_icon(const device_state_t *state) {
 		return;
 	}
 
-	// Amber on Black keeps this status glyph in the battery's signal orange.
+	// Amber on Black and OLED keep this status glyph in the battery's colour.
 	// Other themes retain the Bluetooth-blue route indicator while it plays.
-	if (theme_is_amber_on_black()) {
+	if (theme_is_monochrome()) {
 		refresh_status_icon_color(play_icon);
 	} else if (state->status == AUDIO_STATUS_PLAYING && bluetooth_audio_active()) {
 		// Fixed Bluetooth blue rather than the accent: it means wireless, not active.
@@ -1085,7 +1085,7 @@ void topbar_init(gui_config_t *cfg) {
 	bat_bolt = lv_image_create(bat_widget);
 	lv_image_set_src(bat_bolt, &icon_battery_charging_bolt);
 	lv_obj_set_style_image_recolor(bat_bolt,
-								   theme_is_amber_on_black() ? theme()->accent : lv_color_make(245, 205, 60), 0);
+								   theme_is_monochrome() ? theme()->accent : lv_color_make(245, 205, 60), 0);
 	lv_obj_set_style_image_recolor_opa(bat_bolt, LV_OPA_COVER, 0);
 	if (topbar_compact) {
 		lv_image_set_scale(bat_bolt, (uint32_t)(LV_SCALE_NONE * battery_icon_size / BATTERY_ICON_SIZE));

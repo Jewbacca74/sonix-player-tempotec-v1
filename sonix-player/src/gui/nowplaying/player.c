@@ -1006,7 +1006,8 @@ static void cover_show(bool have_cover) {
 static void set_over_cover(bool on) {
 	chrome_over_cover = on;
 
-	bool amber = theme_is_amber_on_black();
+	// Amber on Black and OLED: the deck's own role colours, over artwork or not.
+	bool mono = theme_is_monochrome();
 	bool tokyo = theme_is_tokyo_night();
 	lv_obj_t *const text_objs[] = {song_title_label, elapsed_label, remaining_label};
 	lv_obj_t *const dim_objs[] = {song_artist_label, format_label, queue_position_label};
@@ -1016,7 +1017,7 @@ static void set_over_cover(bool on) {
 		if (!text_objs[i]) {
 			continue;
 		}
-		if (amber) {
+		if (mono) {
 			lv_obj_set_style_text_color(text_objs[i],
 									   theme_player_chrome_color(THEME_PLAYER_CHROME_PRIMARY), 0);
 		} else if (tokyo && text_objs[i] == song_title_label) {
@@ -1033,7 +1034,7 @@ static void set_over_cover(bool on) {
 		if (!dim_objs[i]) {
 			continue;
 		}
-		if (amber) {
+		if (mono) {
 			lv_obj_set_style_text_color(dim_objs[i],
 									   theme_player_chrome_color(THEME_PLAYER_CHROME_SECONDARY), 0);
 		} else if (tokyo && dim_objs[i] == song_artist_label) {
@@ -1050,7 +1051,7 @@ static void set_over_cover(bool on) {
 		if (!icon_objs[i]) {
 			continue;
 		}
-		if (amber) {
+		if (mono) {
 			lv_obj_set_style_image_recolor(icon_objs[i],
 									   theme_player_chrome_color(THEME_PLAYER_CHROME_PRIMARY), 0);
 			lv_obj_set_style_image_recolor_opa(icon_objs[i], LV_OPA_COVER, 0);
@@ -1140,13 +1141,13 @@ static lv_color_t tone_shaped(int sat, int want) {
 // what makes the two pages look like they belong to the same player.
 static lv_color_t alt_surface(void) { return tone_shaped(ALT_SURFACE_SAT, ALT_SURFACE_LUMA); }
 static lv_color_t alt_mark(void) {
-	return theme_is_amber_on_black()
+	return theme_is_monochrome()
 			   ? theme_player_chrome_color(THEME_PLAYER_CHROME_PLAYBACK)
 			   : tone_shaped(ALT_MARK_SAT, ALT_MARK_LUMA);
 }
 
 static lv_color_t chrome_accent(void) {
-	if (theme_is_amber_on_black()) {
+	if (theme_is_monochrome()) {
 		return theme_player_chrome_color(THEME_PLAYER_CHROME_PLAYBACK);
 	}
 	// Tokyo Night's play/pause glyph, and whatever else lights up with it,
@@ -1221,11 +1222,11 @@ static void paint_alt_tint(void) {
 	}
 
 	lv_color_t surface = alt_surface();
-	bool amber = theme_is_amber_on_black();
-	lv_color_t title_ink = amber
+	bool mono = theme_is_monochrome();
+	lv_color_t title_ink = mono
 						 ? theme_player_chrome_color(THEME_PLAYER_CHROME_PRIMARY)
 						 : alt_ink();
-	lv_color_t artist_ink = amber
+	lv_color_t artist_ink = mono
 						  ? theme_player_chrome_color(THEME_PLAYER_CHROME_SECONDARY)
 						  : title_ink;
 
@@ -1238,7 +1239,7 @@ static void paint_alt_tint(void) {
 	}
 	if (song_artist_label) {
 		lv_obj_set_style_text_color(song_artist_label, artist_ink, 0);
-		lv_obj_set_style_text_opa(song_artist_label, amber ? LV_OPA_COVER : LV_OPA_80, 0);
+		lv_obj_set_style_text_opa(song_artist_label, mono ? LV_OPA_COVER : LV_OPA_80, 0);
 	}
 	update_fav_button();
 	alt_pills_sync();
@@ -1328,7 +1329,7 @@ static void slider_over_waveform(bool over) {
 				 PROGRESS_TRACK_HEIGHT);
 	lv_obj_remove_local_style_prop(progress_slider, LV_STYLE_BG_OPA, LV_PART_MAIN);
 	lv_obj_set_style_bg_opa(progress_slider,
-							 theme_is_amber_on_black() ? LV_OPA_COVER : LV_OPA_30, LV_PART_MAIN);
+							 theme_is_monochrome() ? LV_OPA_COVER : LV_OPA_30, LV_PART_MAIN);
 	lv_obj_remove_local_style_prop(progress_slider, LV_STYLE_BG_OPA, LV_PART_INDICATOR);
 	lv_obj_remove_local_style_prop(progress_slider, LV_STYLE_OPA, LV_PART_KNOB);
 }
@@ -1383,9 +1384,15 @@ static bool studio_up;
 static int studio_box_w, studio_box_h; // the panel this arrangement is laid out on
 static bool lyrics_look_on;			   // the words have Studio's look up, see lyrics_look()
 
+// OLED keeps the page black behind Now Playing: the blurred copy of the sleeve
+// the V1 lays behind the standard and alternative arrangements, and behind the
+// words, is a lit background, and the theme has none. Studio and Immersive keep
+// theirs -- there the artwork is what the arrangement is.
+static bool backdrop_blur_wanted(void) { return !theme_is_oled(); }
+
 // Puts the V1's screen-sized blur up behind the standard and alternative
 // arrangements, or takes it down, to match whether there is a backdrop on
-// hand. Studio draws the same object itself and the words borrow it while they
+// hand (and whether the theme wants one, backdrop_blur_wanted()). Studio draws the same object itself and the words borrow it while they
 // are up, so both of those are left alone here; the cover panel and the deck
 // are already clear on this board (compact_clear_style), so there is nothing
 // else to switch.
@@ -1393,7 +1400,7 @@ static void full_backdrop_apply(void) {
 	if (!backdrop_full || !studio_bg || layout_studio_now || lyrics_look_on) {
 		return;
 	}
-	bool have = current_backdrop.pixels != NULL && backdrop_is_full;
+	bool have = backdrop_blur_wanted() && current_backdrop.pixels != NULL && backdrop_is_full;
 	lv_image_set_src(studio_bg, have ? &current_backdrop.dsc : NULL);
 	lv_obj_set_hidden(studio_bg, !have);
 	if (have) {
@@ -1803,6 +1810,11 @@ static void lyrics_scroll_cb(lv_event_t *e) {
 // The blurred sleeve the words sit on: Studio's own, or the one made for the
 // other two arrangements. NULL while there is none.
 static const lv_image_dsc_t *lyrics_backdrop(void) {
+	// None on OLED outside Studio and Immersive: the words stand on the page's
+	// own black, in the theme's colours.
+	if (!layout_studio_now && !layout_immersive_now && !backdrop_blur_wanted()) {
+		return NULL;
+	}
 	// Studio's copy is already the shape of the screen, and so is the V1's in
 	// every arrangement: nothing to make a second one from.
 	if (layout_studio_now || backdrop_is_full) {
@@ -3464,14 +3476,14 @@ static void player_refresh_theme(void) {
 	if (!cover_panel)
 		return;
 
-	bool amber = theme_is_amber_on_black();
-	if (amber) {
+	bool mono = theme_is_monochrome();
+	if (mono) {
 		player_clear_footer_edge();
 	}
 	lv_color_t progress_rest = lv_color_make(255, 255, 255);
 	lv_color_t playback = theme()->accent;
 	lv_color_t overflow = lv_color_make(150, 150, 150);
-	if (amber) {
+	if (mono) {
 		progress_rest = theme_player_chrome_color(THEME_PLAYER_CHROME_PROGRESS_REST);
 		playback = theme_player_chrome_color(THEME_PLAYER_CHROME_PLAYBACK);
 		overflow = theme_player_chrome_color(THEME_PLAYER_CHROME_OVERFLOW);
@@ -3495,7 +3507,7 @@ static void player_refresh_theme(void) {
 	cover_set_backdrop_light(false);
 	lv_obj_set_style_bg_color(progress_slider, progress_rest, LV_PART_MAIN);
 	if (!layout_wave_now) {
-		lv_obj_set_style_bg_opa(progress_slider, amber ? LV_OPA_COVER : LV_OPA_30, LV_PART_MAIN);
+		lv_obj_set_style_bg_opa(progress_slider, mono ? LV_OPA_COVER : LV_OPA_30, LV_PART_MAIN);
 	}
 	lv_obj_set_style_bg_color(progress_slider, playback, LV_PART_INDICATOR);
 	lv_obj_set_style_bg_color(progress_slider, playback, LV_PART_KNOB);
@@ -3510,6 +3522,9 @@ static void player_refresh_theme(void) {
 	device_state_t state;
 	device_state_get(&state);
 	refresh_cover(state.current_file);
+	// The same picture keeps its backdrop as it was, so whether the theme
+	// wants the V1's blur behind the page at all is asked again here.
+	full_backdrop_apply();
 	if (lyrics_pane) {
 		lyrics_look(lyrics_look_on); // the words in the new theme's colours
 	}
@@ -3771,11 +3786,12 @@ static void update_fav_button(void) {
 	//
 	// Tokyo Night matches the artist line's cyan in both states. Amber's marker
 	// stays in the subdued brown sampled from the reference, instead of
-	// competing with the cream title and playback accent.
+	// competing with the cream title and playback accent; OLED's in its muted
+	// grey, for the same reason.
 	lv_color_t favorite_color;
 	if (theme_is_tokyo_night()) {
 		favorite_color = theme_semantic_color(THEME_SEMANTIC_CYAN);
-	} else if (theme_is_amber_on_black()) {
+	} else if (theme_is_monochrome()) {
 		favorite_color = theme_player_chrome_color(THEME_PLAYER_CHROME_MUTED);
 	} else if (starred) {
 		favorite_color = lv_color_make(246, 211, 45); // Adwaita yellow
@@ -4004,10 +4020,10 @@ static void update_speed_button(void) {
 		return;
 	}
 	bool normal = speed_current_permille() == AUDIOBOOK_SPEED_NORMAL;
-	lv_color_t inactive = theme_is_amber_on_black()
+	lv_color_t inactive = theme_is_monochrome()
 						  ? theme_player_chrome_color(THEME_PLAYER_CHROME_MUTED)
 						  : lv_color_make(100, 100, 100);
-	lv_color_t active = theme_is_amber_on_black()
+	lv_color_t active = theme_is_monochrome()
 						? theme_player_chrome_color(THEME_PLAYER_CHROME_PLAYBACK)
 						: theme()->accent;
 	lv_obj_set_style_image_recolor(speed_btn_icon, normal ? inactive : active, 0);
@@ -4060,7 +4076,7 @@ static void update_repeat_button(void) {
 	// Active playback modes use the reference's dark orange. Shuffle/repeat
 	// when inactive has its own deep-brown role rather than the artist color.
 	lv_color_t active = chrome_accent();
-	lv_color_t inactive = (theme_is_amber_on_black() || theme_is_tokyo_night())
+	lv_color_t inactive = (theme_is_monochrome() || theme_is_tokyo_night())
 							  ? theme_player_chrome_color(THEME_PLAYER_CHROME_SHUFFLE_IDLE)
 							  : lv_color_make(100, 100, 100);
 
@@ -5206,11 +5222,11 @@ void player_init(gui_config_t *cfg) {
 	// centred square sleeve in what is left above it, and the blurred artwork
 	// behind the whole screen rather than behind the deck alone.
 	const bool compact = bp_is_tempotec_v1();
-	const bool amber_theme = theme_is_amber_on_black();
+	const bool mono_theme = theme_is_monochrome();
 	lv_color_t progress_rest_color = lv_color_make(255, 255, 255);
 	lv_color_t playback_color = theme()->accent;
 	lv_color_t overflow_color = lv_color_make(150, 150, 150);
-	if (amber_theme) {
+	if (mono_theme) {
 		progress_rest_color = theme_player_chrome_color(THEME_PLAYER_CHROME_PROGRESS_REST);
 		playback_color = theme_player_chrome_color(THEME_PLAYER_CHROME_PLAYBACK);
 		overflow_color = theme_player_chrome_color(THEME_PLAYER_CHROME_OVERFLOW);
@@ -5283,7 +5299,7 @@ void player_init(gui_config_t *cfg) {
 	lv_obj_set_flex_flow(player_menu, LV_FLEX_FLOW_COLUMN);
 	lv_obj_set_flex_align(player_menu, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_style_border_width(player_menu, 0, 0);
-	if (theme_is_amber_on_black()) {
+	if (theme_is_monochrome()) {
 		player_clear_footer_edge();
 	}
 	lv_obj_set_style_radius(player_menu, 0, 0);
@@ -5445,7 +5461,7 @@ void player_init(gui_config_t *cfg) {
 
 	lv_obj_set_style_radius(progress_slider, LV_RADIUS_CIRCLE, LV_PART_MAIN);
 	lv_obj_set_style_bg_color(progress_slider, progress_rest_color, LV_PART_MAIN);
-	lv_obj_set_style_bg_opa(progress_slider, amber_theme ? LV_OPA_COVER : LV_OPA_30, LV_PART_MAIN);
+	lv_obj_set_style_bg_opa(progress_slider, mono_theme ? LV_OPA_COVER : LV_OPA_30, LV_PART_MAIN);
 
 	lv_obj_set_style_radius(progress_slider, LV_RADIUS_CIRCLE, LV_PART_INDICATOR);
 	lv_obj_set_style_bg_color(progress_slider, playback_color, LV_PART_INDICATOR);

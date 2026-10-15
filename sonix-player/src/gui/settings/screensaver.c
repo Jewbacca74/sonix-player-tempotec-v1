@@ -99,12 +99,12 @@ static bool next_pending; // a request is out with the loader
 // Cheap, and a no-op unless something has actually changed.
 static int cover_box_h;
 
-// The two palettes added for the V1 draw the metadata over the sleeve itself:
+// The palettes added for the V1 draw the metadata over the sleeve itself:
 // the artwork runs the whole panel and a translucent field of the palette's
 // own colour is laid over its foot. Dark and Light keep the blurred strip,
 // which is the artwork the player already made for that purpose.
 static bool metadata_over_art(void) {
-	return theme_is_amber_on_black() || theme_is_tokyo_night();
+	return theme_is_monochrome() || theme_is_tokyo_night();
 }
 
 static void set_strip_height(int height) {
@@ -305,12 +305,12 @@ static void promote_next(void) {
 }
 
 // The V1 palettes replace the artwork-derived blur beneath their metadata with
-// a fixed translucent field: Amber's own black, Tokyo Night's blue-black
-// panel. Either keeps the palette's ink legible over every sleeve while still
+// a fixed translucent field: black for Amber and OLED, Tokyo Night's
+// blue-black panel. Either keeps the palette's ink legible over every sleeve while still
 // letting the cover show through behind it. The other themes keep the blurred
 // copy, or plain black when there is no artwork to blur.
 static void set_info_strip_backdrop(const lv_image_dsc_t *backdrop) {
-	if (theme_is_amber_on_black()) {
+	if (theme_is_monochrome()) {
 		lv_obj_set_style_bg_image_src(info_strip, NULL, 0);
 		lv_obj_set_style_bg_color(info_strip, lv_color_black(), 0);
 		lv_obj_set_style_bg_opa(info_strip, AMBER_STRIP_OPA, 0);
@@ -335,9 +335,10 @@ static void set_info_strip_backdrop(const lv_image_dsc_t *backdrop) {
 }
 
 // The metadata field's ink, by palette. Amber takes the cream, amber and
-// signal-orange roles sampled from its reference Now Playing screen; Tokyo
-// Night takes the violet it gives the deck's track name, the cyan it gives the
-// artist line and its own accent blue for the time. Dark and Light have no
+// signal-orange roles sampled from its reference Now Playing screen, and OLED
+// the white and grey steps of its own deck; Tokyo Night takes the violet it
+// gives the deck's track name, the cyan it gives the artist line and its own
+// accent blue for the time. Dark and Light have no
 // field of their own: they keep the light type they have always worn over the
 // blurred strip, whatever the page behind them is.
 static void screensaver_refresh_theme(void) {
@@ -345,9 +346,9 @@ static void screensaver_refresh_theme(void) {
 		return;
 	}
 
-	bool amber = theme_is_amber_on_black();
+	bool mono = theme_is_monochrome(); // Amber on Black and OLED
 	bool tokyo = theme_is_tokyo_night();
-	bool field = amber || tokyo;
+	bool field = mono || tokyo;
 
 	// The page behind everything. Where there is a field it is the palette's own
 	// background -- both the ground the note sits on when a track has no artwork
@@ -378,10 +379,11 @@ static void screensaver_refresh_theme(void) {
 	}
 
 	if (cover_placeholder) {
-		// The note in the middle of a screen with no artwork: Amber's subdued
-		// amber, the palette's own secondary text everywhere else.
+		// The note in the middle of a screen with no artwork: the monochrome
+		// palettes' secondary deck role, the palette's own secondary text
+		// everywhere else.
 		lv_obj_set_style_image_recolor(cover_placeholder,
-									   amber ? theme_player_chrome_color(THEME_PLAYER_CHROME_SECONDARY)
+									   mono ? theme_player_chrome_color(THEME_PLAYER_CHROME_SECONDARY)
 											 : theme()->text_secondary,
 									   0);
 	}

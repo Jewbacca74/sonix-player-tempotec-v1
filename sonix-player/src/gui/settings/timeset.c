@@ -60,7 +60,7 @@ static void dst_paint(void) {
 		lv_obj_set_style_bg_color(dst_pills[i], active ? theme()->accent : theme()->surface_pressed, 0);
 		lv_obj_t *label = lv_obj_get_child(dst_pills[i], 0);
 		if (label) {
-			lv_obj_set_style_text_color(label, active ? lv_color_white() : theme()->text_primary, 0);
+			lv_obj_set_style_text_color(label, active ? theme_on_accent() : theme()->text_primary, 0);
 		}
 	}
 }
@@ -931,8 +931,7 @@ void timeset_init(gui_config_t *cfg) {
 
 	h24_switch = lv_switch_create(h24_card);
 	lv_obj_set_size(h24_switch, compact() ? 48 : 68, compact() ? 28 : 36);
-	lv_obj_add_style(h24_switch, &theme_style_switch, LV_PART_MAIN);
-	lv_obj_add_style(h24_switch, &theme_style_switch_checked, LV_PART_INDICATOR | LV_STATE_CHECKED);
+	theme_apply_switch(h24_switch);
 	if (clock_use_24h()) {
 		lv_obj_add_state(h24_switch, LV_STATE_CHECKED);
 	}
@@ -951,7 +950,7 @@ void timeset_init(gui_config_t *cfg) {
 	lv_obj_t *confirm_label = lv_label_create(confirm);
 	lv_label_set_text(confirm_label, tr("confirm"));
 	lv_obj_set_style_text_font(confirm_label, &font_ui_24, 0);
-	lv_obj_set_style_text_color(confirm_label, lv_color_white(), 0);
+	lv_obj_set_style_text_color(confirm_label, theme_on_accent(), 0);
 	lv_obj_center(confirm_label);
 
 	build_timezone_panel(cfg);

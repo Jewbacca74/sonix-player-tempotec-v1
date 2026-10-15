@@ -21,7 +21,7 @@
 
 lv_obj_t *appearance_screen;
 
-static lv_obj_t *theme_buttons[4];
+static lv_obj_t *theme_buttons[THEME_KIND_COUNT];
 static lv_obj_t *btn_boot[4]; // Stock / Retrospace / Space / Travelling in space
 static lv_obj_t *btn_clock[4]; // left / centre / right / hidden
 static lv_obj_t *btn_accent[THEME_ACCENT_COUNT]; // the coloured circles
@@ -163,27 +163,30 @@ static void font_pills_reload_cb(lv_event_t *e) {
 }
 
 // Paints the active theme choice. Dark and Light keep their original filled
-// accent treatment; the two blue-/amber-black palettes use the quieter outlined
-// selected pill that suits their compact V1 appearance card.
+// accent treatment; the blue-, amber- and true-black palettes use the quieter
+// outlined selected pill that suits their compact V1 appearance card.
 static void refresh_buttons(void) {
 	theme_kind_t active_kind = theme_get_kind();
-	for (int i = 0; i < 4; i++) {
+	for (int i = 0; i < THEME_KIND_COUNT; i++) {
 		lv_obj_t *button = theme_buttons[i];
 		if (!button) {
 			continue;
 		}
 		lv_obj_t *label = lv_obj_get_child(button, 0);
 		bool active = i == (int)active_kind;
-		bool outlined = active_kind == THEME_KIND_TOKYO_NIGHT || active_kind == THEME_KIND_AMBER_ON_BLACK;
+		bool outlined = theme_uses_function_glyphs();
 		if (active && outlined) {
-			lv_obj_set_style_bg_color(button, lv_color_mix(theme()->accent, theme()->surface, (lv_opa_t)64), 0);
+			// OLED's outlined pill stays black inside: a quarter of its white
+			// accent would be a grey fill.
+			lv_color_t fill = theme_is_oled() ? theme()->surface : lv_color_mix(theme()->accent, theme()->surface, (lv_opa_t)64);
+			lv_obj_set_style_bg_color(button, fill, 0);
 			lv_obj_set_style_text_color(label, theme()->text_primary, 0);
 			lv_obj_set_style_border_width(button, 1, 0);
 			lv_obj_set_style_border_color(button, theme()->accent, 0);
 			lv_obj_set_style_border_opa(button, LV_OPA_COVER, 0);
 		} else if (active) {
 			lv_obj_set_style_bg_color(button, theme()->accent, 0);
-			lv_obj_set_style_text_color(label, lv_color_white(), 0);
+			lv_obj_set_style_text_color(label, theme_on_accent(), 0);
 			lv_obj_set_style_border_width(button, 0, 0);
 		} else {
 			lv_obj_set_style_bg_color(button, theme()->surface_pressed, 0);
@@ -194,20 +197,32 @@ static void refresh_buttons(void) {
 	}
 }
 
-// The active circle wears a ring in the text colour; the rest sit flat.
+// The active circle wears a ring in the text colour; the rest sit flat. A
+// light circle under light text (OLED's white) takes a black ring instead,
+// with a hairline of the text colour around it, or the ring would vanish.
 static void refresh_accent_buttons(void) {
 	int active_accent = theme_get_accent();
 	for (int i = 0; i < THEME_ACCENT_COUNT; i++) {
 		if (!btn_accent[i]) {
 			continue;
 		}
-		lv_obj_set_style_bg_color(btn_accent[i], theme_accent_preset(i), 0);
+		lv_color_t fill = theme_accent_preset(i);
+		lv_obj_set_style_bg_color(btn_accent[i], fill, 0);
+		bool light_on_light = theme_color_is_light(fill) && theme_color_is_light(theme()->text_primary);
 		if (i == active_accent) {
 			lv_obj_set_style_border_width(btn_accent[i], 3, 0);
-			lv_obj_set_style_border_color(btn_accent[i], theme()->text_primary, 0);
+			lv_obj_set_style_border_color(btn_accent[i], light_on_light ? lv_color_black() : theme()->text_primary, 0);
 			lv_obj_set_style_border_opa(btn_accent[i], LV_OPA_COVER, 0);
 		} else {
 			lv_obj_set_style_border_width(btn_accent[i], 0, 0);
+		}
+		if (i == active_accent && light_on_light) {
+			lv_obj_set_style_outline_width(btn_accent[i], 2, 0);
+			lv_obj_set_style_outline_pad(btn_accent[i], 0, 0);
+			lv_obj_set_style_outline_color(btn_accent[i], theme()->text_primary, 0);
+			lv_obj_set_style_outline_opa(btn_accent[i], LV_OPA_COVER, 0);
+		} else {
+			lv_obj_set_style_outline_width(btn_accent[i], 0, 0);
 		}
 	}
 }
@@ -238,7 +253,7 @@ static void refresh_clock_buttons(void) {
 		}
 		if (i == active) {
 			lv_obj_set_style_bg_color(btn_clock[i], theme()->accent, 0);
-			lv_obj_set_style_text_color(lv_obj_get_child(btn_clock[i], 0), lv_color_white(), 0);
+			lv_obj_set_style_text_color(lv_obj_get_child(btn_clock[i], 0), theme_on_accent(), 0);
 		} else {
 			lv_obj_set_style_bg_color(btn_clock[i], theme()->surface_pressed, 0);
 			lv_obj_set_style_text_color(lv_obj_get_child(btn_clock[i], 0), theme()->text_primary, 0);
@@ -298,7 +313,7 @@ static void refresh_boot_buttons(void) {
 		bool on = i == choice;
 		lv_obj_set_style_bg_color(btn_boot[i], on ? theme()->accent : theme()->surface_pressed, 0);
 		lv_obj_set_style_text_color(lv_obj_get_child(btn_boot[i], 0),
-									on ? lv_color_white() : theme()->text_primary, 0);
+									on ? theme_on_accent() : theme()->text_primary, 0);
 	}
 }
 
@@ -373,12 +388,14 @@ static lv_obj_t *theme_preview_card(lv_obj_t *parent, const char *title, bool co
 static void appearance_preview_refresh(void) {
 	bool tokyo = theme_is_tokyo_night();
 	bool amber = theme_is_amber_on_black();
-	bool show = bp_is_tempotec_v1() && (tokyo || amber);
+	bool oled = theme_is_oled();
+	bool show = bp_is_tempotec_v1() && (tokyo || amber || oled);
 	if (theme_palette_card) {
 		lv_obj_set_hidden(theme_palette_card, !show);
 	}
 	if (theme_palette_title) {
-		lv_label_set_text(theme_palette_title, tr(amber ? "appearance_amber_palette" : "appearance_tokyo_palette"));
+		const char *title = amber ? "appearance_amber_palette" : oled ? "appearance_oled_palette" : "appearance_tokyo_palette";
+		lv_label_set_text(theme_palette_title, tr(title));
 	}
 	if (function_glyph_card) {
 		lv_obj_set_hidden(function_glyph_card, !show);
@@ -386,9 +403,20 @@ static void appearance_preview_refresh(void) {
 
 	// Tokyo Night keeps its semantic hues. Amber on Black shows the distinct
 	// dark track, subdued star, playback, artist and cream-title colors from
-	// the reference screen instead of looking like the Tokyo palette.
+	// the reference screen instead of looking like the Tokyo palette. OLED is
+	// its ramp of greys, black to white, ending on the accent: the page and the
+	// cards, both black, then the track under the progress bar.
 	lv_color_t swatches[8];
-	if (amber) {
+	if (oled) {
+		swatches[0] = theme()->screen_bg;
+		swatches[1] = theme()->surface;
+		swatches[2] = theme_player_chrome_color(THEME_PLAYER_CHROME_PROGRESS_REST);
+		swatches[3] = theme_player_chrome_color(THEME_PLAYER_CHROME_SHUFFLE_IDLE);
+		swatches[4] = theme_player_chrome_color(THEME_PLAYER_CHROME_MUTED);
+		swatches[5] = theme_player_chrome_color(THEME_PLAYER_CHROME_SECONDARY);
+		swatches[6] = theme_player_chrome_color(THEME_PLAYER_CHROME_PRIMARY);
+		swatches[7] = theme()->accent;
+	} else if (amber) {
 		swatches[0] = theme()->screen_bg;
 		swatches[1] = theme()->surface;
 		swatches[2] = theme()->surface_pressed;
@@ -412,8 +440,8 @@ static void appearance_preview_refresh(void) {
 			continue;
 		}
 		lv_obj_set_style_bg_color(theme_palette_swatches[i], swatches[i], 0);
-		if (amber) {
-			// The four near-black swatches otherwise disappear into the card and
+		if (amber || oled) {
+			// The near-black swatches otherwise disappear into the card and
 			// look like unpainted boxes on the low-contrast V1 panel.
 			lv_obj_set_style_border_width(theme_palette_swatches[i], 1, 0);
 			lv_obj_set_style_border_color(theme_palette_swatches[i], theme()->text_secondary, 0);
@@ -529,10 +557,11 @@ void appearance_init(gui_config_t *cfg) {
 		make_theme_choice(row, "appearance_tokyo_night", THEME_KIND_TOKYO_NIGHT, compact);
 	theme_buttons[THEME_KIND_AMBER_ON_BLACK] = make_theme_choice(row,
 		compact ? "appearance_amber_short" : "appearance_amber_on_black", THEME_KIND_AMBER_ON_BLACK, compact);
+	theme_buttons[THEME_KIND_OLED] = make_theme_choice(row, "appearance_oled", THEME_KIND_OLED, compact);
 
-	// Compact palette and function-glyph examples for Tokyo Night and Amber on
-	// Black, immediately after the theme switch. Hidden for Dark/Light so their
-	// existing Appearance page remains unchanged.
+	// Compact palette and function-glyph examples for Tokyo Night, Amber on
+	// Black and OLED, immediately after the theme switch. Hidden for Dark/Light
+	// so their existing Appearance page remains unchanged.
 	build_theme_previews(container, compact);
 
 	// A second card: which picture the next power-on shows. Unlike every

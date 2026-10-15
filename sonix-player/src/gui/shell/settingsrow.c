@@ -650,8 +650,7 @@ lv_obj_t *settingsrow_toggle(lv_obj_t *parent, const char *name, lv_obj_t **swit
 	// Shared theme styles rather than colours frozen at creation: a hand-set
 	// colour would keep the palette the row was built under, leaving off-toggles
 	// white after a switch to the dark theme.
-	lv_obj_add_style(toggle, &theme_style_switch, LV_PART_MAIN);
-	lv_obj_add_style(toggle, &theme_style_switch_checked, LV_PART_INDICATOR | LV_STATE_CHECKED);
+	theme_apply_switch(toggle);
 	lv_obj_add_event_cb(toggle, cb, LV_EVENT_VALUE_CHANGED, NULL);
 
 	if (switch_out) {
@@ -713,8 +712,7 @@ lv_obj_t *settingsrow_toggle_slider(lv_obj_t *parent, const char *name, int step
 	lv_obj_t *toggle = lv_switch_create(card);
 	lv_obj_set_size(toggle, compact_rows() ? 48 : 68, compact_rows() ? 28 : 36);
 	lv_obj_align(toggle, LV_ALIGN_TOP_RIGHT, 0, compact_rows() ? -2 : -4);
-	lv_obj_add_style(toggle, &theme_style_switch, LV_PART_MAIN);
-	lv_obj_add_style(toggle, &theme_style_switch_checked, LV_PART_INDICATOR | LV_STATE_CHECKED);
+	theme_apply_switch(toggle);
 	lv_obj_add_event_cb(toggle, toggle_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
 	lv_obj_t *value = lv_label_create(card);
@@ -825,10 +823,10 @@ void settingsrow_chevron_active(lv_obj_t *row, bool active) {
 		return;
 	}
 	if (active) {
-		// Adwaita green marks an active row, except Amber on Black uses its
-		// signal amber so the palette remains monochrome.
+		// Adwaita green marks an active row, except the monochrome palettes
+		// (Amber on Black, OLED) use their accent so they stay single-hue.
 		lv_obj_set_style_image_recolor(chev,
-									   theme_is_amber_on_black() ? theme()->accent : lv_color_make(46, 194, 126), 0);
+									   theme_is_monochrome() ? theme()->accent : lv_color_make(46, 194, 126), 0);
 		lv_obj_set_style_image_recolor_opa(chev, LV_OPA_COVER, 0);
 		lv_obj_set_style_image_opa(chev, LV_OPA_COVER, 0);
 	} else {
@@ -1077,8 +1075,7 @@ lv_obj_t *settingsrow_toggle_pills(lv_obj_t *parent, const char *title, lv_event
 
 	lv_obj_t *toggle = lv_switch_create(head);
 	lv_obj_set_size(toggle, compact_rows() ? 48 : 68, compact_rows() ? 28 : 36);
-	lv_obj_add_style(toggle, &theme_style_switch, LV_PART_MAIN);
-	lv_obj_add_style(toggle, &theme_style_switch_checked, LV_PART_INDICATOR | LV_STATE_CHECKED);
+	theme_apply_switch(toggle);
 	lv_obj_add_event_cb(toggle, toggle_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
 	lv_obj_t *pills = lv_obj_create(card);
@@ -1169,7 +1166,7 @@ void settingsrow_pill_active(lv_obj_t *pill, bool active) {
 		return;
 	}
 	lv_obj_set_style_bg_color(pill, active ? theme()->accent : theme()->surface_pressed, 0);
-	lv_obj_set_style_text_color(lv_obj_get_child(pill, 0), active ? lv_color_white() : theme()->text_primary, 0);
+	lv_obj_set_style_text_color(lv_obj_get_child(pill, 0), active ? theme_on_accent() : theme()->text_primary, 0);
 }
 
 // ---------------------------------------------------------------------------

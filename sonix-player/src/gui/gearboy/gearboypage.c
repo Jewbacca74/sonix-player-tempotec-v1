@@ -82,7 +82,7 @@ static void refresh_view_buttons(void) {
 		}
 		bool on = colour[i] == show_color;
 		lv_obj_set_style_bg_color(buttons[i], on ? theme()->accent : theme()->surface_pressed, 0);
-		lv_obj_set_style_text_color(lv_obj_get_child(buttons[i], 0), on ? lv_color_white() : theme()->text_primary, 0);
+		lv_obj_set_style_text_color(lv_obj_get_child(buttons[i], 0), on ? theme_on_accent() : theme()->text_primary, 0);
 	}
 }
 

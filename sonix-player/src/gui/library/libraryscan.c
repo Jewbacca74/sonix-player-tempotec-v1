@@ -330,7 +330,7 @@ static lv_obj_t *pick_button(lv_obj_t *parent, const char *text, bool accent, lv
 	lv_obj_t *label = lv_label_create(btn);
 	lv_label_set_text(label, tr(text));
 	lv_obj_set_style_text_font(label, bp_is_tempotec_v1() ? &font_ui_18 : &font_ui_22, 0);
-	lv_obj_set_style_text_color(label, accent ? lv_color_white() : theme()->text_primary, 0);
+	lv_obj_set_style_text_color(label, accent ? theme_on_accent() : theme()->text_primary, 0);
 	lv_obj_center(label);
 	return btn;
 }
@@ -486,7 +486,7 @@ static lv_obj_t *make_button(lv_obj_t *parent, const char *text, lv_color_t colo
 	lv_obj_t *label = lv_label_create(button);
 	lv_label_set_text(label, tr(text));
 	lv_obj_set_style_text_font(label, &font_ui_24, 0);
-	lv_obj_set_style_text_color(label, lv_color_white(), 0);
+	lv_obj_set_style_text_color(label, theme_ink_on(colour), 0);
 	lv_obj_center(label);
 
 	return button;

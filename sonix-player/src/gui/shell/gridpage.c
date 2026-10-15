@@ -619,7 +619,7 @@ lv_obj_t *gridpage_empty_panel(lv_obj_t *screen, gui_config_t *cfg, const lv_ima
 	lv_obj_t *button_label = lv_label_create(button);
 	lv_label_set_text(button_label, tr("scan"));
 	lv_obj_set_style_text_font(button_label, compact ? &font_ui_20 : &font_ui_24, 0);
-	lv_obj_set_style_text_color(button_label, lv_color_white(), 0);
+	lv_obj_set_style_text_color(button_label, theme_on_accent(), 0);
 	lv_obj_center(button_label);
 
 	return panel;
@@ -636,7 +636,9 @@ void gridpage_show_empty(lv_obj_t *grid, lv_obj_t *panel, bool empty) {
 	if (panel) {
 		if (empty) {
 			// The accent may have changed since the panel was built.
-			lv_obj_set_style_bg_color(lv_obj_get_child(panel, 2), theme()->accent, 0);
+			lv_obj_t *button = lv_obj_get_child(panel, 2);
+			lv_obj_set_style_bg_color(button, theme()->accent, 0);
+			lv_obj_set_style_text_color(lv_obj_get_child(button, 0), theme_on_accent(), 0);
 			lv_obj_set_hidden(panel, false);
 		} else {
 			lv_obj_set_hidden(panel, true);

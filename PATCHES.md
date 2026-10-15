@@ -143,6 +143,43 @@ Amber. Adding Tokyo Night beside it is a second branch in three functions —
 `metadata_over_art()`, `set_info_strip_backdrop()` and that callback — and
 touches the Amber path nowhere.
 
+**OLED** is the third palette added for the V1: true black, white type, white
+as its accent and `#a0a0a0` for the second line, with nothing filled grey. The
+page, the status bar, the Now Playing deck, the cards and the idle pills and
+buttons are all `#000000`, so the layouts are carried by the type and the
+glyphs alone. Now Playing goes the same way: the blurred copy of the sleeve the
+V1 lays behind the standard and alternative arrangements, and behind the
+lyrics, is left out, so the sleeve stands on black (`backdrop_blur_wanted()`,
+asked again on a theme change, since the same picture otherwise keeps the
+backdrop it has). Studio and Immersive keep theirs: there the artwork is what
+the arrangement is. What would vanish with its fill gets something else
+instead. A press flashes `#303030`, the only grey that is ever a fill, and only
+under a finger. A quiet control (an off switch's track, a dialog's Cancel, an
+idle quick-panel circle) is drawn as a 2 px `#606060` ring. A disabled switch
+is faded to 40% rather than given the default theme's wash towards light grey,
+which on a black track is a grey fill. A switch that is on is one solid white
+pill: its ring takes the accent, and so does the track under the indicator, so
+the two rounded edges have nothing dark to blend into where they meet. Tracks
+stay visible, `#303030` under the progress bar and the secondary text at 40%
+under a slider, since a bar with no rest reads as a stray line. Every grey the
+theme draws is a multiple of eight, which RGB565 keeps exactly; a step in
+between lands on different levels in the five-bit and six-bit channels and
+comes out faintly green or magenta.
+
+It takes the same compact layouts and function-matched glyphs as Tokyo Night
+and Amber, with one exception: the home screen has no title or tagline, and its
+grid starts directly under the status bar, the six tiles sharing the height the
+header took. It is single-hue like Amber, so the places that kept Amber
+monochrome — the status glyphs, the codec colours, the balanced-output gold,
+the Now Playing deck, the screensaver's field — ask `theme_is_monochrome()`
+now, and the deck's roles come back as steps of grey: `#888888` for the star
+and the overflow, `#606060` for the idle shuffle. A white accent is also the
+first one white type does not read on, so whatever is drawn on an accent fill —
+a selected pill, a confirm button, the keyboard's accept key, the knob of a
+switch that is on — takes `theme_on_accent()`: black above a luma of 200, white
+below it. Every earlier accent, Amber's `#ffad2e` included, stays below the
+line and keeps its white.
+
 Two board matters that are not layout live beside the profile. The V1 kernel
 has one switch node, `/sys/class/switch/headset`, and no `balance` node; with
 nothing in either socket the headset node reads `1`, which the HiBy logic took

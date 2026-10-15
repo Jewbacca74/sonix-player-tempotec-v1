@@ -2162,6 +2162,9 @@ static void index_theme_refresh(void) {
 		}
 		if (panels[i]->index_hint) {
 			lv_obj_set_style_bg_color(panels[i]->index_hint, theme()->accent, 0);
+			if (panels[i]->index_hint_label) {
+				lv_obj_set_style_text_color(panels[i]->index_hint_label, theme_on_accent(), 0);
+			}
 		}
 		reorder_icon_paint(panels[i]);
 	}
@@ -2229,7 +2232,7 @@ static void index_build(panel_t *p, gui_config_t *cfg) {
 	p->index_hint_label = lv_label_create(p->index_hint);
 	lv_label_set_text(p->index_hint_label, "");
 	lv_obj_set_style_text_font(p->index_hint_label, &font_ui_64_bold, 0);
-	lv_obj_set_style_text_color(p->index_hint_label, lv_color_white(), 0);
+	lv_obj_set_style_text_color(p->index_hint_label, theme_on_accent(), 0);
 	lv_obj_center(p->index_hint_label);
 
 	index_guard_note(p);
