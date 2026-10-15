@@ -95,7 +95,7 @@ Showcase of **Tokyo Night** appearance: a blue-black palette with function-match
 
 ### Amber on black theme
 
-Showcase of **Ember** appearance: fiery orange accents on a pure black background, with warm amber artwork and glowing icons.
+Showcase of **Amber** appearance: fiery orange accents on a pure black background, with warm amber artwork and glowing icons.
 
 <table>
   <tr>
