@@ -5,6 +5,7 @@ Run from the repository root on a Linux host:
 ```sh
 make -C sonix-player/tests test
 make -C sonix-player/tests sanitize
+make -C sonix-player/tests swvolume
 ```
 
 These require only a C compiler, Make and Python 3 (plus standard pthread/dl/math libraries). They **do not require LVGL, ALSA, a MIPS toolchain, a music server, a real account, or downloaded audio**.
@@ -27,6 +28,17 @@ Checks include:
 - cancellation during HTTP header setup, a stalled body, and reader starvation, followed by generation-safe reuse;
 - nonmutating playlist next-track look-ahead across repeat/shuffle/ordered modes;
 - exclusive decoder leases, both handoff/teardown orders, failed pre-cache retry suppression, repeat-one starting at byte zero, account-change invalidation with an outstanding lease, metadata lookup and unsupported raw codecs.
+
+## Software volume
+
+`make -C sonix-player/tests swvolume` checks the arithmetic of the software
+volume -- the whole level law for a USB DAC with no control of its own. The
+gain must mean exactly the decibels the USB route asked for, mute must be
+exact, a deeply attenuated stream must stay quiet, clean and in range (rounded
+and dithered, not truncated into grit), and the scaling must apply only while
+the sound is leaving over the USB-C port. The three routing answers (Bluetooth,
+a card on the port, that card's volume control) are stubbed; the curve, the
+coefficients and the scaling are the real ones.
 
 ## Real codec integration
 

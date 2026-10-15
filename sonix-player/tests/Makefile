@@ -40,6 +40,19 @@ $(BUILD)/test_screensaverpics: $(PICS_SRC) $(ROOT)/src/system/device/screensaver
 	@mkdir -p $(BUILD)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(PICS_SRC) $(LDFLAGS) $(LDLIBS)
 
+# The software volume's arithmetic -- the whole level law for a USB DAC with
+# no control of its own. Plain C, no ALSA: the three routing answers
+# (Bluetooth, a card on the port, that card's control) are stubbed.
+SWVOL_SRC = test_swvolume.c $(ROOT)/src/system/audio/swvolume.c
+.PHONY: swvolume
+swvolume: $(BUILD)/test_swvolume
+	$(BUILD)/test_swvolume
+
+$(BUILD)/test_swvolume: $(SWVOL_SRC) $(ROOT)/src/system/audio/swvolume.h \
+                        $(ROOT)/src/system/audio/usbaudio.h $(ROOT)/src/system/audio/audio.h
+	@mkdir -p $(BUILD)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(SWVOL_SRC) $(LDFLAGS) $(LDLIBS)
+
 # Optional real-codec integration: the usual host development packages are
 # sufficient. No fake MP3/FLAC/Opus decoder is used. See tests/README.md.
 CODEC = $(filter-out %/wavpackdec.c %/opusdec.c,$(wildcard $(ROOT)/src/system/decode/*.c)) \
