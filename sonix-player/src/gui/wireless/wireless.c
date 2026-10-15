@@ -215,8 +215,7 @@ static lv_obj_t *radio_card(lv_obj_t *parent, const char *label, const lv_image_
 
 	row->toggle = lv_switch_create(heading);
 	lv_obj_set_size(row->toggle, 44, 24);
-	lv_obj_add_style(row->toggle, &theme_style_switch, LV_PART_MAIN);
-	lv_obj_add_style(row->toggle, &theme_style_switch_checked, LV_PART_INDICATOR | LV_STATE_CHECKED);
+	theme_apply_switch(row->toggle);
 	lv_obj_add_event_cb(row->toggle, radio_changed_cb, LV_EVENT_VALUE_CHANGED, row);
 
 	row->options = lv_btn_create(card);

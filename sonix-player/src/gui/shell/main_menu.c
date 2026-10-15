@@ -131,6 +131,12 @@ static void set_label_if_changed(lv_obj_t *label, const char *text) {
 	}
 }
 
+// The V1 home's title and tagline. OLED leaves both out: its grid starts right
+// under the status bar, and the six cards share the height the header took.
+#define HOME_HEADER_HEIGHT 62
+
+static bool home_header_shown(void) { return !theme_is_oled(); }
+
 // Fit the V1's live strip around two fixed one-line labels. Explicitly sizing
 // the text column from the row's content width keeps both glyphs and ellipses
 // inside the card, including after a font-size or theme change.
@@ -163,7 +169,8 @@ static void main_menu_layout_tokyo_home(bool force) {
 	lv_obj_set_height(mini_player_subtitle, line_height);
 
 	int bottom = (int)menu_cfg->padding + footer_height + 1;
-	gridpage_set_layout(menu_grid, menu_cfg, (int)menu_cfg->top_bar_height + 62, bottom, menu_cfg->padding, 6, 2, 3);
+	int top = (int)menu_cfg->top_bar_height + (home_header_shown() ? HOME_HEADER_HEIGHT : 0);
+	gridpage_set_layout(menu_grid, menu_cfg, top, bottom, menu_cfg->padding, 6, 2, 3);
 	for (int i = 0; i < 6; i++) {
 		gridpage_set_tile_orientation(menu_grid, i, true);
 	}
@@ -267,12 +274,13 @@ static void main_menu_refresh_theme(void) {
 	}
 
 	if (prototype_layout) {
-		lv_obj_set_hidden(home_header, false);
-		lv_obj_set_hidden(home_note, false);
+		lv_obj_set_hidden(home_header, !home_header_shown());
+		lv_obj_set_hidden(home_note, !home_header_shown());
 		lv_obj_set_hidden(mini_player, false);
 
 		// Status bar: y=0..24. The bold 36 px title row and single-line note
 		// lead into six horizontal icon-and-label cards; the mini-player sits below.
+		// OLED has no title row or note: the cards start under the status bar.
 		// The six existing tile objects are simply reflowed, not duplicated.
 		// The title rests directly on the Tokyo Night background; the tagline
 		// stays below it with a clear gap, and there is no divider.

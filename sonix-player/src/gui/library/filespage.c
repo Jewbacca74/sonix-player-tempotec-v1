@@ -1319,7 +1319,7 @@ void filespage_init(gui_config_t *cfg) {
 
 	pick_here_label = lv_label_create(pick_here_btn);
 	lv_label_set_text(pick_here_label, tr("files_move_here"));
-	lv_obj_set_style_text_color(pick_here_label, lv_color_white(), 0);
+	lv_obj_set_style_text_color(pick_here_label, theme_on_accent(), 0);
 	lv_obj_set_style_text_font(pick_here_label, &font_ui_24, 0);
 	lv_obj_center(pick_here_label);
 

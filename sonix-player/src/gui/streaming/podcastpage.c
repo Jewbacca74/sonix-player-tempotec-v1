@@ -2006,7 +2006,7 @@ static void paint_pill(lv_obj_t *btn, bool on) {
 		return;
 	}
 	lv_obj_set_style_bg_color(btn, on ? theme()->accent : theme()->surface_pressed, 0);
-	lv_obj_set_style_text_color(lv_obj_get_child(btn, 0), on ? lv_color_white() : theme()->text_primary, 0);
+	lv_obj_set_style_text_color(lv_obj_get_child(btn, 0), on ? theme_on_accent() : theme()->text_primary, 0);
 }
 
 // The corner buttons' visibility has a single owner, because two owners of one

@@ -136,6 +136,49 @@ Showcase of **Amber** appearance: fiery orange accents on a pure black backgroun
   </tr>
 </table>
 
+### OLED theme
+
+Showcase of **OLED** appearance: true black backgrounds with white as the accent, on the same V1 layouts as Tokyo Night and Amber. Nothing is filled grey: cards, rows and buttons are as black as the page, and Now Playing sets the sleeve on black instead of on a blurred copy of it. The main menu leaves out the title and tagline, so its six tiles start right under the status bar. Rendered by the host simulator with the V1 profile.
+
+<table>
+  <tr>
+    <td align="center">
+      <a href="screenshots/oled/main-menu.png"><img src="screenshots/oled/main-menu.png" width="180" alt="OLED main menu"></a>
+      <br><sub><b>Main menu</b></sub>
+    </td>
+    <td align="center">
+      <a href="screenshots/oled/music.png"><img src="screenshots/oled/music.png" width="180" alt="OLED music"></a>
+      <br><sub><b>Music</b></sub>
+    </td>
+    <td align="center">
+      <a href="screenshots/oled/more.png"><img src="screenshots/oled/more.png" width="180" alt="OLED more"></a>
+      <br><sub><b>More</b></sub>
+    </td>
+    <td align="center">
+      <a href="screenshots/oled/wireless.png"><img src="screenshots/oled/wireless.png" width="180" alt="OLED wireless"></a>
+      <br><sub><b>Wireless</b></sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <a href="screenshots/oled/settings.png"><img src="screenshots/oled/settings.png" width="180" alt="OLED settings"></a>
+      <br><sub><b>Settings</b></sub>
+    </td>
+    <td align="center">
+      <a href="screenshots/oled/now-playing.png"><img src="screenshots/oled/now-playing.png" width="180" alt="OLED now playing"></a>
+      <br><sub><b>Now Playing</b></sub>
+    </td>
+    <td align="center">
+      <a href="screenshots/oled/file-browser.png"><img src="screenshots/oled/file-browser.png" width="180" alt="OLED file browser"></a>
+      <br><sub><b>File Browser</b></sub>
+    </td>
+    <td align="center">
+      <a href="screenshots/oled/streaming.png"><img src="screenshots/oled/streaming.png" width="180" alt="OLED streaming"></a>
+      <br><sub><b>Streaming</b></sub>
+    </td>
+  </tr>
+</table>
+
 ## Contents
 
 - [Target device](#target-device)
@@ -143,6 +186,7 @@ Showcase of **Amber** appearance: fiery orange accents on a pure black backgroun
 - [Screenshots](#screenshots)
   - [Tokyo Night theme](#tokyo-night-theme)
   - [Ember theme](#ember-theme)
+  - [OLED theme](#oled-theme)
 - [Build a firmware image](#build-a-firmware-image)
 - [Install or restore firmware](#install-or-restore-firmware)
 - [Streaming credentials](#streaming-credentials)

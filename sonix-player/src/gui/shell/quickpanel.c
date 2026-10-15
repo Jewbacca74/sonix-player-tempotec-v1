@@ -1426,9 +1426,10 @@ static lv_obj_t *make_circle_button(lv_obj_t *parent, const lv_image_dsc_t *glyp
 	lv_obj_add_event_cb(btn, circle_guard_cb, LV_EVENT_LONG_PRESSED, NULL);
 	lv_obj_set_size(btn, circle_button_size, circle_button_size);
 	lv_obj_set_style_radius(btn, LV_RADIUS_CIRCLE, 0);
-	lv_obj_add_style(btn, &theme_style_switch, 0); // neutral circle that follows the theme
+	// The neutral circle that follows the theme; its border too is the shared
+	// style's -- none, except OLED's ring around an idle circle.
+	lv_obj_add_style(btn, &theme_style_switch, 0);
 	lv_obj_set_style_shadow_width(btn, 0, 0);
-	lv_obj_set_style_border_width(btn, 0, 0);
 
 	lv_obj_t *icon = lv_image_create(btn);
 	lv_image_set_src(icon, glyph);
@@ -1442,8 +1443,8 @@ static lv_obj_t *make_circle_button(lv_obj_t *parent, const lv_image_dsc_t *glyp
 	return btn;
 }
 
-// Paints a quick button for its state: accent fill with a white glyph while on,
-// the neutral circle while off.
+// Paints a quick button for its state: accent fill with a white glyph while on
+// (black on a white accent), the neutral circle while off.
 static void circle_button_set_on(lv_obj_t *btn, bool on) {
 	if (!btn) {
 		return;
@@ -1453,12 +1454,14 @@ static void circle_button_set_on(lv_obj_t *btn, bool on) {
 	if (on) {
 		lv_obj_set_style_bg_color(btn, theme()->accent, 0);
 		lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
+		lv_obj_set_style_border_width(btn, 0, 0); // a filled circle needs no ring
 		if (icon) {
-			lv_obj_set_style_image_recolor(icon, lv_color_white(), 0);
+			lv_obj_set_style_image_recolor(icon, theme_on_accent(), 0);
 		}
 	} else {
 		lv_obj_remove_local_style_prop(btn, LV_STYLE_BG_COLOR, 0);
 		lv_obj_remove_local_style_prop(btn, LV_STYLE_BG_OPA, 0);
+		lv_obj_remove_local_style_prop(btn, LV_STYLE_BORDER_WIDTH, 0);
 		if (icon) {
 			lv_obj_remove_local_style_prop(icon, LV_STYLE_IMAGE_RECOLOR, 0);
 		}

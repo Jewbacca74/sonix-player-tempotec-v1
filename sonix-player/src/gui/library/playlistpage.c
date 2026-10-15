@@ -1506,7 +1506,7 @@ void playlistpage_init(gui_config_t *cfg) {
 	import_action_label = lv_label_create(import_action);
 	lv_label_set_text(import_action_label, tr("playlist_import"));
 	lv_obj_set_style_text_font(import_action_label, &font_ui_24, 0);
-	lv_obj_set_style_text_color(import_action_label, lv_color_white(), 0);
+	lv_obj_set_style_text_color(import_action_label, theme_on_accent(), 0);
 	lv_obj_center(import_action_label);
 
 	int import_top = content_top;

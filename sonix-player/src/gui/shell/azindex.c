@@ -309,11 +309,14 @@ static void timer_cb(lv_timer_t *t) {
 	}
 }
 
-// The two hand-set colours; the letters follow their shared style on their own.
+// The hand-set colours; the letters follow their shared style on their own.
 static void theme_refresh(void) {
 	for (int i = 0; i < strip_count; i++) {
 		lv_obj_set_style_bg_color(strips[i]->bar, theme()->surface, 0);
 		lv_obj_set_style_bg_color(strips[i]->hint, theme()->accent, 0);
+		if (strips[i]->hint_label) {
+			lv_obj_set_style_text_color(strips[i]->hint_label, theme_on_accent(), 0);
+		}
 	}
 }
 
@@ -386,7 +389,7 @@ azindex_t *azindex_create(lv_obj_t *screen, gui_config_t *cfg, lv_obj_t *list, i
 	ix->hint_label = lv_label_create(ix->hint);
 	lv_label_set_text(ix->hint_label, "");
 	lv_obj_set_style_text_font(ix->hint_label, &font_ui_64_bold, 0);
-	lv_obj_set_style_text_color(ix->hint_label, lv_color_white(), 0);
+	lv_obj_set_style_text_color(ix->hint_label, theme_on_accent(), 0);
 	lv_obj_center(ix->hint_label);
 
 	strips[strip_count++] = ix;

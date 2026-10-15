@@ -567,8 +567,8 @@ static void row_create(row_t *row) {
 static void pill_paint(category_t cat) {
 	bool on = cat == current_cat;
 	lv_obj_set_style_bg_color(pill[cat], on ? theme()->accent : theme()->surface_pressed, 0);
-	lv_obj_set_style_text_color(pill_name[cat], on ? lv_color_white() : theme()->text_primary, 0);
-	lv_obj_set_style_text_color(pill_count[cat], on ? lv_color_white() : theme()->text_secondary, 0);
+	lv_obj_set_style_text_color(pill_name[cat], on ? theme_on_accent() : theme()->text_primary, 0);
+	lv_obj_set_style_text_color(pill_count[cat], on ? theme_on_accent() : theme()->text_secondary, 0);
 }
 
 static void pills_paint(void) {

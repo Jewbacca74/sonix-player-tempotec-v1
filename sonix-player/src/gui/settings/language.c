@@ -228,7 +228,7 @@ static void build_panel(gui_config_t *cfg) {
 	lv_obj_t *confirm_label = lv_label_create(confirm);
 	lv_label_set_text(confirm_label, tr("confirm"));
 	lv_obj_set_style_text_font(confirm_label, &font_ui_24, 0);
-	lv_obj_set_style_text_color(confirm_label, lv_color_white(), 0);
+	lv_obj_set_style_text_color(confirm_label, theme_on_accent(), 0);
 	lv_obj_center(confirm_label);
 }
 

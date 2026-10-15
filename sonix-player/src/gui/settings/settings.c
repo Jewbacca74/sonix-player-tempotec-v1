@@ -375,7 +375,7 @@ static void refresh_kbtype_buttons(void) {
 		bool on = i == active;
 		lv_obj_set_style_bg_color(kbtype_buttons[i], on ? theme()->accent : theme()->surface_pressed, 0);
 		lv_obj_set_style_text_color(lv_obj_get_child(kbtype_buttons[i], 0),
-									on ? lv_color_white() : theme()->text_primary, 0);
+									on ? theme_on_accent() : theme()->text_primary, 0);
 	}
 }
 

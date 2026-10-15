@@ -73,21 +73,23 @@ static lv_obj_t *make_button(lv_obj_t *parent, const char *text, bool accent, lv
 	lv_obj_set_height(btn, BUTTON_H);
 	lv_obj_set_flex_grow(btn, 1);
 	lv_obj_set_style_radius(btn, bp_pick(10, 12), 0);
-	lv_obj_set_style_border_width(btn, 0, 0);
 	lv_obj_set_style_shadow_width(btn, 0, 0);
 	lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, NULL);
 
 	if (accent) {
+		lv_obj_set_style_border_width(btn, 0, 0);
 		lv_obj_set_style_bg_color(btn, theme()->accent, 0);
 		lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
 	} else {
-		lv_obj_add_style(btn, &theme_style_switch, 0); // the quiet neutral fill
+		// The quiet neutral fill. Its border is left to the shared style:
+		// none, except OLED's ring around a button as black as the card.
+		lv_obj_add_style(btn, &theme_style_switch, 0);
 	}
 
 	lv_obj_t *label = lv_label_create(btn);
 	lv_label_set_text(label, tr(text));
 	lv_obj_set_style_text_font(label, &font_ui_24, 0);
-	lv_obj_set_style_text_color(label, accent ? lv_color_white() : theme()->text_primary, 0);
+	lv_obj_set_style_text_color(label, accent ? theme_on_accent() : theme()->text_primary, 0);
 	lv_obj_center(label);
 
 	if (label_out) {
