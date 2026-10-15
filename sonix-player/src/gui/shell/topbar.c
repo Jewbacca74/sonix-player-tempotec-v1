@@ -254,6 +254,44 @@ static void refresh_status_icon_color(lv_obj_t *icon) {
 	}
 }
 
+// The volume number is held at the width of the widest reading it can show, so
+// the glyphs after it in the left group -- jack, playback, Detect changes,
+// SonixLink -- stay put while the level moves. Sized to its text, the label
+// shoved them sideways whenever the level gained or lost a digit, and in a face
+// with proportional figures on most steps in between: in MiSans at the V1's
+// 14 px a 1 is six pixels wide and a 0 nine, so the jack glyph took a dozen
+// different positions on the way from 0 to 100.
+//
+// Measured, not written down: the face and the text size are both settings and
+// a card font can be any width, so this runs again after either changes. Every
+// reading from 0 to 100 is tried rather than three of the widest digit, which
+// would hold room for an 888 the scale never reaches -- three pixels more in
+// MiSans, and the V1's bar has none to spare.
+//
+// A minimum width rather than a fixed one: the label stays sized to its text,
+// so a measure that came up short would let it grow, never wrap the number onto
+// a second line. The number keeps to the side of the glyph that says what it
+// means; the spare room opens up after it.
+static void fit_volume_label(void) {
+	if (!vol_label) {
+		return;
+	}
+
+	const lv_font_t *font = lv_obj_get_style_text_font(vol_label, LV_PART_MAIN);
+	int32_t letter_space = lv_obj_get_style_text_letter_space(vol_label, LV_PART_MAIN);
+	int32_t widest = 0;
+	for (int percent = 0; percent <= 100; percent++) {
+		char text[8];
+		snprintf(text, sizeof(text), "%d", percent);
+		lv_point_t size;
+		lv_text_get_size(&size, text, font, letter_space, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+		if (size.x > widest) {
+			widest = size.x;
+		}
+	}
+	lv_obj_set_style_min_width(vol_label, widest, 0);
+}
+
 // Volume, as a number with the glyph that matches its level.
 void topbar_refresh_volume(int percent) {
 	if (!vol_label) {
@@ -766,9 +804,82 @@ static void timer_update_cb(lv_timer_t *timer) {
 	led_set_dac(dac_live, dac_live && dac.streaming, dac.sample_rate);
 }
 
+// The edge of a side group that faces the clock: the right edge of the
+// rightmost glyph on the left, or the left edge of the leftmost one on the
+// right. Hidden glyphs take no room in the row and do not count. False when the
+// group shows nothing at all.
+static bool group_edge(lv_obj_t *group, bool right_edge, int32_t *edge) {
+	bool found = false;
+	uint32_t n = lv_obj_get_child_count(group);
+	for (uint32_t i = 0; i < n; i++) {
+		lv_obj_t *child = lv_obj_get_child(group, (int32_t)i);
+		if (lv_obj_is_hidden(child)) {
+			continue;
+		}
+		lv_area_t area;
+		lv_obj_get_coords(child, &area);
+		int32_t x = right_edge ? area.x2 : area.x1;
+		if (!found || (right_edge ? x > *edge : x < *edge)) {
+			*edge = x;
+		}
+		found = true;
+	}
+	return found;
+}
+
+// Where the centred clock goes. Centred on the bar whenever it fits there,
+// which on the regular layout is nearly always. The V1's 240 px are another
+// matter: the volume group with the jack and playback glyphs leaves the clock
+// a dozen pixels or so, and the Detect changes glyph on top of those runs into
+// the clock's first digit. So the clock steps aside, just far enough to keep
+// the groups' own gap from the last glyph on the left. It keeps the same gap
+// from the battery side and never runs into it, moving left instead when the
+// radios and the charge reading crowd it from there. When there is not room for
+// everything, the battery side keeps its gap and what overlap is left stays on
+// the left.
+//
+// So what moves it is something beside it appearing, going or changing width,
+// never the volume: the number, which changes all the time, holds one width
+// (fit_volume_label()).
+static void place_clock(void) {
+	if (!clock_label || lv_obj_get_parent(clock_label) != top_bar || lv_obj_is_hidden(clock_label)) {
+		return;
+	}
+
+	// The x LV_ALIGN_CENTER gives it, worked out the way lv_obj_refr_pos()
+	// does: from the bar's content box, with the halves rounded separately.
+	lv_area_t bar;
+	lv_obj_get_content_coords(top_bar, &bar);
+	int32_t width = lv_obj_get_width(clock_label);
+	int32_t centred = bar.x1 + lv_area_get_width(&bar) / 2 - width / 2;
+
+	int32_t gap = lv_obj_get_style_pad_column(container_left, 0);
+	int32_t x = centred;
+	int32_t edge;
+	if (group_edge(container_left, true, &edge) && x < edge + 1 + gap) {
+		x = edge + 1 + gap;
+	}
+	if (group_edge(container_right, false, &edge) && x + width > edge - gap) {
+		x = edge - gap - width;
+	}
+	lv_obj_set_x(clock_label, x - centred); // does nothing when it has not moved
+}
+
+// Run after either side group has been laid out afresh (a glyph shown or
+// hidden, a label grown or shrunk) and when the clock's own width changes with
+// its digits or the face. Those are the moments the coordinates place_clock()
+// reads are new; when the clock moves, LVGL lays it out again before anything
+// is drawn.
+static void clock_room_cb(lv_event_t *e) {
+	(void)e;
+	place_clock();
+}
+
 // Where the clock sits in the bar: centred on its own, first in the volume group
 // on the left, or last in the battery group on the right. Re-parenting is all it
 // takes, since the two side groups are flex rows and their layout absorbs it.
+// Centred, it still steps aside when a side group crowds it: see
+// place_clock().
 void topbar_set_clock_position(int pos) {
 	if (!clock_label) {
 		return;
@@ -790,6 +901,10 @@ void topbar_set_clock_position(int pos) {
 	} else {
 		lv_obj_set_parent(clock_label, top_bar);
 		lv_obj_align(clock_label, LV_ALIGN_CENTER, 0, 0);
+		// Back from hidden, or set again while already centred, the clock
+		// leaves neither side group, and nothing would place it. Laying the
+		// left group out again does: its event calls place_clock().
+		lv_obj_mark_layout_as_dirty(container_left);
 	}
 }
 
@@ -962,6 +1077,10 @@ void topbar_init(gui_config_t *cfg) {
 	lv_obj_add_style(vol_label, &theme_style_text, 0);
 	lv_obj_set_style_text_color(vol_label, lv_color_white(), 0);
 	lv_obj_set_style_text_font(vol_label, topbar_compact ? &font_ui_14 : &font_ui_24, 0);
+	// As wide as the widest reading, so nothing after it moves with the level;
+	// measured again whenever the face or the text size changes.
+	fit_volume_label();
+	fonts_register_change(fit_volume_label);
 
 	// The jack indicator: appears when headphones are plugged in, theme-coloured
 	// for the 3.5 mm jack and gold for the 4.4 mm balanced one.
@@ -1095,11 +1214,15 @@ void topbar_init(gui_config_t *cfg) {
 	}
 	lv_obj_set_hidden(bat_bolt, true);
 
-	// Clock, centred on the bar and independent of everything around it.
+	// Clock, centred on the bar unless a side group crowds it: see
+	// place_clock() for that, and clock_room_cb() for when it is placed.
 	clock_label = lv_label_create(top_bar);
 	lv_obj_add_style(clock_label, &theme_style_text, 0);
 	lv_obj_set_style_text_font(clock_label, topbar_compact ? &font_ui_14 : &font_ui_24, 0);
 	lv_obj_align(clock_label, LV_ALIGN_CENTER, 0, 0);
+	lv_obj_add_event_cb(container_left, clock_room_cb, LV_EVENT_LAYOUT_CHANGED, NULL);
+	lv_obj_add_event_cb(container_right, clock_room_cb, LV_EVENT_LAYOUT_CHANGED, NULL);
+	lv_obj_add_event_cb(clock_label, clock_room_cb, LV_EVENT_SIZE_CHANGED, NULL);
 	topbar_refresh_clock();
 	topbar_set_clock_position((int)config_get_int("screen", "clock_pos", TOPBAR_CLOCK_CENTER));
 
