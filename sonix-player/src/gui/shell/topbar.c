@@ -254,6 +254,44 @@ static void refresh_status_icon_color(lv_obj_t *icon) {
 	}
 }
 
+// The volume number is held at the width of the widest reading it can show, so
+// the glyphs after it in the left group -- jack, playback, Detect changes,
+// SonixLink -- stay put while the level moves. Sized to its text, the label
+// shoved them sideways whenever the level gained or lost a digit, and in a face
+// with proportional figures on most steps in between: in MiSans at the V1's
+// 14 px a 1 is six pixels wide and a 0 nine, so the jack glyph took a dozen
+// different positions on the way from 0 to 100.
+//
+// Measured, not written down: the face and the text size are both settings and
+// a card font can be any width, so this runs again after either changes. Every
+// reading from 0 to 100 is tried rather than three of the widest digit, which
+// would hold room for an 888 the scale never reaches -- three pixels more in
+// MiSans, and the V1's bar has none to spare.
+//
+// A minimum width rather than a fixed one: the label stays sized to its text,
+// so a measure that came up short would let it grow, never wrap the number onto
+// a second line. The number keeps to the side of the glyph that says what it
+// means; the spare room opens up after it.
+static void fit_volume_label(void) {
+	if (!vol_label) {
+		return;
+	}
+
+	const lv_font_t *font = lv_obj_get_style_text_font(vol_label, LV_PART_MAIN);
+	int32_t letter_space = lv_obj_get_style_text_letter_space(vol_label, LV_PART_MAIN);
+	int32_t widest = 0;
+	for (int percent = 0; percent <= 100; percent++) {
+		char text[8];
+		snprintf(text, sizeof(text), "%d", percent);
+		lv_point_t size;
+		lv_text_get_size(&size, text, font, letter_space, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+		if (size.x > widest) {
+			widest = size.x;
+		}
+	}
+	lv_obj_set_style_min_width(vol_label, widest, 0);
+}
+
 // Volume, as a number with the glyph that matches its level.
 void topbar_refresh_volume(int percent) {
 	if (!vol_label) {
@@ -962,6 +1000,10 @@ void topbar_init(gui_config_t *cfg) {
 	lv_obj_add_style(vol_label, &theme_style_text, 0);
 	lv_obj_set_style_text_color(vol_label, lv_color_white(), 0);
 	lv_obj_set_style_text_font(vol_label, topbar_compact ? &font_ui_14 : &font_ui_24, 0);
+	// As wide as the widest reading, so nothing after it moves with the level;
+	// measured again whenever the face or the text size changes.
+	fit_volume_label();
+	fonts_register_change(fit_volume_label);
 
 	// The jack indicator: appears when headphones are plugged in, theme-coloured
 	// for the 3.5 mm jack and gold for the 4.4 mm balanced one.
