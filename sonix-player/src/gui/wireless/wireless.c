@@ -11,6 +11,7 @@
 #include "src/gui/shell/gridpage.h"
 #include "src/gui/shell/icons.h"
 #include "src/gui/shell/settingsrow.h"
+#include "src/gui/shell/scrolltext.h"
 #include "src/gui/shell/switcher.h"
 #include "src/gui/shell/theme.h"
 #include "src/gui/wireless/airplay.h"
@@ -100,7 +101,11 @@ static void radio_detail_refresh(radio_row_t *row) {
 	} else {
 		text = tr("off");
 	}
-	lv_label_set_text(row->detail, text);
+	if (row->wifi) {
+		lv_label_set_text(row->detail, text);
+	} else {
+		scrolltext_set(row->detail, text);
+	}
 }
 
 static void radios_refresh(void) {
@@ -207,11 +212,18 @@ static lv_obj_t *radio_card(lv_obj_t *parent, const char *label, const lv_image_
 
 	row->wifi = strcmp(label, "wi_fi") == 0;
 	row->detail = lv_label_create(copy);
-	lv_label_set_long_mode(row->detail, LV_LABEL_LONG_DOT);
+	if (row->wifi) {
+		lv_label_set_long_mode(row->detail, LV_LABEL_LONG_DOT);
+	}
 	lv_obj_set_width(row->detail, lv_pct(100));
 	lv_obj_set_height(row->detail, lv_font_get_line_height(&font_ui_14));
 	lv_obj_add_style(row->detail, &theme_style_text_dim, 0);
 	lv_obj_set_style_text_font(row->detail, &font_ui_14, 0);
+	if (!row->wifi) {
+		// Keep the whole connected-device name visible in this compact overview;
+		// Echo devices often share a prefix, so an ellipsis hides the useful part.
+		scrolltext_apply(row->detail);
+	}
 
 	row->toggle = lv_switch_create(heading);
 	lv_obj_set_size(row->toggle, 44, 24);
