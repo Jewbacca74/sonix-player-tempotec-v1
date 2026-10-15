@@ -49,3 +49,42 @@ Both sanitizer targets use AddressSanitizer and UndefinedBehaviorSanitizer. At `
 ## Limits
 
 The fixture proves transport, byte/sample counts and ownership behavior on the host. Scheduling helpers are stubs and there is **no ALSA/device loop** here, so these tests do not certify real-time scheduling, gapless analog output, Wi-Fi performance, target CPU use or battery life. The TLS cases run against the OpenSSL the host has (the player's own client code, `dlopen`ed exactly as on the device, sees the host's libssl 1.1/3.x); with no loadable OpenSSL they print `SKIP TLS` and the rest of the suite still runs. Real-network trust, redirects and certificate cancellation, plus UI interaction, should also be checked on hardware. See [the V1 checklist](../../docs/subsonic.md#validation).
+
+## Headless main-menu appearance tests
+
+```sh
+# Only needed if the player build has not already fetched LVGL:
+git clone --depth 1 -b v9.6.0 https://github.com/lvgl/lvgl.git sonix-player/lvgl
+make -C sonix-player/tests ui -j"$(nproc)"
+```
+
+This optional suite links the real LVGL layout engine, main menu, shared grid,
+Appearance controls, themes, language loader and configuration store. It uses
+`tests/ui/lv_conf.h` to disable SDL, FreeType and device drivers, so a compiler
+and the LVGL checkout are sufficient; no audio libraries or display are needed.
+Deterministic built-in font metrics and unrelated navigation/playback services
+are substituted, rather than running the player or touching device hardware.
+
+It checks the default and saved **Main menu icons only** setting on both panel
+sizes, all five themes, exact icon sizes and centering, glow-free icon-only
+tiles, unchanged secondary-menu tiles, restoration of the labeled layout and
+its decorative glows, real switch callbacks and config save/reload,
+theme/accent/tint/font changes, hidden-label translation, and the six tile
+destinations. Both language asset trees are used. Icon-only images must have
+native-size sources and no scaling transform, including after font-metric
+reflows. Actual LVGL snapshots verify pixel-for-pixel alpha edges, theme tints
+and opaque pixels in ARGB8888 and the panel's RGB565 format; geometry alone
+cannot catch a small bitmap being enlarged into a blurry icon.
+
+To inspect rendered screens, optionally set `SONIX_MENU_SNAPSHOTS` to an output
+prefix (its parent directory must exist), for example:
+
+```sh
+SONIX_MENU_SNAPSHOTS=.build/menu make -C sonix-player/tests ui
+```
+
+This writes ignored `.build/menu-<width>-theme<kind>.ppm` files using LVGL's
+software renderer. To regenerate the main-menu-only native art, see
+`tools/main_menu_icons.py`; Python image tools are not required to build or
+run the player/tests. The host-build workflow runs this suite as well. These
+checks do not replace visual and touch testing on a physical V1.
