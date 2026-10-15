@@ -503,6 +503,13 @@ static void key_async_cb(void *user_data) {
 		return;
 	}
 
+	// A book owns Previous and Next while it is on screen. Play/Pause remains
+	// an audio command, so background music can still be stopped without
+	// putting the book down.
+	if (ebookreader_handle_key(key)) {
+		return;
+	}
+
 	// The side keys act on the local transport, and there are states in which
 	// that transport is not what the device is doing. Pressing them then does
 	// not do nothing -- it starts a local track underneath whatever is actually

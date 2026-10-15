@@ -128,6 +128,9 @@ a self-signed certificate), and HLS.
 - **Bookmarks** - double-tap the top of a page; up to 64 per book.
 - A **reading bar** along the bottom with chapter, page, progress, battery and
   clock, each one optional.
+- **Hardware page keys** - Previous and Next turn pages while a book is open;
+  in vertical mode they move one screen at a time and cross chapter boundaries
+  at the ends. Play/Pause and volume remain available for background audio.
 
 ## Games
 

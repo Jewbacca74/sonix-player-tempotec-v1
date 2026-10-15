@@ -18,4 +18,10 @@ void ebookreader_open(const char *path);
 // was left: what the bookmarks page opens a book with.
 void ebookreader_open_at(const char *path, uint32_t spine, uint32_t block, uint32_t offset);
 
+// Offers a hardware/media transport action to the open reader. Previous and
+// Next turn a page (or move one screen in vertical mode); Play/Pause is left to
+// the audio player, so somebody can still pause background music while reading.
+// Returns true when the reader owns the action and it must not reach playback.
+bool ebookreader_handle_key(gui_key_t key);
+
 #endif /* EBOOKREADER_H */
