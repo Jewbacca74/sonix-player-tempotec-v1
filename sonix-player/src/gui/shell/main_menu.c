@@ -158,6 +158,11 @@ static void main_menu_refresh_tiles(void) {
 			// Leave room for the tile padding and the glyph's optional 6 px
 			// halo. Size both the image's drawing and its flex layout box.
 			icon_size = LV_MAX(1, LV_MIN(lv_obj_get_width(tile), lv_obj_get_height(tile)) - bp_pick(12, 24));
+			// OLED's header-free grid has taller tiles. Leave more breathing
+			// room for its glyphs without changing the grid or touch targets.
+			if (theme_is_oled()) {
+				icon_size = LV_MAX(1, icon_size * 4 / 5);
+			}
 		}
 
 		gridpage_set_tile_label_hidden(menu_grid, i, icons_only);

@@ -135,6 +135,11 @@ static void check_grid(lv_obj_t *grid, bool icons_only) {
 		int long_side = LV_MAX(lv_obj_get_width(icon), lv_obj_get_height(icon));
 		int default_size = theme_uses_function_glyphs() ? bp_pick(22, 46) : bp_pick(46, 128);
 		assert(long_side > default_size);
+		/* OLED alone uses 80% of the original icon-only size. Check the
+		 * exact size in every theme, including after font/theme changes. */
+		int available = LV_MAX(1, LV_MIN(lv_obj_get_width(tile), lv_obj_get_height(tile)) - bp_pick(12, 24));
+		int expected_size = theme_is_oled() ? LV_MAX(1, available * 80 / 100) : available;
+		assert(long_side == expected_size);
 		lv_area_t t, image;
 		lv_obj_get_coords(tile, &t);
 		lv_obj_get_coords(icon, &image);
