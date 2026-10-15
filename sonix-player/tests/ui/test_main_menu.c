@@ -128,6 +128,19 @@ static void check_grid(lv_obj_t *grid, bool icons_only) {
 		lv_obj_t *label = child_of_type(tile, &lv_label_class);
 		assert(lv_obj_is_hidden(label) == icons_only);
 		assert(lv_label_get_text(label)[0]);
+		if (lv_obj_get_parent(grid) == main_menu_screen) {
+			/* Icon-only tiles must stay sharp: no visible halo, even if it
+			 * already exists from the labeled layout or a previous theme. */
+			int visible_halos = 0;
+			for (uint32_t j = 0; j < lv_obj_get_child_count(tile); j++) {
+				lv_obj_t *child = lv_obj_get_child(tile, j);
+				if (lv_obj_is_floating(child) && !lv_obj_is_hidden(child)) {
+					visible_halos++;
+				}
+			}
+			bool glow_expected = !icons_only && bp_is_tempotec_v1() && theme_uses_function_glyphs() && (i % 2 == 0);
+			assert(visible_halos == (glow_expected ? 1 : 0));
+		}
 		if (!icons_only) {
 			continue;
 		}
@@ -135,10 +148,11 @@ static void check_grid(lv_obj_t *grid, bool icons_only) {
 		int long_side = LV_MAX(lv_obj_get_width(icon), lv_obj_get_height(icon));
 		int default_size = theme_uses_function_glyphs() ? bp_pick(22, 46) : bp_pick(46, 128);
 		assert(long_side > default_size);
-		/* OLED alone uses 80% of the original icon-only size. Check the
-		 * exact size in every theme, including after font/theme changes. */
+		/* Preserve OLED's earlier reduction, then shrink every theme's
+		 * current icon-only size by 5%, rounded to the nearest pixel. */
 		int available = LV_MAX(1, LV_MIN(lv_obj_get_width(tile), lv_obj_get_height(tile)) - bp_pick(12, 24));
-		int expected_size = theme_is_oled() ? LV_MAX(1, available * 80 / 100) : available;
+		int previous_size = theme_is_oled() ? LV_MAX(1, available * 80 / 100) : available;
+		int expected_size = LV_MAX(1, (previous_size * 95 + 50) / 100);
 		assert(long_side == expected_size);
 		lv_area_t t, image;
 		lv_obj_get_coords(tile, &t);
@@ -147,18 +161,6 @@ static void check_grid(lv_obj_t *grid, bool icons_only) {
 		assert(abs((t.y1 + t.y2) - (image.y1 + image.y2)) <= 2);
 		assert(image.x1 >= t.x1 && image.x2 <= t.x2);
 		assert(image.y1 >= t.y1 && image.y2 <= t.y2);
-		/* A floating halo must follow the centered glyph after every reflow. */
-		for (uint32_t j = 0; j < lv_obj_get_child_count(tile); j++) {
-			lv_obj_t *halo = lv_obj_get_child(tile, j);
-			if (!lv_obj_is_floating(halo) || lv_obj_is_hidden(halo)) {
-				continue;
-			}
-			lv_area_t h;
-			lv_obj_get_coords(halo, &h);
-			assert(abs((h.x1 + h.x2) - (image.x1 + image.x2)) <= 2);
-			assert(abs((h.y1 + h.y2) - (image.y1 + image.y2)) <= 2);
-			assert(h.x1 >= t.x1 && h.x2 <= t.x2 && h.y1 >= t.y1 && h.y2 <= t.y2);
-		}
 	}
 }
 

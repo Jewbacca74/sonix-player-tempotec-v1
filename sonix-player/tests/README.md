@@ -66,9 +66,10 @@ Deterministic built-in font metrics and unrelated navigation/playback services
 are substituted, rather than running the player or touching device hardware.
 
 It checks the default and saved **Main menu icons only** setting on both panel
-sizes, all five themes, larger centered icons and halo bounds, unchanged
-secondary-menu tiles, restoration of the original labeled layout, real switch
-callbacks and config save/reload, theme/accent/tint/font changes, hidden-label
+sizes, all five themes, exact icon sizes and centering, glow-free icon-only
+tiles, unchanged secondary-menu tiles, restoration of the labeled layout and
+its decorative glows, real switch callbacks and config save/reload,
+theme/accent/tint/font changes, hidden-label
 translation, and the six tile destinations. Both language asset trees are used.
 The host-build workflow runs this suite as well. These are layout/behavior
 checks, not a replacement for visual and touch testing on a physical V1.

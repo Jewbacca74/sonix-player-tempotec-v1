@@ -155,20 +155,25 @@ static void main_menu_refresh_tiles(void) {
 		lv_obj_t *tile = lv_obj_get_child(menu_grid, i);
 		int icon_size = tokyo ? (compact ? 22 : 46) : (compact ? 46 : 0);
 		if (icons_only) {
-			// Leave room for the tile padding and the glyph's optional 6 px
-			// halo. Size both the image's drawing and its flex layout box.
+			// Leave breathing room inside the tile. Size both the image's
+			// drawing and its flex layout box.
 			icon_size = LV_MAX(1, LV_MIN(lv_obj_get_width(tile), lv_obj_get_height(tile)) - bp_pick(12, 24));
 			// OLED's header-free grid has taller tiles. Leave more breathing
 			// room for its glyphs without changing the grid or touch targets.
 			if (theme_is_oled()) {
 				icon_size = LV_MAX(1, icon_size * 4 / 5);
 			}
+			// A further 5% reduction in every theme, rounded to the nearest
+			// display pixel so compact glyphs do not shrink by a full extra pixel.
+			icon_size = LV_MAX(1, (icon_size * 95 + 50) / 100);
 		}
 
 		gridpage_set_tile_label_hidden(menu_grid, i, icons_only);
 		if (tokyo) {
+			// Keep the decorative left-column glow only in the labeled layout.
+			bool glow = !icons_only && compact && (i % 2 == 0);
 			gridpage_set_tile_icon_style(menu_grid, i, TOKYO_MENU_ICONS[i], icon_size, true,
-										 theme_semantic_color(TOKYO_MENU_TONES[i]), compact && i < 5 && i != 1 && i != 3);
+										 theme_semantic_color(TOKYO_MENU_TONES[i]), glow);
 		} else {
 			gridpage_set_tile_icon_style(menu_grid, i, NORMAL_MENU_ICONS[i], icon_size, false,
 										 theme()->text_primary, false);
