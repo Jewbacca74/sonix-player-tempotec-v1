@@ -14,10 +14,14 @@
 //   * JPEG, .jpg or .jpeg, and BASELINE -- the scaled decoder cannot read a
 //     progressive one (see jpeg_scaled.h) and the fallback path is what runs a
 //     64 MB device out of memory;
-//   * no wider and no taller than the screen, and portrait rather than
-//     landscape. The picture is drawn at full size on a panel held upright: one
-//     that would have to be shrunk to fit is one that was not prepared for
-//     this.
+//   * no wider and no taller than the caller's limit, and portrait rather than
+//     landscape. The limit is the screen's own size, so the picture is drawn
+//     at full size on a panel held upright: one that would have to be shrunk
+//     to fit is one that was not prepared for this. The exception is the V1,
+//     which takes the size its texts promise and scales it down to its smaller
+//     panel (see screensaver.c);
+//   * not hidden: a name starting with a dot is never a picture somebody put
+//     there, and a Mac leaves one beside every file it copies.
 //
 // A file breaking any of those is passed over in silence. With several in the
 // folder the others still come up, and a picture drawn wrong is worse than a

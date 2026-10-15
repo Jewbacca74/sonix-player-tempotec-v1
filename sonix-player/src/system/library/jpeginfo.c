@@ -4,12 +4,6 @@
 #include <string.h>
 #include <strings.h> // strcasecmp
 
-// The frame header is near the front of every JPEG -- after the application
-// and quantisation segments, before the first scan -- so a few kilobytes is
-// more than enough and a file that has not declared itself by then is one this
-// player is not going to show anyway.
-#define JPEG_HEAD_BYTES 8192
-
 // Start Of Frame markers. The progressive ones are the second column: SOF2 and
 // its arithmetic and hierarchical relatives, all of which the scaled decoder
 // refuses. Everything else in the C0..CF block that is not a frame header --
@@ -25,30 +19,65 @@ static bool is_progressive_marker(unsigned char m) {
 	return m == 0xC2 || m == 0xC6 || m == 0xCA || m == 0xCE;
 }
 
-bool jpeg_info_parse(const unsigned char *data, size_t size, jpeg_info_t *out) {
-	if (!data || !out) {
+// The headers are walked one segment at a time, from bytes in hand or straight
+// from the file. Every segment that is not the frame header is stepped over by
+// its length, never read.
+//
+// Nothing limits how far into the file the frame header may sit. What comes
+// before it is metadata: Exif with its thumbnail, colour profiles, XMP and
+// Photoshop's resources. A phone, Photoshop or GIMP keeping all of that puts
+// the frame header tens or hundreds of kilobytes in. A reader that gave up
+// after the first 8 KB turned every one of those pictures away, whatever its
+// size. Stepping over a segment by seeking costs the same at 60 KB as at 60
+// bytes.
+typedef struct {
+	const unsigned char *data; // bytes in hand, or NULL to read `file`
+	size_t size;
+	size_t pos;
+	FILE *file;
+} cursor_t;
+
+// The next byte, or -1 at the end.
+static int next_byte(cursor_t *c) {
+	if (!c->data) {
+		return fgetc(c->file); // EOF is -1
+	}
+	return c->pos < c->size ? c->data[c->pos++] : -1;
+}
+
+// Steps over `count` bytes, which a segment length keeps under 64 KB. False
+// when that runs past the end of bytes in hand. A file may seek past its end;
+// the read after that is what says the file ended too soon.
+static bool skip_bytes(cursor_t *c, size_t count) {
+	if (!c->data) {
+		return fseek(c->file, (long)count, SEEK_CUR) == 0;
+	}
+	if (count > c->size - c->pos) {
 		return false;
 	}
-	memset(out, 0, sizeof(*out));
+	c->pos += count;
+	return true;
+}
 
-	if (size < 4 || data[0] != 0xFF || data[1] != 0xD8) {
+static bool walk_headers(cursor_t *c, jpeg_info_t *out) {
+	if (next_byte(c) != 0xFF || next_byte(c) != 0xD8) {
 		return false; // no SOI: not a JPEG
 	}
 
-	size_t i = 2;
-	while (i + 1 < size) {
+	for (;;) {
 		// Segments are separated by fill bytes in some encoders' output: any
 		// number of 0xFF may precede the marker itself.
-		if (data[i] != 0xFF) {
-			return false; // out of step with the segment structure
+		int b = next_byte(c);
+		if (b != 0xFF) {
+			return false; // out of step with the segment structure, or the end
 		}
-		while (i < size && data[i] == 0xFF) {
-			i++;
+		while (b == 0xFF) {
+			b = next_byte(c);
 		}
-		if (i >= size) {
+		if (b < 0) {
 			return false;
 		}
-		unsigned char marker = data[i++];
+		unsigned char marker = (unsigned char)b;
 
 		// The standalone markers carry no length: restart intervals, SOI, EOI
 		// and TEM. Nothing follows them to skip.
@@ -59,28 +88,47 @@ bool jpeg_info_parse(const unsigned char *data, size_t size, jpeg_info_t *out) {
 			return false; // the scan begins and no frame header was found
 		}
 
-		if (i + 1 >= size) {
+		int hi = next_byte(c);
+		int lo = next_byte(c);
+		if (hi < 0 || lo < 0) {
 			return false;
 		}
-		unsigned int length = ((unsigned int)data[i] << 8) | data[i + 1];
+		unsigned int length = ((unsigned int)hi << 8) | (unsigned int)lo;
 		if (length < 2) {
 			return false;
 		}
 
 		if (is_frame_marker(marker)) {
-			// SOFn payload: length(2), precision(1), height(2), width(2).
-			if (length < 7 || i + 6 >= size) {
+			// SOFn payload after the length: precision(1), height(2), width(2).
+			if (length < 7) {
 				return false;
 			}
-			out->height = ((int)data[i + 3] << 8) | data[i + 4];
-			out->width = ((int)data[i + 5] << 8) | data[i + 6];
+			int field[5];
+			for (int i = 0; i < 5; i++) {
+				field[i] = next_byte(c);
+				if (field[i] < 0) {
+					return false;
+				}
+			}
+			out->height = (field[1] << 8) | field[2];
+			out->width = (field[3] << 8) | field[4];
 			out->progressive = is_progressive_marker(marker);
 			return out->width > 0 && out->height > 0;
 		}
 
-		i += length; // the length counts itself, so this lands on the next marker
+		if (!skip_bytes(c, length - 2)) { // the length counts itself
+			return false;
+		}
 	}
-	return false;
+}
+
+bool jpeg_info_parse(const unsigned char *data, size_t size, jpeg_info_t *out) {
+	if (!data || !out) {
+		return false;
+	}
+	memset(out, 0, sizeof(*out));
+	cursor_t c = {.data = data, .size = size};
+	return walk_headers(&c, out);
 }
 
 bool jpeg_info_read(const char *path, jpeg_info_t *out) {
@@ -95,11 +143,10 @@ bool jpeg_info_read(const char *path, jpeg_info_t *out) {
 	if (!f) {
 		return false;
 	}
-	unsigned char head[JPEG_HEAD_BYTES];
-	size_t got = fread(head, 1, sizeof(head), f);
+	cursor_t c = {.file = f};
+	bool ok = walk_headers(&c, out);
 	fclose(f);
-
-	return jpeg_info_parse(head, got, out);
+	return ok;
 }
 
 bool jpeg_info_has_extension(const char *name) {

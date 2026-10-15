@@ -132,6 +132,13 @@ void player_restore_list(const char *const *list, int count, int start_index, bo
 const lv_image_dsc_t *player_cover_image(void);
 const lv_image_dsc_t *player_backdrop_image(void);
 
+// The path that artwork was read from: the track for a file, the downloaded
+// icon or cover for a live stream. NULL whenever player_cover_image() is NULL.
+// For whoever wants the same picture at another size -- the Framed screensaver
+// asks the cover loader for it at the frame's -- without guessing which of the
+// several places a picture can come from the player used.
+const char *player_cover_path(void);
+
 // Registers a callback run immediately before that artwork is freed, so
 // whoever borrowed it can drop its references first. One at a time; NULL
 // clears it.

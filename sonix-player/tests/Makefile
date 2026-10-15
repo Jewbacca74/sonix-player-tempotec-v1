@@ -27,6 +27,19 @@ $(BUILD)/test_subsonic: test_subsonic.c support.c $(CORE) $(shell find $(ROOT)/s
 sanitize:
 	$(MAKE) BUILD=.build/sanitize CFLAGS='-O1 -g -std=gnu11 -Wall -Wextra -Werror -D_FILE_OFFSET_BITS=64 -ffunction-sections -fdata-sections -fno-omit-frame-pointer -fsanitize=address,undefined' LDFLAGS='-Wl,--gc-sections -fsanitize=address,undefined' test
 
+# The Screensaver folder's rules: which files are pictures, judged from their
+# JPEG headers, and the random pick between them. Plain C, no LVGL.
+PICS_SRC = test_screensaverpics.c $(ROOT)/src/system/device/screensaverpics.c \
+           $(ROOT)/src/system/library/jpeginfo.c
+.PHONY: pictures
+pictures: $(BUILD)/test_screensaverpics
+	$(BUILD)/test_screensaverpics
+
+$(BUILD)/test_screensaverpics: $(PICS_SRC) $(ROOT)/src/system/device/screensaverpics.h \
+                               $(ROOT)/src/system/library/jpeginfo.h
+	@mkdir -p $(BUILD)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(PICS_SRC) $(LDFLAGS) $(LDLIBS)
+
 # Optional real-codec integration: the usual host development packages are
 # sufficient. No fake MP3/FLAC/Opus decoder is used. See tests/README.md.
 CODEC = $(filter-out %/wavpackdec.c %/opusdec.c,$(wildcard $(ROOT)/src/system/decode/*.c)) \
@@ -64,14 +77,30 @@ UI_OBJ = $(patsubst $(ROOT)/%.c,$(BUILD)/ui/%.o,$(UI_SRC)) \
 UI_CPPFLAGS = $(CPPFLAGS) -I$(ROOT)/lvgl -DLV_CONF_PATH='"$(abspath ui/lv_conf.h)"'
 UI_CFLAGS = $(CFLAGS) -MMD -MP
 
+# The screensaver's Framed style on the same renderer; shares the objects above.
+SAVER_SRC = $(ROOT)/tests/ui/test_screensaver.c $(ROOT)/src/gui/settings/screensaver.c \
+            $(ROOT)/src/gui/shell/scrolltext.c $(ROOT)/src/gui/shell/settingsrow.c \
+            $(ROOT)/src/gui/shell/theme.c $(ROOT)/src/gui/shell/icons.c \
+            $(ROOT)/src/gui/board_profile.c \
+            $(ROOT)/src/system/core/config.c $(ROOT)/src/system/core/lang.c
+SAVER_OBJ = $(patsubst $(ROOT)/%.c,$(BUILD)/ui/%.o,$(SAVER_SRC)) \
+            $(patsubst $(ROOT)/%.c,$(BUILD)/ui/%.o,$(UI_LVGL_SRC))
+
 .PHONY: ui
-ui: $(BUILD)/test_main_menu
+ui: $(BUILD)/test_main_menu $(BUILD)/test_screensaver
 	BOARD=tempotec_v1 $(BUILD)/test_main_menu ../../sonix-packer/assets/R1/usr/resource/sonix/language
 	BOARD=tempotec_v1 $(BUILD)/test_main_menu ../../sonix-packer/assets/R1/usr/resource/sonix/language saved
 	BOARD=hiby_r1 $(BUILD)/test_main_menu ../../sonix-packer/assets/R3PII/usr/resource/sonix/language
 	BOARD=hiby_r1 $(BUILD)/test_main_menu ../../sonix-packer/assets/R3PII/usr/resource/sonix/language saved
+	BOARD=tempotec_v1 $(BUILD)/test_screensaver ../../sonix-packer/assets/R1/usr/resource/sonix/language
+	BOARD=tempotec_v1 $(BUILD)/test_screensaver ../../sonix-packer/assets/R1/usr/resource/sonix/language saved
+	BOARD=hiby_r1 $(BUILD)/test_screensaver ../../sonix-packer/assets/R3PII/usr/resource/sonix/language
+	BOARD=hiby_r1 $(BUILD)/test_screensaver ../../sonix-packer/assets/R3PII/usr/resource/sonix/language saved
 
 $(BUILD)/test_main_menu: $(UI_OBJ)
+	$(CC) -o $@ $^ $(LDFLAGS) $(LDLIBS)
+
+$(BUILD)/test_screensaver: $(SAVER_OBJ)
 	$(CC) -o $@ $^ $(LDFLAGS) $(LDLIBS)
 
 $(BUILD)/ui/%.o: $(ROOT)/%.c ui/lv_conf.h $(ROOT)/lv_conf.h
@@ -83,4 +112,4 @@ $(BUILD)/ui/lvgl/%.o: $(ROOT)/lvgl/%.c ui/lv_conf.h $(ROOT)/lv_conf.h
 	@mkdir -p $(dir $@)
 	$(CC) $(UI_CPPFLAGS) $(filter-out -Werror,$(UI_CFLAGS)) -c $< -o $@
 
--include $(UI_OBJ:.o=.d)
+-include $(sort $(UI_OBJ:.o=.d) $(SAVER_OBJ:.o=.d))

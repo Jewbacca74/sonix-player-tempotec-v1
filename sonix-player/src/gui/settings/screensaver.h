@@ -18,6 +18,12 @@
 //
 // The artwork is borrowed from the player, which has already decoded it for
 // the current track -- nothing is decoded here, so a wake stays instant.
+//
+// That is the Fill style, and the borrowed picture is the size of the player's
+// sleeve: covering the screensaver's larger area means enlarging it, which on
+// the V1 is half again in Dark and Light and twice over under the palettes'
+// field. The Framed style (see screensaver_style_t) is the other answer: the
+// artwork whole, with margins round it, at one pixel to one.
 
 void screensaver_init(gui_config_t *cfg);
 
@@ -39,6 +45,31 @@ typedef enum {
 
 screensaver_source_t screensaver_source(void);
 void screensaver_set_source(screensaver_source_t source);
+
+// How the album source draws the artwork. Config-backed
+// ("screen"/"screensaver_style"); pictures from the folder are always drawn
+// the one way, since they are made for the screen in the first place.
+//
+// Fill is the arrangement the screensaver has always had, and the default: the
+// artwork covers its area, centre-cropped and enlarged to do it -- everything
+// above the strip in Dark and Light, the whole panel under the V1 palettes'
+// translucent field.
+//
+// Framed never enlarges. The whole picture sits in a frame with the player's
+// rounded corners and margins on every side, above the title, the artist and
+// the clock rather than under them, and it is decoded for exactly that frame
+// -- from the file, not from the player's copy -- so it is drawn one pixel to
+// one. A file that only carries a small picture shows it at its own size. Dark
+// and Light lay it on the player's blurred copy of the artwork when there is
+// one the size of the screen, which on the V1 is every arrangement but
+// Immersive; the palettes lay it on their own page colour.
+typedef enum {
+	SCREENSAVER_STYLE_FILL = 0,
+	SCREENSAVER_STYLE_FRAMED,
+} screensaver_style_t;
+
+screensaver_style_t screensaver_style(void);
+void screensaver_set_style(screensaver_style_t style);
 
 // Where the card is mounted, for the Screensaver folder below. Called at
 // startup and again whenever a card is attached, like every other module that

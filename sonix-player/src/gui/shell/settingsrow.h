@@ -119,6 +119,14 @@ lv_obj_t *settingsrow_toggle_pills(lv_obj_t *parent, const char *title, lv_event
 // rather than something that can be off.
 lv_obj_t *settingsrow_pills(lv_obj_t *parent, const char *title, lv_obj_t **pills_out);
 
+// A second row of pills inside one of the cards above, under a caption of its
+// own: for a choice that only means anything for one answer of the first row
+// -- how the screensaver draws the album only matters while it shows the
+// album. The caption and its pills come back as one group, so the caller shows
+// or hides them whole the way it does the first row; `pills_out` is where the
+// pills go.
+lv_obj_t *settingsrow_pills_group(lv_obj_t *card, const char *caption, lv_obj_t **pills_out);
+
 // One pill. `value` reaches the callback as its user data.
 lv_obj_t *settingsrow_pill(lv_obj_t *parent, const char *text, int value, lv_event_cb_t cb);
 

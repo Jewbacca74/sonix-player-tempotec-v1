@@ -88,3 +88,72 @@ software renderer. To regenerate the main-menu-only native art, see
 `tools/main_menu_icons.py`; Python image tools are not required to build or
 run the player/tests. The host-build workflow runs this suite as well. These
 checks do not replace visual and touch testing on a physical V1.
+
+## Headless screensaver artwork tests
+
+The same `ui` target also builds `test_screensaver`, which links the real
+screensaver, scrolling labels, themes, settings card helpers, language loader
+and configuration store. The player that lends the artwork, the cover loader
+and the device services are substituted. The test drives the loader by hand,
+so it decides when a decode lands, what size it is, or that it found nothing.
+
+It checks the **Album art: Fill / Framed** choice on both panel sizes, default
+and saved:
+
+- Fill is unchanged: the sleeve still covers its whole area, and it never
+  asks for a decode. On the V1 that always means enlarging it.
+- Framed asks for one copy of the artwork at exactly the frame's size (160 px
+  on the V1, 400 px on the 480-wide panels), from the path the player read
+  the artwork from. It asks as the panel goes dark, once the player has the
+  artwork, and never again after a theme change or a failed decode.
+- Until that copy lands, the player's sleeve stands in, never enlarged; a
+  non-square Immersive crop is not used as a stand-in.
+- The frame is centred in the area above the strip, with the margins, the
+  player's rounded corners and no strip backdrop.
+- The page behind the frame is right in all five themes.
+- Small pictures are shown at their own size.
+- Track changes, abandoned decodes, switching back to Fill, switching to
+  Pictures, dismissing and switching off release every borrowed and owned
+  buffer.
+
+Rendered RGB565 snapshots verify that every pixel of the frame outside its
+rounded corners is the decoded picture's own pixel: drawn one to one, not
+shifted, not resampled. The test pictures are one-pixel checkerboards, so any
+scaling fails. The three new texts are checked in every language file, and
+the captioned pill row is checked to relabel on a language switch.
+
+The same test checks the size limit the screensaver hands the Screensaver
+folder. It reads the size the empty-folder note promises from every language
+file, requires them all to agree, and requires the limit to match: 480x800 on
+the V1, which ships the R1's texts, and the panel's own size elsewhere.
+
+Set `SONIX_SCREENSAVER_SNAPSHOTS` to an output prefix to keep the rendered
+screens as ignored `.ppm` files, for example:
+
+```sh
+SONIX_SCREENSAVER_SNAPSHOTS=.build/saver make -C sonix-player/tests ui
+```
+
+## Screensaver folder rules
+
+`make -C sonix-player/tests pictures` builds and runs `test_screensaverpics`,
+plain C with no LVGL. It links the real folder code (`screensaverpics.c`) and
+JPEG header reader (`jpeginfo.c`), and checks them on synthetic JPEGs in a
+temporary card. Only headers matter here, so each file has a JPEG's segment
+structure, with filler where the picture data would be.
+
+- **Headers:** the size and coding are read even when the frame header sits
+  behind about 93 KB of an editor's metadata (Exif with a thumbnail, a colour
+  profile, XMP, Photoshop resources). The metadata filler contains frame
+  markers of its own, as a real Exif thumbnail does, so a reader that looked
+  inside a segment would be caught. Fill bytes, truncated files, scans with no
+  frame, non-JPEGs and both extensions in either case are covered too.
+- **Folder rules:** pictures over the limit, landscape or progressive are
+  turned away, and so are hidden files (including a Mac's `._` companions),
+  other names and missing files. Pictures made to the V1's note (480x800) are
+  found with the V1's limit and not with its panel size, which is the fault
+  this guards against.
+- **Random pick:** it only ever returns a usable picture and reaches all of
+  them. It avoids the picture already up while there is another, and falls
+  back to it when it is the only one. Twenty `._` files beside one picture
+  never make it miss.

@@ -18,6 +18,13 @@
 
 static char card_root[512];
 
+// Whether a name is one the folder is read for at all: a JPEG by its
+// extension, and not hidden. A Mac copying pictures to a FAT card leaves a
+// "._" file beside each one, named like the picture but holding only Finder
+// metadata. Opening those would cost a read for nothing, and in the random
+// pick below every one drawn is a try spent.
+static bool candidate_name(const char *name) { return name && name[0] != '.' && jpeg_info_has_extension(name); }
+
 void screensaverpics_set_root(const char *root) {
 	snprintf(card_root, sizeof(card_root), "%s", root ? root : "");
 }
@@ -31,7 +38,7 @@ const char *screensaverpics_dir(void) {
 }
 
 bool screensaverpics_usable(const char *dir, const char *name, int max_w, int max_h) {
-	if (!dir || !dir[0] || !jpeg_info_has_extension(name)) {
+	if (!dir || !dir[0] || !candidate_name(name)) {
 		return false;
 	}
 	char path[PATH_MAX];
@@ -90,7 +97,7 @@ static bool sample_name(const char *dir, const char *avoid, char skip[][NAME_MAX
 	out[0] = '\0';
 	struct dirent *e;
 	while ((e = readdir(d)) != NULL) {
-		if (!jpeg_info_has_extension(e->d_name)) {
+		if (!candidate_name(e->d_name)) {
 			continue;
 		}
 		if (avoid && avoid[0] && strcmp(e->d_name, avoid) == 0) {

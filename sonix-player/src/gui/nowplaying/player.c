@@ -3453,6 +3453,14 @@ const lv_image_dsc_t *player_backdrop_image(void) {
 	return current_backdrop.pixels ? &current_backdrop.dsc : NULL;
 }
 
+// Only while there are pixels to go with it. cover_shown_path moves to the next
+// track before the loader has said whether that track's picture is the same
+// one (see refresh_cover); in that gap it already names the track whose
+// artwork is about to be up, which is the picture a caller asking now wants.
+const char *player_cover_path(void) {
+	return current_cover.pixels && cover_shown_path[0] ? cover_shown_path : NULL;
+}
+
 static void update_repeat_button(void);
 
 // Keep the player footer edge-free. Its border is already zeroed by the deck,

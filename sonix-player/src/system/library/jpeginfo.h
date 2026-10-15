@@ -22,7 +22,9 @@ typedef struct {
 	bool progressive;
 } jpeg_info_t;
 
-// Fills `out` from the first few kilobytes of `path`. False when the file
+// Fills `out` from the headers of `path`. Only the segment markers and the
+// frame header are read: metadata before the frame (Exif and its thumbnail,
+// colour profiles, XMP) is stepped over, however large. False when the file
 // cannot be opened, is not a JPEG, or ends before it says how big it is.
 bool jpeg_info_read(const char *path, jpeg_info_t *out);
 
