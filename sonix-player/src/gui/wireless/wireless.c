@@ -1,5 +1,6 @@
 #include "wireless.h"
 
+#include <stdio.h>
 #include <string.h>
 
 #include "lvgl/lvgl.h"
@@ -63,6 +64,50 @@ static radio_row_t wifi_row;
 static radio_row_t bluetooth_row;
 static wireless_icon_t action_icons[WIRELESS_ACTION_COUNT];
 
+#define BT_CONNECTED_DETAIL_MAX (BT_MAX_DEVICES * (BT_NAME_MAX + 48) + 1)
+
+static void bluetooth_connected_detail(char *out, size_t size) {
+	if (!out || size == 0) {
+		return;
+	}
+	out[0] = '\0';
+
+	bt_device_t devices[BT_MAX_DEVICES];
+	size_t used = 0;
+	bool full = false;
+	for (int list = 0; list < 2; list++) {
+		int count = list == 0 ? bluetooth_get_paired(devices, BT_MAX_DEVICES)
+								 : bluetooth_get_found(devices, BT_MAX_DEVICES);
+		for (int i = 0; i < count; i++) {
+			bool audio = bluetooth_device_audio_connected(devices[i].mac);
+			if (!devices[i].connected && !audio) {
+				continue;
+			}
+
+			const char *name = devices[i].name[0] ? devices[i].name : devices[i].mac;
+			int written;
+			if (audio) {
+				written = snprintf(out + used, size - used, "%s%s (%s)", used ? " · " : "", name, tr("in_use"));
+			} else {
+				written = snprintf(out + used, size - used, "%s%s", used ? " · " : "", name);
+			}
+			if (written < 0 || (size_t)written >= size - used) {
+				out[size - 1] = '\0';
+				full = true;
+				break;
+			}
+			used += (size_t)written;
+		}
+		if (full) {
+			break;
+		}
+	}
+
+	if (!used) {
+		snprintf(out, size, "%s", tr("on"));
+	}
+}
+
 static void radio_detail_refresh(radio_row_t *row) {
 	if (!row || !row->detail || !row->toggle) {
 		return;
@@ -84,6 +129,7 @@ static void radio_detail_refresh(radio_row_t *row) {
 		lv_obj_set_hidden(row->options, !available || !enabled);
 	}
 
+	char bt_detail[BT_CONNECTED_DETAIL_MAX];
 	const char *text;
 	if (!available) {
 		text = tr(row->wifi ? "wifi_no_hardware" : "bt_no_hardware");
@@ -96,8 +142,8 @@ static void radio_detail_refresh(radio_row_t *row) {
 		wifi_get_status(&status);
 		text = status.state == WIFI_STATE_CONNECTED && status.ssid[0] ? status.ssid : tr("on");
 	} else if (!row->wifi && enabled) {
-		bt_device_t device;
-		text = bluetooth_connected_device(&device) && device.name[0] ? device.name : tr("on");
+		bluetooth_connected_detail(bt_detail, sizeof(bt_detail));
+		text = bt_detail;
 	} else {
 		text = tr("off");
 	}
