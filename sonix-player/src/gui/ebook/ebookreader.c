@@ -2004,6 +2004,78 @@ static void menu_open(void) {
 	lv_obj_move_foreground(menu_veil);
 }
 
+// A hardware page step in the one continuous chapter view. Leave one line on
+// screen so the eye can find its place after the move. At an end, another press
+// crosses the chapter boundary: the touch UI uses a button there because an
+// overscroll gesture is ambiguous, but a key whose name is Next/Previous is not.
+static void vertical_key_step(int direction) {
+	if (!book || !page_box || direction == 0) {
+		return;
+	}
+
+	int32_t remaining = direction > 0 ? lv_obj_get_scroll_bottom(page_box) : lv_obj_get_scroll_top(page_box);
+	if (remaining <= 0) {
+		uint32_t chapter = ebook_chapter_index(book);
+		if (direction > 0) {
+			if (chapter + 1u < ebook_spine_count(book)) {
+				load_chapter(chapter + 1u, 0, 0);
+			}
+		} else if (chapter > 0 && load_chapter(chapter - 1u, 0, 0)) {
+			// A chapter opened normally starts at its first text block (past its
+			// Previous chapter button). Reading backwards wants its other end.
+			lv_obj_update_layout(page_box);
+			lv_obj_scroll_to_y(page_box, lv_obj_get_scroll_y(page_box) + lv_obj_get_scroll_bottom(page_box),
+							   LV_ANIM_OFF);
+			vertical_scrolled_cb(NULL);
+		}
+		return;
+	}
+
+	int32_t line = opt_size + opt_line;
+	int32_t step = lv_obj_get_height(page_box) - 2 * opt_margin - line;
+	if (step < line) {
+		step = line;
+	}
+	lv_obj_scroll_to_y(page_box, lv_obj_get_scroll_y(page_box) + direction * step, LV_ANIM_ON);
+}
+
+bool ebookreader_handle_key(gui_key_t key) {
+	if (lv_screen_active() != ebookreader_screen) {
+		return false;
+	}
+
+	// Only the two actions whose meaning carries cleanly from tracks to pages
+	// belong to the reader. In particular, Play/Pause continues to control
+	// audio, which makes reading to music possible without returning to it.
+	int direction;
+	switch (key) {
+	case GUI_KEY_NEXT:
+		direction = +1;
+		break;
+	case GUI_KEY_PREV:
+		direction = -1;
+		break;
+	case GUI_KEY_PLAY_PAUSE:
+	default:
+		return false;
+	}
+
+	// A visible menu owns the screen but not page navigation. Swallow the keys
+	// rather than turn the page invisibly underneath it.
+	if (!book || (menu_veil && !lv_obj_is_hidden(menu_veil))) {
+		return true;
+	}
+
+	if (turn_mode() == TURN_VERTICAL) {
+		vertical_key_step(direction);
+	} else if (direction > 0) {
+		page_next();
+	} else {
+		page_prev();
+	}
+	return true;
+}
+
 static void menu_veil_cb(lv_event_t *e) {
 	(void)e;
 	menu_close();
