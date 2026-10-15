@@ -11,6 +11,7 @@
 #include "src/gui/shell/icons.h"
 #include "src/gui/shell/keyboard.h"
 #include "src/gui/nowplaying/player.h"
+#include "src/gui/shell/scrolltext.h"
 #include "src/gui/shell/settingsrow.h"
 #include "src/gui/shell/switcher.h"
 #include "src/gui/shell/theme.h"
@@ -28,6 +29,8 @@ lv_obj_t *btaudio_screen;
 #define BTAUDIO_POLL_MS 700
 
 static lv_obj_t *volume_switch;
+static lv_obj_t *output_row;
+static lv_obj_t *output_value;
 static lv_obj_t *airpods_row;
 static lv_obj_t *airpods_icon;
 static lv_obj_t *codec_row;
@@ -268,6 +271,15 @@ static void refresh_airpods_row(void) {
 	}
 }
 
+static void refresh_output_row(void) {
+	bt_device_t device;
+	bool connected = bluetooth_audio_device(&device);
+	lv_obj_set_hidden(output_row, !connected);
+	if (connected) {
+		scrolltext_set(output_value, device.name[0] ? device.name : device.mac);
+	}
+}
+
 static void volume_toggle_cb(lv_event_t *e) {
 	(void)e;
 	bluetooth_set_volume_sync(lv_obj_has_state(volume_switch, LV_STATE_CHECKED));
@@ -279,9 +291,9 @@ static void refresh_page(void) {
 	// The name is read from the firmware's file at startup and can be changed
 	// from this page, so it is re-read here rather than written once.
 	refresh_name_row();
+	refresh_output_row();
 
-	bt_device_t device;
-	bool connected = bluetooth_connected_device(&device);
+	bool connected = bluetooth_audio_device(NULL);
 
 	char selected[BT_CODEC_MAX];
 	char codecs[BT_MAX_CODECS][BT_CODEC_MAX];
@@ -521,11 +533,6 @@ static void build_name_layer(gui_config_t *cfg) {
 void btaudio_init(gui_config_t *cfg) {
 	lv_obj_t *container = settingsrow_page(btaudio_screen, cfg, "btaudio_title");
 
-	// No "audio via Bluetooth" switch, no paragraph explaining the absence, and
-	// no "output" row: the stock player has none of the three. Connected
-	// headphones are the output, and which ones they are is written on the
-	// Bluetooth page itself.
-
 	// The player's own name, first: it is about this device rather than about
 	// whatever is connected to it.
 	lv_obj_t *name_row = settingsrow_add(container, "bt_rename", &name_row_value, name_row_cb, NULL);
@@ -538,6 +545,17 @@ void btaudio_init(gui_config_t *cfg) {
 		lv_obj_set_style_text_align(name_row_value, LV_TEXT_ALIGN_RIGHT, 0);
 		lv_label_set_long_mode(name_row_value, LV_LABEL_LONG_DOT);
 	}
+
+	// The active A2DP output, not just whichever paired device happens to be
+	// first in the list. It is hidden until a headphone stream is actually up.
+	output_row = settingsrow_add(container, "wireless_audio_output", &output_value, NULL, NULL);
+	if (output_value) {
+		lv_obj_set_width(output_value, cfg->screen_width < 320 ? lv_pct(42) : lv_pct(46));
+		lv_obj_set_style_text_font(output_value, cfg->screen_width < 320 ? &font_ui_14 : &font_ui_20, 0);
+		lv_obj_set_style_text_align(output_value, LV_TEXT_ALIGN_RIGHT, 0);
+		scrolltext_apply(output_value);
+	}
+	lv_obj_set_hidden(output_row, true);
 
 	// The AirPods row, above the codec: it is about the headphones themselves
 	// rather than about the link, and it is the one row here that is not

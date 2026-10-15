@@ -96,8 +96,15 @@ uint32_t bluetooth_devices_serial(void);
 int bluetooth_get_paired(bt_device_t *out, int max);
 int bluetooth_get_found(bt_device_t *out, int max);
 
-// The device on the other end right now, if there is one.
+// A connected Bluetooth peer, if there is one. SonixLink-only phones are
+// excluded; when multiple peers are connected, use bluetooth_audio_device() to
+// identify the one carrying the player's audio.
 bool bluetooth_connected_device(bt_device_t *out);
+
+// The Bluetooth headphones currently receiving the player's audio, if any.
+// Unlike bluetooth_connected_device(), this identifies the active A2DP output
+// specifically when other Bluetooth links are connected at the same time.
+bool bluetooth_audio_device(bt_device_t *out);
 
 void bluetooth_scan_start(void);
 void bluetooth_scan_stop(void);

@@ -3373,8 +3373,9 @@ void bluetooth_connect(const char *mac) { post_device_job(JOB_CONNECT, mac); }
 void bluetooth_disconnect(const char *mac) { post_device_job(JOB_DISCONNECT, mac); }
 void bluetooth_forget(const char *mac) { post_device_job(JOB_FORGET, mac); }
 
-// The connected audio device. A phone that is only the SonixLink remote is
-// connected too, and is not it.
+// A connected peer other than a phone used only for SonixLink. This is useful
+// for the "anything connected?" checks; when the audio output itself matters,
+// bluetooth_audio_device() identifies it unambiguously.
 bool bluetooth_connected_device(bt_device_t *out) {
 	bool found = false;
 	pthread_mutex_lock(&lock);
@@ -3389,6 +3390,38 @@ bool bluetooth_connected_device(bt_device_t *out) {
 	}
 	pthread_mutex_unlock(&lock);
 	return found;
+}
+
+bool bluetooth_audio_device(bt_device_t *out) {
+	pthread_mutex_lock(&lock);
+	bool active = g_enabled && g_a2dp_connected && g_a2dp_mac[0];
+	if (!active) {
+		pthread_mutex_unlock(&lock);
+		return false;
+	}
+
+	if (out) {
+		memset(out, 0, sizeof(*out));
+		snprintf(out->mac, sizeof(out->mac), "%s", g_a2dp_mac);
+		out->connected = true;
+
+		for (int i = 0; i < g_paired_count; i++) {
+			if (strcasecmp(g_paired[i].mac, g_a2dp_mac) == 0) {
+				*out = g_paired[i];
+				// A live A2DP PCM is the authoritative connection state even
+				// during the short interval before BlueZ's paired-list cache
+				// catches up.
+				out->connected = true;
+				break;
+			}
+		}
+		if (!out->name[0]) {
+			snprintf(out->name, sizeof(out->name), "%s", out->mac);
+		}
+	}
+
+	pthread_mutex_unlock(&lock);
+	return true;
 }
 
 // ---------------------------------------------------------------------------

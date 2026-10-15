@@ -12,6 +12,7 @@
 #include "src/gui/shell/gui.h"
 #include "src/gui/shell/icons.h"
 #include "src/gui/shell/popover.h"
+#include "src/gui/shell/scrolltext.h"
 #include "src/gui/shell/settingsrow.h"
 #include "src/gui/shell/spinner.h"
 #include "src/gui/shell/switcher.h"
@@ -26,6 +27,7 @@ lv_obj_t *btsettings_screen;
 #define BT_PAGE_POLL_MS 500
 #define BT_ROW_H 76
 
+static bool compact_rows;
 static lv_obj_t *bt_switch;
 static lv_obj_t *status_label;
 static lv_obj_t *paired_label;
@@ -329,6 +331,9 @@ static void add_row(lv_obj_t *parent, const bt_device_t *device, bool paired_sec
 		return;
 	}
 
+	bool audio_connected = paired_section && bluetooth_device_audio_connected(device->mac);
+	bool connected = device->connected || audio_connected;
+
 	lv_obj_t *row = lv_btn_create(parent);
 	lv_obj_set_width(row, lv_pct(100));
 	lv_obj_set_height(row, BT_ROW_H);
@@ -337,15 +342,15 @@ static void add_row(lv_obj_t *parent, const bt_device_t *device, bool paired_sec
 	lv_obj_set_style_radius(row, 12, 0);
 	lv_obj_set_style_border_width(row, 0, 0);
 	lv_obj_set_style_shadow_width(row, 0, 0);
-	lv_obj_set_style_pad_hor(row, 18, 0);
+	lv_obj_set_style_pad_hor(row, compact_rows ? 10 : 18, 0);
 	lv_obj_set_style_pad_ver(row, 0, 0);
 	lv_obj_set_event_bubble(row, true);
 	lv_obj_set_scrollable(row, false);
 	lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
 	lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-	lv_obj_set_style_pad_column(row, 14, 0);
+	lv_obj_set_style_pad_column(row, compact_rows ? 8 : 14, 0);
 
-	lv_obj_set_user_data(row, device->connected ? (void *)1 : NULL);
+	lv_obj_set_user_data(row, connected ? (void *)1 : NULL);
 	if (paired_section) {
 		lv_obj_add_event_cb(row, paired_row_clicked_cb, LV_EVENT_CLICKED, mac_copy);
 		lv_obj_add_event_cb(row, paired_row_long_pressed_cb, LV_EVENT_LONG_PRESSED, mac_copy);
@@ -358,27 +363,56 @@ static void add_row(lv_obj_t *parent, const bt_device_t *device, bool paired_sec
 	lv_image_set_src(icon, &icon_bluetooth_status);
 	lv_obj_add_style(icon, &theme_style_icon, 0);
 	lv_obj_set_style_image_recolor_opa(icon, LV_OPA_COVER, 0);
-	if (device->connected) {
+	if (compact_rows) {
+		lv_obj_set_size(icon, 24, 24);
+		lv_image_set_inner_align(icon, LV_IMAGE_ALIGN_CENTER);
+	}
+	if (connected) {
 		lv_obj_set_style_image_recolor(icon, theme()->accent, 0);
 	} else if (!paired_section) {
 		lv_obj_set_style_image_opa(icon, LV_OPA_60, 0);
 	}
 
-	// Name on a single line, without the MAC address under it: what matters is
-	// the name and whether the device is connected.
-	lv_obj_t *name = lv_label_create(row);
-	lv_label_set_text(name, device->name);
-	lv_label_set_long_mode(name, LV_LABEL_LONG_DOT);
-	lv_obj_set_flex_grow(name, 1);
-	lv_obj_set_height(name, lv_font_get_line_height(&font_ui_24));
-	lv_obj_add_style(name, &theme_style_text, 0);
-	lv_obj_set_style_text_font(name, &font_ui_24, 0);
+	// On the V1, the row is too narrow to fit the device name, a connection
+	// badge and the menu on one line. Give the name its own column and put the
+	// state beneath it. Long names scroll so headphones that share a prefix can
+	// still be told apart.
+	lv_obj_t *name_parent = row;
+	if (compact_rows) {
+		name_parent = lv_obj_create(row);
+		lv_obj_remove_style_all(name_parent);
+		lv_obj_set_flex_grow(name_parent, 1);
+		lv_obj_set_height(name_parent, LV_SIZE_CONTENT);
+		lv_obj_set_style_pad_all(name_parent, 0, 0);
+		lv_obj_set_style_pad_row(name_parent, 1, 0);
+		lv_obj_set_scrollable(name_parent, false);
+		lv_obj_set_flex_flow(name_parent, LV_FLEX_FLOW_COLUMN);
+		lv_obj_set_flex_align(name_parent, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+	}
 
-	if (device->connected) {
-		lv_obj_t *state = lv_label_create(row);
-		lv_label_set_text(state, tr("connected"));
+	lv_obj_t *name = lv_label_create(name_parent);
+	lv_label_set_text(name, device->name[0] ? device->name : device->mac);
+	lv_obj_set_width(name, compact_rows ? lv_pct(100) : LV_SIZE_CONTENT);
+	lv_obj_set_height(name, lv_font_get_line_height(compact_rows ? &font_ui_20 : &font_ui_24));
+	lv_obj_add_style(name, &theme_style_text, 0);
+	lv_obj_set_style_text_font(name, compact_rows ? &font_ui_20 : &font_ui_24, 0);
+	if (compact_rows) {
+		scrolltext_apply(name);
+	} else {
+		lv_label_set_long_mode(name, LV_LABEL_LONG_DOT);
+		lv_obj_set_flex_grow(name, 1);
+	}
+
+	if (connected) {
+		lv_obj_t *state = lv_label_create(compact_rows ? name_parent : row);
+		lv_label_set_text(state, tr(audio_connected ? "in_use" : "connected"));
+		lv_label_set_long_mode(state, LV_LABEL_LONG_DOT);
 		lv_obj_add_style(state, &theme_style_text_dim, 0);
-		lv_obj_set_style_text_font(state, &font_ui_20, 0);
+		lv_obj_set_style_text_font(state, compact_rows ? &font_ui_14 : &font_ui_20, 0);
+		if (compact_rows) {
+			lv_obj_set_width(state, lv_pct(100));
+			lv_obj_set_height(state, lv_font_get_line_height(&font_ui_14));
+		}
 		lv_obj_set_style_text_color(state, theme()->accent, 0);
 	}
 
@@ -386,7 +420,7 @@ static void add_row(lv_obj_t *parent, const bt_device_t *device, bool paired_sec
 	// the row connects, so disconnect and forget need somewhere else to live.
 	if (paired_section) {
 		lv_obj_t *menu_btn = lv_btn_create(row);
-		lv_obj_set_size(menu_btn, 44, 56);
+		lv_obj_set_size(menu_btn, compact_rows ? 40 : 44, 56);
 		lv_obj_set_style_bg_opa(menu_btn, LV_OPA_TRANSP, 0);
 		lv_obj_set_style_border_width(menu_btn, 0, 0);
 		lv_obj_set_style_shadow_width(menu_btn, 0, 0);
@@ -680,6 +714,7 @@ static lv_obj_t *make_section(lv_obj_t *container, const char *title, lv_obj_t *
 }
 
 void btsettings_init(gui_config_t *cfg) {
+	compact_rows = cfg->screen_width < 320;
 	lv_obj_t *container = settingsrow_page(btsettings_screen, cfg, "bluetooth");
 	settingsrow_title_corner_slots(settingsrow_page_title(btsettings_screen), cfg, 3);
 
