@@ -8,6 +8,7 @@
 #include "src/gui/board_profile.h"
 #include "src/gui/fonts/fonts.h"
 #include "src/gui/library/audiobooks.h"
+#include "src/gui/ebook/ebookpage.h"
 #include "src/gui/library/music.h"
 #include "src/gui/nowplaying/coverflow.h"
 #include "src/gui/nowplaying/player.h"
@@ -39,6 +40,7 @@ static lv_obj_t *mini_player_title;
 static lv_obj_t *mini_player_subtitle;
 static lv_timer_t *mini_player_timer;
 static gui_config_t *menu_cfg;
+static void main_menu_refresh_tiles(void);
 
 // lv_btn supplies state-specific focus and shadow styles. Those do not inherit
 // the zero-width default style below, and on the compact footer their bottom
@@ -141,6 +143,32 @@ static bool home_header_shown(void) { return !theme_is_oled(); }
 
 bool main_menu_icons_only(void) { return config_get_bool("ui", "main_menu_icons_only", false); }
 
+// Whether the EPUB shelf (Books) takes the Audiobooks slot on the home screen.
+bool main_menu_books(void) { return config_get_bool("ui", "home_books", false); }
+
+static void set_home_books(bool enabled) {
+	if (main_menu_books() == enabled) {
+		return;
+	}
+	config_set_bool("ui", "home_books", enabled);
+	config_save();
+	main_menu_refresh_tiles();
+}
+
+void main_menu_set_books(bool enabled) { set_home_books(enabled); }
+
+static void open_home_library(void) {
+	if (main_menu_books()) {
+		if (!gui_card_available()) {
+			gui_notify_no_card();
+			return;
+		}
+		ebookpage_open();
+	} else {
+		open_audiobooks();
+	}
+}
+
 // Only this grid opts into hidden captions. Reapply after its geometry changes
 // so the larger icons fit the space left by each theme, header and footer.
 static void main_menu_refresh_tiles(void) {
@@ -151,6 +179,8 @@ static void main_menu_refresh_tiles(void) {
 	bool compact = bp_is_tempotec_v1();
 	bool tokyo = theme_uses_function_glyphs();
 	bool icons_only = main_menu_icons_only();
+	bool books = main_menu_books();
+	gridpage_set_tile(menu_grid, 3, books ? &icon_menu_books : &icon_menu_audiobooks, books ? "books" : "audiobooks");
 	bool horizontal = compact && tokyo && !icons_only;
 	for (int i = 0; i < 6; i++) {
 		lv_obj_t *tile = lv_obj_get_child(menu_grid, i);
@@ -170,7 +200,8 @@ static void main_menu_refresh_tiles(void) {
 		}
 
 		const lv_image_dsc_t *source = tokyo ? TOKYO_MENU_ICONS[i] : NORMAL_MENU_ICONS[i];
-		if (icons_only) {
+		if (i == 3 && books) source = tokyo ? &icon_files_book : &icon_menu_books;
+		if (icons_only && !(i == 3 && books)) {
 			// Use art pre-rasterized at the final pixel size, not stretched
 			// toolbar glyphs or colored art filtered for a second time.
 			// Matching source/layout sizes also avoids LVGL's fractional image
@@ -371,7 +402,7 @@ void main_menu_init(gui_config_t *cfg) {
 		{"music", &icon_menu_music, &music_screen, NULL},
 		{"streaming", &icon_menu_streaming, &streaming_screen, NULL},
 		{"wireless", &icon_menu_wireless, &wireless_screen, NULL},
-		{"audiobooks", &icon_menu_audiobooks, NULL, open_audiobooks},
+		{"audiobooks", &icon_menu_audiobooks, NULL, open_home_library},
 		// The door to the More page, which holds the DAC and anything else
 		// that does not fit. The main menu has exactly six tiles, and one of
 		// them has to be able to keep growing.
