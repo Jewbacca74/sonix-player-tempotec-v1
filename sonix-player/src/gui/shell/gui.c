@@ -40,6 +40,9 @@
 #include "src/gui/library/medialist.h"
 #include "src/gui/library/filespage.h"
 #include "src/gui/library/textview.h"
+#include "src/gui/calculator/calculator.h"
+#include "src/gui/notes/noteeditor.h"
+#include "src/gui/notes/notes.h"
 #include "src/gui/shell/morepage.h"
 #include "src/gui/shell/popover.h"
 #include "src/gui/nowplaying/trackmenu.h"
@@ -640,6 +643,9 @@ void gui_init(gui_config_t *cfg) {
 	gearboypage_screen = lv_obj_create(NULL);
 	gearboyplay_screen = lv_obj_create(NULL);
 	flappybird_screen = lv_obj_create(NULL);
+	calculator_screen = lv_obj_create(NULL);
+	notes_screen = lv_obj_create(NULL);
+	noteeditor_screen = lv_obj_create(NULL);
 
 	// Persistent topbar that stays above every screen.
 	topbar_init(cfg);
@@ -689,6 +695,10 @@ void gui_init(gui_config_t *cfg) {
 	ebookmarkspage_init(cfg);
 	ebooksettings_init(cfg); // likewise: the other corner button opens this
 	ebookpage_init(cfg);
+	// Before morepage: the More menu points at both of them.
+	calculator_init(cfg);
+	noteeditor_init(cfg); // before notes: a row of the shelf opens it
+	notes_init(cfg);
 	morepage_init(cfg);
 	textview_init(cfg); // before filespage: a text file tapped there opens here
 	filespage_init(cfg);

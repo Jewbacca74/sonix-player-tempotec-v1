@@ -132,6 +132,31 @@ a self-signed certificate), and HLS.
   in vertical mode they move one screen at a time and cross chapter boundaries
   at the ends. Play/Pause and volume remain available for background audio.
 
+## Tools
+
+> **Calculator** and **Notes** are in the **More** menu, under the file
+> manager. Both are drawn for the panel they are on: on the 240x320 V1 the
+> twenty keys stay a finger's width, and the whole page -- display, keypad and
+> labels -- fits without scrolling.
+
+- **Calculator** - a display and the twenty keys of an ordinary pocket
+  calculator: the four operations, sign, percent, backspace and clear. The sum
+  in progress is kept while you leave the page and come back. The keys are
+  laid out from the panel's own measurements, so the same page fills a V1 and a
+  480-pixel HiBy player.
+- **Notes** - the `Notes` folder of the card, listed: every text file in it,
+  one row per note, newest names where the sort puts them, and a row at the
+  top that makes a new one. Tapping a note opens it for writing on the glass
+  keyboard, and the file is written back when you save, when you leave the
+  page, and a couple of seconds after you stop typing -- so a note survives a
+  flat battery. The folder is read every time the page is opened, so a note
+  written on a computer turns up without a restart.
+  > Notes live in `Notes` on the card, beside `Ebook`, `Audiobooks`, `Games`
+  > and `PEQ`. `.txt`, `.md`, `.lrc`, `.nfo` and `.ini` files are notes,
+  > written as UTF-8; a file saved as UTF-16 or Windows-1252 is read and shown
+  > correctly too, and a note longer than the editor holds is offered to the
+  > file manager's viewer instead of being cut short here.
+
 ## Games
 
 > **Flappy Bird** is in the **More** menu. It is played on the glass, it leaves
