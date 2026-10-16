@@ -1530,9 +1530,52 @@ static void refresh_audio_state(void) {
 // The class of device comes with the inquiry result itself, before any name,
 // and the A2DP sink UUID comes with the advert when it comes at all. Either
 // says this is something to listen through rather than a tag on a keyring.
+#define COD_MAJOR_PHONE 0x02
 #define COD_MAJOR_AUDIO 0x04
+#define A2DP_ROLE_WAIT_MS 3000
+
+static unsigned cod_major(const btstack_device_t *dev) {
+	return (dev->cod >> 8) & 0x1f;
+}
+
+// A phone normally advertises its A2DP Source UUID after SDP completes. Its
+// class of device is available earlier, which lets pairing avoid asking it for
+// the player's output profile before the receiver page has registered a Sink.
+static bool advertises_a2dp_source(const btstack_device_t *dev) {
+	return dev->audio_source || cod_major(dev) == COD_MAJOR_PHONE;
+}
+
+// Wait briefly for SDP's UUIDs after bonding. Phones identify themselves by
+// class immediately; computers can take another moment to expose their A2DP
+// Source UUID. A device with an A2DP Sink is still an output device and must
+// keep using the headphone path.
+static bool device_is_a2dp_source_only(const char *mac) {
+	for (int waited = 0; waited <= A2DP_ROLE_WAIT_MS; waited += 200) {
+		btstack_device_t devices[BT_MAX_DEVICES];
+		int count = btstack_devices(devices, BT_MAX_DEVICES);
+		for (int i = 0; i < count; i++) {
+			if (strcasecmp(devices[i].address, mac) != 0) {
+				continue;
+			}
+			if (devices[i].audio_sink) {
+				return false;
+			}
+			if (devices[i].audio_source || cod_major(&devices[i]) == COD_MAJOR_PHONE) {
+				return true;
+			}
+			if (cod_major(&devices[i]) == COD_MAJOR_AUDIO) {
+				return false;
+			}
+		}
+		if (waited < A2DP_ROLE_WAIT_MS) {
+			sleep_ms(200);
+		}
+	}
+	return false;
+}
+
 static bool anonymous_is_audio(const btstack_device_t *dev) {
-	return dev->audio_sink || ((dev->cod >> 8) & 0x1f) == COD_MAJOR_AUDIO;
+	return dev->audio_sink || cod_major(dev) == COD_MAJOR_AUDIO;
 }
 
 // Re-reads everything bluez knows and splits it into the two lists the
@@ -1732,6 +1775,21 @@ static bool wait_for_a2dp(const char *mac, int timeout_ms) {
 	}
 }
 
+// The receiving direction uses the BlueALSA source PCM: the remote phone is
+// an A2DP source and this player is the sink.
+static bool wait_for_receiver_audio(const char *mac, int timeout_ms) {
+	for (int waited = 0;; waited += 100) {
+		char source[BT_MAC_MAX];
+		if (btstack_audio_source(source, sizeof(source)) && strcasecmp(source, mac) == 0) {
+			return true;
+		}
+		if (!bluetooth_still_wanted() || waited >= timeout_ms) {
+			return false;
+		}
+		sleep_ms(100);
+	}
+}
+
 // The address of the connected sink other than `except`, if there is one. Only
 // one pair of headphones can hold the A2DP link, and the stock player
 // disconnects the incumbent before connecting the new one.
@@ -1832,7 +1890,17 @@ static bool connect_was_refused(const char *why) {
 	return strstr(why, "org.bluez.Error.Failed") != NULL && strstr(why, "Host is down") == NULL;
 }
 
-static bool connect_device(const char *mac) {
+static bool connect_device(const char *mac, bool source_only) {
+	if (source_only) {
+		fprintf(stderr, "bluetooth: requesting receiver stream from %s\n", mac);
+		bool ok = btstack_connect_a2dp_source(mac, CONNECT_TIMEOUT_MS);
+		if (ok && !wait_for_receiver_audio(mac, A2DP_CONFIRM_MS)) {
+			fprintf(stderr, "bluetooth: receiver profile on %s accepted; PCM not visible yet\n", mac);
+		}
+		refresh_devices();
+		return ok;
+	}
+
 	// Never send Device1.Connect on top of a link or an A2DP profile that is
 	// already up. Connect can tear the working profile down on some speakers.
 	char sink[BT_MAC_MAX];
@@ -1980,8 +2048,22 @@ static bool pair_and_connect(const char *mac) {
 	// to ask.
 	btstack_trust(mac, true);
 
+	bool source_only = device_is_a2dp_source_only(mac);
+	if (source_only && !receiver_profile_wanted()) {
+		// A phone is the A2DP sender, not a headphone. Pairing it while the
+		// receiver page is closed must not run Device1.Connect against the
+		// source-only BlueALSA instance: that asks for a local Sink that is not
+		// registered yet, and can make BlueZ drop the ACL link. The receiver
+		// page will invite this bonded source after it has restarted BlueALSA
+		// with the Sink endpoint enabled.
+		fprintf(stderr,
+				"bluetooth: %s paired as an A2DP source; deferring audio connection until receiver mode\n",
+				mac);
+		return true;
+	}
+
 	fprintf(stderr, "bluetooth: %s paired, connecting\n", mac);
-	return connect_device(mac);
+	return connect_device(mac, source_only);
 }
 
 // Whether going back to the last device should be given up, and why.
@@ -2112,7 +2194,7 @@ static void reconnect_last(void) {
 			return;
 		}
 		fprintf(stderr, "bluetooth: going back to %s (attempt %d)\n", mac, attempt);
-		connect_device(mac);
+		connect_device(mac, false);
 
 		if (btstack_audio_sink(sink, sizeof(sink)) && strcasecmp(sink, mac) == 0) {
 			fprintf(stderr, "bluetooth: %s is back with audio\n", mac);
@@ -2889,23 +2971,52 @@ static void restart_bluealsa(const char *why) {
 	}
 }
 
-// With the receiver just opened: a phone or a computer already linked to this
-// device found no sink here when it connected, so its A2DP stream is asked for
-// now rather than left to the user to reconnect. Headphones are skipped.
+// When receiver mode opens, invite a phone/computer that is already linked,
+// and reconnect a bonded A2DP source that dropped its ACL while the local Sink
+// endpoint was unavailable. Headphones are never invited in this direction.
 static void invite_sources(void) {
+	char active[BT_MAC_MAX];
+	if (btstack_audio_source(active, sizeof(active))) {
+		fprintf(stderr, "bluetooth: already receiving audio from %s\n", active);
+		return;
+	}
+
 	btstack_device_t devices[BT_MAX_DEVICES];
 	int count = btstack_devices(devices, BT_MAX_DEVICES);
 	bool waited = false;
 	for (int i = 0; i < count; i++) {
-		if (!devices[i].connected || devices[i].audio_sink) {
+		if (devices[i].audio_sink) {
 			continue;
 		}
+
+		// A connected non-headphone was already invited by the old path. An
+		// unconnected device is only a candidate when BlueZ says it is bonded
+		// and it advertises the A2DP Source role (or identifies as a phone).
+		bool source_candidate = advertises_a2dp_source(&devices[i]);
+		if (!devices[i].connected && !(devices[i].paired && source_candidate)) {
+			continue;
+		}
+
 		if (!waited) {
 			sleep_ms(800); // the new daemon registers its endpoints after its name
 			waited = true;
 		}
-		fprintf(stderr, "bluetooth: asking %s to stream here\n", devices[i].address);
-		btstack_connect_a2dp_source(devices[i].address, CONNECT_TIMEOUT_MS);
+		fprintf(stderr, "bluetooth: asking %s to stream here%s\n", devices[i].address,
+				devices[i].connected ? "" : " (reconnecting paired source)");
+		if (!btstack_connect_a2dp_source(devices[i].address, CONNECT_TIMEOUT_MS)) {
+			// One unavailable old phone must not keep the worker from servicing
+			// other Bluetooth events for every paired source on the device.
+			if (!devices[i].connected) {
+				return;
+			}
+			continue;
+		}
+		if (!wait_for_receiver_audio(devices[i].address, A2DP_CONFIRM_MS)) {
+			fprintf(stderr,
+					"bluetooth: A2DP source profile accepted for %s; receiver PCM not visible yet\n",
+					devices[i].address);
+		}
+		return; // only one phone should stream to the receiver at a time
 	}
 }
 
@@ -3000,20 +3111,36 @@ static void *bluetooth_worker(void *arg) {
 				refresh_devices();
 				break;
 
-			case JOB_PAIR:
+			case JOB_PAIR: {
 				name_for(job.mac, name, sizeof(name));
-				// Pairing and connecting are one step from the user's side: a
-				// device that has just been paired and does nothing is not what
-				// anyone meant by tapping their headphones.
-				set_op(pair_and_connect(job.mac) ? BT_OP_OK : BT_OP_FAILED, name);
+				// Headphones pair and connect in one action. A phone is bonded
+				// here and connects as an audio source only after receiver mode
+				// has registered the local A2DP Sink.
+				bool ok = pair_and_connect(job.mac);
 				refresh_devices();
+				set_op(ok ? BT_OP_OK : BT_OP_FAILED, name);
 				break;
+			}
 
-			case JOB_CONNECT:
+			case JOB_CONNECT: {
 				name_for(job.mac, name, sizeof(name));
-				set_op(connect_device(job.mac) ? BT_OP_OK : BT_OP_FAILED, name);
-				refresh_devices();
+				bool source_only = device_is_a2dp_source_only(job.mac);
+				if (source_only && !receiver_profile_wanted()) {
+					// Connecting a phone from the Bluetooth list while its local
+					// Sink endpoint is off would repeat the role mismatch. Treat
+					// this as a successful bond; the receiver page will connect it.
+					fprintf(stderr,
+							"bluetooth: %s is an A2DP source; deferring connection until receiver mode\n",
+							job.mac);
+					refresh_devices();
+					set_op(BT_OP_PAIRED, name);
+				} else {
+					bool ok = connect_device(job.mac, source_only);
+					refresh_devices();
+					set_op(ok ? BT_OP_OK : BT_OP_FAILED, name);
+				}
 				break;
+			}
 
 			case JOB_DISCONNECT:
 				name_for(job.mac, name, sizeof(name));
@@ -3051,9 +3178,12 @@ static void *bluetooth_worker(void *arg) {
 				bool want = receiver_profile_wanted();
 				if (process_running("bluealsa") && bluealsa_has_sink() != want) {
 					restart_bluealsa(want ? "receiver open" : "receiver closed");
-					if (want) {
-						invite_sources();
-					}
+				}
+				// Opening the receiver is also a reconnect request. Do this even
+				// when the endpoint was already active, since the phone may have
+				// dropped its link before the page was opened.
+				if (want && process_running("bluealsa") && bluealsa_has_sink()) {
+					invite_sources();
 				}
 				break;
 			}
@@ -3647,7 +3777,7 @@ bt_op_t bluetooth_take_op_result(char *name_out, int name_size) {
 	if (name_out && name_size > 0) {
 		snprintf(name_out, (size_t)name_size, "%s", g_op_name);
 	}
-	if (op == BT_OP_OK || op == BT_OP_FAILED) {
+	if (op == BT_OP_OK || op == BT_OP_PAIRED || op == BT_OP_FAILED) {
 		g_op = BT_OP_IDLE;
 	}
 	pthread_mutex_unlock(&lock);

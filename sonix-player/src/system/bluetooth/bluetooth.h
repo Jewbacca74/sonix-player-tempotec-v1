@@ -49,6 +49,7 @@ typedef enum {
 	BT_OP_IDLE = 0,
 	BT_OP_BUSY,
 	BT_OP_OK,
+	BT_OP_PAIRED, // paired A2DP sender; receiver audio waits for its profile to be active
 	BT_OP_FAILED,
 } bt_op_t;
 

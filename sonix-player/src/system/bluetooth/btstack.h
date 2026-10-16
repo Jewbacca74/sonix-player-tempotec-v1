@@ -46,7 +46,8 @@ typedef struct {
 	bool paired;
 	bool trusted;
 	bool connected; // the ACL link, not the audio profile
-	bool audio_sink; // advertises the A2DP sink UUID: headphones, not a phone
+	bool audio_sink; // remote A2DP sink: headphones/speakers this player can send to
+	bool audio_source; // remote A2DP source: phones/computers this player can receive from
 	unsigned cod;	 // class of device, 0 when bluez has none (every LE-only device)
 	int rssi;		 // 0 when bluez does not have one
 } btstack_device_t;
@@ -131,8 +132,8 @@ bool btstack_connect(const char *address, int timeout_ms, char *err_out, size_t 
 // Only the headphones' A2DP stream, on a device whose link is already up: what
 // is left to bring back after bluealsa has been restarted under it.
 bool btstack_connect_a2dp(const char *address, int timeout_ms);
-// The other direction: a phone or a computer's A2DP source, streaming to this
-// device, on a link that is already up.
+// The other direction: request a phone or computer's A2DP source profile so it
+// can stream to this device. BlueZ establishes the link if it is not up yet.
 bool btstack_connect_a2dp_source(const char *address, int timeout_ms);
 
 bool btstack_disconnect(const char *address);

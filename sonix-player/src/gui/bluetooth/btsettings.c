@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 #include "lvgl/lvgl.h"
 
@@ -70,10 +71,12 @@ static void rebuild_lists(void);
 // before the answer, leaving no way to tell a slow success from a silent
 // failure.
 //
-// The notice therefore stays up until the device is actually connected -- not
-// paired, not "the command returned" -- watched by this timer. It is separate
-// from the page poll timer because it must survive leaving the page: the modal
-// lives on the top layer and would otherwise sit over whatever screen follows.
+// The notice stays up until the pairing worker finishes. Some devices (notably
+// phones that will send audio to the receiver) should be bonded here and only
+// connect after the receiver profile is active, so the success notice says
+// "paired" unless an audio stream is actually up. This timer is separate from
+// the page poll so it survives leaving the page: the modal lives on the top
+// layer and would otherwise sit over whatever screen follows.
 // ---------------------------------------------------------------------------
 
 #define PAIRING_WATCH_MS 300
@@ -95,18 +98,14 @@ static void pairing_watch_stop(void) {
 	pairing_mac[0] = '\0';
 }
 
-// True only once the link is really up: bluetooth_get_paired() reports the
-// Connected flag bluez publishes on D-Bus, the same source the list is drawn
-// from.
-static bool pairing_device_connected(void) {
-	bt_device_t devices[BT_MAX_DEVICES];
-	int count = bluetooth_get_paired(devices, BT_MAX_DEVICES);
-	for (int i = 0; i < count; i++) {
-		if (devices[i].connected && strcmp(devices[i].mac, pairing_mac) == 0) {
-			return true;
-		}
+// An ACL link alone is not an audio connection. Check both directions so a
+// headphone stream and a phone streaming into the receiver are reported alike.
+static bool pairing_device_audio_connected(void) {
+	if (bluetooth_device_audio_connected(pairing_mac)) {
+		return true;
 	}
-	return false;
+	char source[BT_MAC_MAX];
+	return bluetooth_receiver_device(source, sizeof(source), NULL, 0) && strcasecmp(source, pairing_mac) == 0;
 }
 
 static void pairing_watch_cb(lv_timer_t *timer) {
@@ -117,19 +116,18 @@ static void pairing_watch_cb(lv_timer_t *timer) {
 		return;
 	}
 
-	if (pairing_device_connected()) {
-		bluetooth_take_op_result(NULL, 0); // consume it here so the page poll does not toast it too
-		pairing_watch_stop();
-		toast_success("bt_device_connected");
-		topbar_refresh_radios();
-		return;
-	}
-
-	// The worker gave up before the link came up.
 	char reported[BT_NAME_MAX];
-	if (bluetooth_take_op_result(reported, sizeof(reported)) == BT_OP_FAILED) {
+	bt_op_t result = bluetooth_take_op_result(reported, sizeof(reported));
+	if (result == BT_OP_FAILED) {
 		pairing_watch_stop();
 		gui_notify_popup("bt_pairing_failed");
+		return;
+	}
+	if (result == BT_OP_OK) {
+		bool audio_connected = pairing_device_audio_connected();
+		pairing_watch_stop();
+		toast_success(audio_connected ? "bt_device_connected" : "bt_device_paired");
+		topbar_refresh_radios();
 		return;
 	}
 
@@ -624,6 +622,11 @@ static void poll_cb(lv_timer_t *timer) {
 			break;
 		}
 		last_action = ACTION_NONE;
+		topbar_refresh_radios();
+		break;
+	case BT_OP_PAIRED:
+		last_action = ACTION_NONE;
+		toast_success("bt_device_paired");
 		topbar_refresh_radios();
 		break;
 	case BT_OP_FAILED:
