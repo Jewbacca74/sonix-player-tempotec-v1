@@ -11,6 +11,7 @@
  */
 #include <assert.h>
 #include <dirent.h>
+#include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,6 +21,7 @@
 #include "src/gui/board_profile.h"
 #include "src/gui/calculator/calculator.h"
 #include "src/gui/fonts/fonts.h"
+#include "src/gui/library/textview.h"
 #include "src/gui/notes/noteeditor.h"
 #include "src/gui/notes/notes.h"
 #include "src/gui/shell/gridpage.h"
@@ -427,6 +429,65 @@ static lv_obj_t *calc_display_label(lv_obj_t *page) {
 	return NULL;
 }
 
+/* The keyboard a page created, found by its shape: the tray is the child that
+ * holds a panel of four rows. Its own header keeps it opaque, so the page test
+ * looks for the object keyboard_set_visible() hides. */
+static lv_obj_t *keyboard_tray_of(lv_obj_t *screen) {
+	for (uint32_t i = 0; i < lv_obj_get_child_count(screen); i++) {
+		lv_obj_t *child = lv_obj_get_child(screen, i);
+		for (uint32_t j = 0; j < lv_obj_get_child_count(child); j++) {
+			if (lv_obj_get_child_count(lv_obj_get_child(child, j)) >= 4) {
+				return child;
+			}
+		}
+	}
+	return NULL;
+}
+
+/* A page's corner button: the one button that is a child of the screen itself,
+ * rather than a key inside the keyboard. */
+static lv_obj_t *corner_button_of(lv_obj_t *screen) {
+	for (uint32_t i = 0; i < lv_obj_get_child_count(screen); i++) {
+		lv_obj_t *child = lv_obj_get_child(screen, i);
+		if (lv_obj_check_type(child, &lv_button_class)) {
+			return child;
+		}
+	}
+	return NULL;
+}
+
+/* A note past what the editor will hold, and inside what the store will read:
+ * one byte per character, so it is exactly the editor's limit plus a hundred. */
+static const char *long_note_text(void) {
+	static char text[NOTES_MAX_CHARS + 101];
+	if (!text[0]) {
+		for (size_t i = 0; i < NOTES_MAX_CHARS + 100; i++) {
+			text[i] = (i % 61 == 60) ? '\n' : (char)('a' + (i % 26));
+		}
+		text[NOTES_MAX_CHARS + 100] = '\0';
+	}
+	return text;
+}
+
+/* A note just inside what the editor will hold: the largest note that is
+ * opened in the editor rather than handed to the viewer. */
+static const char *big_note_text(void) {
+	static char text[NOTES_MAX_CHARS - 383];
+	if (!text[0]) {
+		for (size_t i = 0; i < sizeof(text) - 1; i++) {
+			text[i] = (i % 61 == 60) ? '\n' : (char)('a' + (i % 26));
+		}
+		text[sizeof(text) - 1] = '\0';
+	}
+	return text;
+}
+
+static double seconds_since(const struct timespec *from) {
+	struct timespec now;
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	return (now.tv_sec - from->tv_sec) + (now.tv_nsec - from->tv_nsec) / 1e9;
+}
+
 static void check_calculator_page(gui_config_t *cfg, const char *tag) {
 	calculator_open();
 	assert(lv_screen_active() == calculator_screen);
@@ -544,7 +605,7 @@ static void check_calculator_page(gui_config_t *cfg, const char *tag) {
 /* ---- the Notes page ------------------------------------------------------ */
 
 static void check_notes_page(gui_config_t *cfg, const char *dir, const char *tag, const char *tag_editor,
-							 const char *tag_after) {
+							 const char *tag_editor_edit, const char *tag_after, const char *tag_long) {
 	// Through the page's own door, as the More menu opens it: that is what
 	// reads the card and then shows the listing.
 	notes_open();
@@ -570,7 +631,7 @@ static void check_notes_page(gui_config_t *cfg, const char *dir, const char *tag
 	assert(row_btn);
 	assert(lv_obj_get_height(row_btn) >= bp_pick(40, 56));
 
-	// Tapping it opens that note.
+	// Tapping it opens that note, to be read.
 	lv_obj_send_event(row_btn, LV_EVENT_CLICKED, NULL);
 	assert(lv_screen_active() == noteeditor_screen);
 	lv_obj_update_layout(noteeditor_screen);
@@ -585,19 +646,101 @@ static void check_notes_page(gui_config_t *cfg, const char *dir, const char *tag
 	// The title is the note's name without the extension.
 	assert(find_label(noteeditor_screen, "shopping"));
 
-	// Typing, then leaving the page: the writing reaches the card even though
-	// the check button was never pressed. Nothing here is the only copy.
-	lv_textarea_set_text(field, "milk, bread and eggs");
+	// Opening a note is reading it: no keyboard, no caret, and the note has the
+	// whole page rather than the part above a keyboard.
+	assert(lv_obj_is_hidden(keyboard_tray_of(noteeditor_screen)));
+	int32_t read_height = lv_obj_get_height(field);
+	assert(read_height > bp_pick(200, 400));
+
+	// The corner button is the way into writing, and out of it again.
+	lv_obj_t *toggle = corner_button_of(noteeditor_screen);
+	assert(toggle);
+	assert(find_image_button(toggle, &icon_check) == NULL);
+	assert(find_image_button(toggle, &icon_pencil));
+
+	// A tap on the text of a note is a tap on the note: it does not move a
+	// caret, and it changes nothing on the card.
+	assert(lv_textarea_get_cursor_click_pos(field) == false);
 	char *text = read_note(dir, "shopping.txt");
 	assert(text && strcmp(text, "milk and bread\n") == 0);
 	free(text);
 
+	// Writing: the keyboard comes up, the note makes room for it, and the
+	// pencil becomes the check.
+	lv_obj_send_event(toggle, LV_EVENT_CLICKED, NULL);
+	lv_obj_update_layout(noteeditor_screen);
+	assert(!lv_obj_is_hidden(keyboard_tray_of(noteeditor_screen)));
+	assert(lv_obj_get_height(field) < read_height);
+	assert(find_image_button(toggle, &icon_check));
+	dump_snapshot(noteeditor_screen, tag_editor_edit);
+
+	// Typing, then leaving the page: the writing reaches the card even though
+	// the check button was never pressed. Nothing here is the only copy.
+	lv_textarea_set_text(field, "milk, bread and eggs");
 	notes_open();
 	text = read_note(dir, "shopping.txt");
 	assert(text && strcmp(text, "milk, bread and eggs\n") == 0);
 	free(text);
 	// And the row still shows the note's name, not its extension.
 	assert(find_label(notes_screen, "shopping"));
+
+	// Reopened: the note reads back, and it is not being written.
+	lv_obj_t *row_again = find_label(notes_screen, "shopping");
+	assert(row_again);
+	lv_obj_send_event(lv_obj_get_parent(row_again), LV_EVENT_CLICKED, NULL);
+	field = find_class(noteeditor_screen, &lv_textarea_class);
+	assert(field);
+	assert(strcmp(lv_textarea_get_text(field), "milk, bread and eggs\n") == 0);
+	assert(lv_obj_is_hidden(keyboard_tray_of(noteeditor_screen)));
+	// Leaving without writing leaves the file as it was: read mode is read
+	// only, and this is what makes opening a note safe.
+	notes_open();
+	text = read_note(dir, "shopping.txt");
+	assert(text && strcmp(text, "milk, bread and eggs\n") == 0);
+	free(text);
+
+	// A note too long to be typed into is shown, not refused, and it is shown
+	// by the text viewer rather than the editor: the editor is the page that
+	// would cut it off on the next save.
+	lv_obj_t *long_row = find_label(notes_screen, "long-note");
+	assert(long_row);
+	lv_obj_send_event(lv_obj_get_parent(long_row), LV_EVENT_CLICKED, NULL);
+	assert(lv_screen_active() == textview_screen);
+	lv_obj_update_layout(textview_screen);
+	check_within_panel(textview_screen, cfg, "Note shown by the viewer");
+	dump_snapshot(textview_screen, tag_long);
+	assert(find_label(textview_screen, "long-note"));
+	assert(find_label(textview_screen, tr("notes_too_long")));
+	notes_open();
+	assert(lv_screen_active() == notes_screen);
+
+	// The largest note that opens in the editor opens in the editor, whole, and
+	// quickly. This is the regression this page was fixed for: setting a
+	// textarea's text with a limit in force inserts it a character at a time,
+	// which cost a walk of the text for every character -- sixteen thousand
+	// characters took forty-five seconds and arrived cut off at the field's
+	// limit. Reading a note is not a wait.
+	lv_obj_t *big_row = find_label(notes_screen, "big-note");
+	assert(big_row);
+	struct timespec started;
+	clock_gettime(CLOCK_MONOTONIC, &started);
+	lv_obj_send_event(lv_obj_get_parent(big_row), LV_EVENT_CLICKED, NULL);
+	double took = seconds_since(&started);
+	assert(lv_screen_active() == noteeditor_screen);
+	lv_obj_t *big_field = find_class(noteeditor_screen, &lv_textarea_class);
+	assert(big_field);
+	// Every character of it, not the first sixteen thousand. The file ends in
+	// the newline textfile_write() puts on every note, and the editor shows the
+	// file as it is.
+	const char *big_shown = lv_textarea_get_text(big_field);
+	size_t big_len = strlen(big_note_text());
+	assert(strncmp(big_shown, big_note_text(), big_len) == 0);
+	assert(big_shown[big_len] == '\n' && big_shown[big_len + 1] == '\0');
+	assert(took < 3.0);
+	// And it is a note to read: the keyboard is down, and nothing is written
+	// until the pencil is asked for.
+	assert(lv_obj_is_hidden(keyboard_tray_of(noteeditor_screen)));
+	notes_open();
 
 	// A new note: the naming dialog, the accept key, and the note it leaves
 	// behind -- written before anything is typed into it, so it is in the list
@@ -699,6 +842,7 @@ int main(int argc, char **argv) {
 	browser_screen = lv_obj_create(NULL);
 	dacpage_screen = lv_obj_create(NULL);
 	gearboypage_screen = lv_obj_create(NULL);
+	textview_screen = lv_obj_create(NULL);
 	morepage_screen = lv_obj_create(NULL);
 	calculator_screen = lv_obj_create(NULL);
 	notes_screen = lv_obj_create(NULL);
@@ -711,6 +855,11 @@ int main(int argc, char **argv) {
 	assert(mkdir(dir, 0755) == 0);
 	assert(notes_write(dir, "shopping", "milk and bread"));
 	assert(notes_write(dir, "recipe.md", "# soup"));
+	// A note past the editor's character limit, and inside the store's byte
+	// limit: one byte a character, so it is the limit plus a hundred.
+	assert(notes_write(dir, "long-note", long_note_text()));
+	// And one at the editor's own ceiling, which is opened in the editor.
+	assert(notes_write(dir, "big-note", big_note_text()));
 	char path[1400];
 	snprintf(path, sizeof(path), "%s/cover.jpg", dir);
 	FILE *other = fopen(path, "wb");
@@ -724,6 +873,7 @@ int main(int argc, char **argv) {
 	noteeditor_init(&cfg);
 	notes_init(&cfg);
 	morepage_init(&cfg);
+	textview_init(&cfg); // the notes shelf shows a long note through it
 
 	/* Both shapes of the More page, each under the themes that use it. Dark
 	 * and Light draw the tiles on every board; the V1's function-glyph themes
@@ -740,7 +890,9 @@ int main(int argc, char **argv) {
 	check_calculator_page(&cfg, bp_is_tempotec_v1() ? "v1-calculator" : "hiby-calculator");
 	check_notes_page(&cfg, dir, bp_is_tempotec_v1() ? "v1-notes" : "hiby-notes",
 					 bp_is_tempotec_v1() ? "v1-note-editor" : "hiby-note-editor",
-					 bp_is_tempotec_v1() ? "v1-notes-after" : "hiby-notes-after");
+					 bp_is_tempotec_v1() ? "v1-note-editor-writing" : "hiby-note-editor-writing",
+					 bp_is_tempotec_v1() ? "v1-notes-after" : "hiby-notes-after",
+					 bp_is_tempotec_v1() ? "v1-note-long" : "hiby-note-long");
 
 	lv_deinit();
 	printf("PASS calculator and notes pages (%s)\n", bp_is_tempotec_v1() ? "240x320" : "480x720");

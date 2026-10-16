@@ -161,7 +161,9 @@ static void name_accept_cb(lv_event_t *e) {
 	}
 
 	name_layer_hide();
-	noteeditor_open(dir, file);
+	// The one note that opens to be written rather than read: it was made a
+	// moment ago, and the person who made it is about to type into it.
+	noteeditor_new(dir, file);
 }
 
 static void name_layer_show(void) {

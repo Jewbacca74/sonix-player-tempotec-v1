@@ -212,6 +212,7 @@ extern const lv_image_dsc_t icon_ebook_cover_small;
 extern const lv_image_dsc_t icon_bookmark;
 extern const lv_image_dsc_t icon_bookmark_check;
 extern const lv_image_dsc_t icon_heart;
+extern const lv_image_dsc_t icon_pencil;
 extern const lv_image_dsc_t icon_calculator;
 extern const lv_image_dsc_t icon_notes;
 extern const lv_image_dsc_t icon_enter;

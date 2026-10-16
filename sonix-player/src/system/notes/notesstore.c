@@ -284,3 +284,20 @@ void notes_default_name(const char *dir, char *out, size_t size) {
 	// it can write.
 	snprintf(out, size, "%s", stamp[0] ? stamp : "note");
 }
+
+// Characters, not bytes: one UTF-8 sequence is one character however many
+// bytes it takes, so a note of accents or ideographs is measured the way the
+// editor holds it.
+static size_t note_chars(const char *text) {
+	size_t chars = 0;
+	for (const unsigned char *p = (const unsigned char *)text; *p; p++) {
+		if ((*p & 0xC0) != 0x80) { // not a continuation byte
+			chars++;
+		}
+	}
+	return chars;
+}
+
+bool notes_fits_editor(const char *text) {
+	return text && note_chars(text) <= NOTES_MAX_CHARS;
+}

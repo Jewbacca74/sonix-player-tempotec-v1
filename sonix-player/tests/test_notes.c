@@ -325,6 +325,44 @@ static void test_default_name(void) {
 	}
 }
 
+// What the editor will hold, which is what decides whether a note is opened
+// to be written or only to be read. Characters rather than bytes: the note of
+// a Japanese or Russian user is three bytes a letter and has exactly as many
+// characters as they typed.
+static void test_fits_editor(void) {
+	static char text[NOTES_MAX_CHARS * 4 + 8];
+
+	// Empty, and one character short of the ceiling: both fit, and a character
+	// is measured by what it is, not by how many bytes it takes.
+	assert(notes_fits_editor(""));
+	memset(text, 'a', NOTES_MAX_CHARS);
+	text[NOTES_MAX_CHARS] = '\0';
+	assert(notes_fits_editor(text)); // exactly the limit
+
+	text[NOTES_MAX_CHARS] = 'a';
+	text[NOTES_MAX_CHARS + 1] = '\0';
+	assert(!notes_fits_editor(text)); // one over it
+
+	// The same count in three-byte letters -- あ -- is still the limit.
+	char *p = text;
+	for (size_t i = 0; i < NOTES_MAX_CHARS; i++) {
+		*p++ = (char)0xE3; // U+3042 in UTF-8
+		*p++ = (char)0x81;
+		*p++ = (char)0x82;
+	}
+	*p = '\0';
+	assert(strlen(text) == NOTES_MAX_CHARS * 3);
+	assert(notes_fits_editor(text)); // three bytes a letter, the limit in letters
+	*p++ = (char)0xE3;
+	*p++ = (char)0x81;
+	*p++ = (char)0x82;
+	*p = '\0';
+	assert(!notes_fits_editor(text));
+
+	// NULL is not a note.
+	assert(!notes_fits_editor(NULL));
+}
+
 int main(void) {
 	char root[] = "/tmp/sonix-notes-XXXXXX";
 	assert(mkdtemp(root));
@@ -335,6 +373,7 @@ int main(void) {
 	test_round_trip();
 	test_decoding();
 	test_default_name();
+	test_fits_editor();
 
 	// The card is temporary; leave nothing behind for the next run.
 	char command[1200];

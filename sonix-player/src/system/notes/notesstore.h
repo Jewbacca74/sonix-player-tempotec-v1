@@ -54,6 +54,12 @@ int notes_list(const char *dir, note_entry_t *out, int max);
 // two: the text is still returned up to NOTES_MAX_BYTES.
 char *notes_read(const char *path, bool *truncated);
 
+// Whether the editor can hold `text` -- NOTES_MAX_CHARS characters, counting
+// UTF-8 sequences rather than bytes. A note longer than that is opened to be
+// read and not to be written: the writing would stop at the limit and the next
+// save would cut the rest of the file off.
+bool notes_fits_editor(const char *text);
+
 // The file a name is written as. "list" becomes "list.txt"; a name that
 // already ends in an extension the page knows is left alone. The dialog asks
 // this before it writes, so that the note it opens afterwards is the note it

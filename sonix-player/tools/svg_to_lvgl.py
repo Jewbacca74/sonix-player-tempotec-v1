@@ -373,6 +373,9 @@ ICONS = [
     # The calculator page: its destination in the More list, and the notes
     # shelf beside it. The enter glyph is the accent key while a note is being
     # written, at the size of the keyboard's other accent keys.
+    # The note editor's way from reading a note to writing it, and the corner
+    # button the browser and the shelf use for the same thing.
+    ("pencil.svg", "pencil", 36),
     ("calculator.svg", "calculator", 32),
     ("notes.svg", "notes", 32),
     ("enter.svg", "enter", 34),

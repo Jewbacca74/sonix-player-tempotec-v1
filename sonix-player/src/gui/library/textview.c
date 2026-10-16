@@ -81,6 +81,38 @@ static void fill(char *text) {
 	}
 }
 
+bool textview_open_text(const char *title, const char *text, const char *footer, bool truncated) {
+	if (!title || !text) {
+		return false;
+	}
+
+	lv_label_set_text(title_label, title);
+
+	lv_obj_clean(page);
+	if (text[0]) {
+		// One label per page of text: fill() cuts the text up, so the copy
+		// here is the page's to keep and it is handed a writable buffer.
+		char *copy = malloc(strlen(text) + 1);
+		if (!copy) {
+			return false;
+		}
+		strcpy(copy, text);
+		fill(copy);
+		free(copy);
+	} else {
+		add_label(tr("files_text_empty"), true);
+	}
+	if (truncated) {
+		add_label(tr("files_text_truncated"), true);
+	} else if (footer && footer[0]) {
+		add_label(footer, true);
+	}
+
+	lv_obj_scroll_to_y(page, 0, LV_ANIM_OFF);
+	switch_screen(textview_screen);
+	return true;
+}
+
 bool textview_open(const char *path) {
 	unsigned char *raw = NULL;
 	size_t len = 0;
@@ -96,22 +128,9 @@ bool textview_open(const char *path) {
 	}
 
 	const char *slash = strrchr(path, '/');
-	lv_label_set_text(title_label, slash ? slash + 1 : path);
-
-	lv_obj_clean(page);
-	if (text[0]) {
-		fill(text);
-	} else {
-		add_label(tr("files_text_empty"), true);
-	}
-	if (more) {
-		add_label(tr("files_text_truncated"), true);
-	}
+	bool ok = textview_open_text(slash ? slash + 1 : path, text, NULL, more);
 	free(text);
-
-	lv_obj_scroll_to_y(page, 0, LV_ANIM_OFF);
-	switch_screen(textview_screen);
-	return true;
+	return ok;
 }
 
 void textview_init(gui_config_t *cfg) {

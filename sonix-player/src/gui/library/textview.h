@@ -26,4 +26,11 @@ void textview_init(gui_config_t *cfg);
 // file cannot be read.
 bool textview_open(const char *path);
 
+// Shows text the caller already holds -- a note opened from the notes shelf,
+// read out of its folder by the notes store -- under `title` rather than a file
+// name. `footer`, when it is not NULL, is a line of its own at the end, and
+// `truncated` puts the viewer's own notice there instead. False when `text` is
+// NULL.
+bool textview_open_text(const char *title, const char *text, const char *footer, bool truncated);
+
 #endif /* TEXTVIEW_H */

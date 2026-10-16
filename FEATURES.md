@@ -149,11 +149,22 @@ a self-signed certificate), and HLS.
   operator column reads as specks next to the numbers it works on.
 - **Notes** - the `Notes` folder of the card, listed: every text file in it,
   one row per note, newest names where the sort puts them, and a row at the
-  top that makes a new one. Tapping a note opens it for writing on the glass
-  keyboard, and the file is written back when you save, when you leave the
-  page, and a couple of seconds after you stop typing -- so a note survives a
-  flat battery. The folder is read every time the page is opened, so a note
-  written on a computer turns up without a restart.
+  top that makes a new one. A note opens **to be read**: the text fills the
+  page, there is no keyboard, and a tap on the text scrolls it rather than
+  placing a caret. The pencil in the corner is what turns the page into an
+  editor -- the keyboard comes up, the note makes room for it, and the pencil
+  becomes the check that puts the writing away again. While a note is being
+  written the file goes back to the card when you press the check, when you
+  leave the page, and a couple of seconds after you stop typing, so a note
+  survives a flat battery; a note that was only read is left exactly as it is.
+  The folder is read every time the page is opened, so a note written on a
+  computer turns up without a restart.
+  > A note longer than the editor holds (16,384 characters, which is far
+  > past anything typed on the glass keyboard) is shown by the file manager's
+  > text viewer when it is tapped, with a line at the end saying so, rather
+  > than opened in the editor -- writing it there would stop at the limit and
+  > cut the rest of the file off. Notes are read without a wait: the editor
+  > is filled in one assignment rather than a character at a time.
   > Notes live in `Notes` on the card, beside `Ebook`, `Audiobooks`, `Games`
   > and `PEQ`. `.txt`, `.md`, `.lrc`, `.nfo` and `.ini` files are notes,
   > written as UTF-8; a file saved as UTF-16 or Windows-1252 is read and shown

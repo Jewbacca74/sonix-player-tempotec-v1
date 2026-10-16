@@ -170,9 +170,11 @@ being cut off.
 (including the folder wearing a note's name and the `.tmp` left by a write
 that was interrupted), the A-Z, case-insensitive, digit-aware order, the name
 a note is written under, names that must not reach the filesystem, the next
-free name for a new note, and reading the files a computer leaves behind --
-UTF-8 with a byte order mark, UTF-16, CRLF, tabs, Windows-1252 accents,
-control characters, an empty file, and a file too long for the editor.
+free name for a new note, what the editor will hold -- counted in characters
+rather than bytes, so a note of three-byte letters is measured by the letters
+-- and reading the files a computer leaves behind: UTF-8 with a byte order
+mark, UTF-16, CRLF, tabs, Windows-1252 accents, control characters, an empty
+file, and a file too long for the editor.
 
 ## Headless calculator and notes page tests
 
@@ -190,9 +192,14 @@ drawn in the larger, bold font while its digits and the decimal point are not
 and that every caption stays inside the key it is drawn on, that the calculator's display follows the
 keys actually tapped and comes back holding the sum it was left with, that the
 error state is drawn in the language's own words, that a note opens with its
-file's text and its name as the title, that leaving the editor with writing
-unsaved leaves the writing on the card, and that a new note is written and
-listed before a single character is typed into it. Every language file is also
+file's text and its name as the title, that opening one is reading it -- no
+keyboard, no caret, a tap on the text that changes nothing, and nothing
+written to the card -- that the corner pencil is what turns the page into an
+editor and the keyboard comes up with it, that leaving the editor with writing
+unsaved leaves the writing on the card, that a note at the editor's ceiling
+opens in the editor in a fraction of a second and whole, that a note past it
+is shown by the text viewer instead, and that a new note is written and listed
+before a single character is typed into it. Every language file is also
 required to carry the two pages' strings: `tr()` falls back to the key it was
 given, so a missing translation shows the tag itself rather than failing.
 
