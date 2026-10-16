@@ -55,8 +55,11 @@ extern lv_font_t font_ui_24_bold;
 extern lv_font_t font_ui_26;
 extern lv_font_t font_ui_28;
 extern lv_font_t font_ui_32;
-// The A and B letters on the Gearboy buttons, nothing else: on a 110 pixel
-// circle the regular weight is lost.
+// A bold face at a size that reads at a glance, because the regular weight
+// gets lost on the objects it is used for: the A and B letters on the Gearboy
+// buttons' 110 pixel circles, and the calculator's symbol keys -- the
+// operators, the sign and the equals -- whose glyphs are half the height of
+// the digits at the digits' own size.
 extern lv_font_t font_ui_36_bold;
 // The letter shown in the middle of the screen while the A-Z list index is in
 // use: one letter at a time, and it has to read from a distance.

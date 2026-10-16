@@ -143,7 +143,10 @@ a self-signed certificate), and HLS.
   calculator: the four operations, sign, percent, backspace and clear. The sum
   in progress is kept while you leave the page and come back. The keys are
   laid out from the panel's own measurements, so the same page fills a V1 and a
-  480-pixel HiBy player.
+  480-pixel HiBy player. The operator keys are drawn a size up and in bold: a
+  face sets a multiplication sign a little over half the height of the digits
+  it sits beside and a hyphen a tenth of it, so at the digits' own size the
+  operator column reads as specks next to the numbers it works on.
 - **Notes** - the `Notes` folder of the card, listed: every text file in it,
   one row per note, newest names where the sort puts them, and a row at the
   top that makes a new one. Tapping a note opens it for writing on the glass

@@ -42,18 +42,26 @@ lv_obj_t *dacpage_screen, *gearboypage_screen;
 lv_font_t font_ui_14, font_ui_16, font_ui_18, font_ui_20, font_ui_20_bold;
 lv_font_t font_ui_22, font_ui_22_bold, font_ui_24, font_ui_24_bold;
 lv_font_t font_ui_26, font_ui_28, font_ui_32;
+lv_font_t font_ui_36_bold; // the calculator's symbol keys, and Gearboy's letters
 static void (*font_callbacks[16])(void);
 static int font_callback_count;
 static int text_size = FONTS_TEXT_NORMAL;
 
 static void init_fonts(void) {
-	lv_font_t *fonts[] = {
+	lv_font_t *small[] = {
 		&font_ui_14, &font_ui_16, &font_ui_18, &font_ui_20, &font_ui_20_bold,
 		&font_ui_22, &font_ui_22_bold, &font_ui_24, &font_ui_24_bold,
 		&font_ui_26, &font_ui_28, &font_ui_32,
 	};
-	for (size_t i = 0; i < sizeof(fonts) / sizeof(fonts[0]); i++) {
-		*fonts[i] = lv_font_montserrat_14;
+	for (size_t i = 0; i < sizeof(small) / sizeof(small[0]); i++) {
+		*small[i] = lv_font_montserrat_14;
+	}
+	// The one size the interface draws a step larger than the text around it:
+	// a second metric, so the calculator's symbol keys can be checked to be
+	// drawn bigger than its digits rather than merely differently styled.
+	lv_font_t *large[] = {&font_ui_36_bold};
+	for (size_t i = 0; i < sizeof(large) / sizeof(large[0]); i++) {
+		*large[i] = lv_font_montserrat_20;
 	}
 }
 
@@ -439,21 +447,53 @@ static void check_calculator_page(gui_config_t *cfg, const char *tag) {
 		}
 	}
 	assert(keypad);
+
+	/* The keys whose caption is a sign are drawn a size up and in the bold
+	 * weight, the digits at the keypad's own size: a face sets a
+	 * multiplication sign a little over half a digit's height and a hyphen a
+	 * tenth of it, so at the digits' size the operator column reads as specks
+	 * beside the numbers it works on. Both fonts are measured here, and every
+	 * caption is required to stay inside the key it is drawn on, so a step up
+	 * too far is a failure rather than a clipped glyph. */
+	const lv_font_t *digit_font = NULL;
+	const lv_font_t *symbol_font = NULL;
 	for (uint32_t i = 0; i < lv_obj_get_child_count(keypad); i++) {
 		lv_obj_t *key = lv_obj_get_child(keypad, i);
 		assert(lv_obj_get_width(key) >= bp_pick(34, 60));
 		assert(lv_obj_get_height(key) >= bp_pick(28, 60));
+
+		// The backspace key draws an icon rather than a caption.
+		lv_obj_t *label = find_class(key, &lv_label_class);
+		if (!label) {
+			continue;
+		}
+		const lv_font_t *font = lv_obj_get_style_text_font(label, LV_PART_MAIN);
+		assert(font);
+		const char *text = lv_label_get_text(label);
+		if (text[0] >= '0' && text[0] <= '9') {
+			digit_font = font;
+		} else if (strcmp(text, "AC") != 0 && strcmp(text, "%") != 0 && strcmp(text, ".") != 0) {
+			symbol_font = font;
+		}
+		lv_area_t key_area, label_area;
+		lv_obj_get_coords(key, &key_area);
+		lv_obj_get_coords(label, &label_area);
+		assert(label_area.y1 >= key_area.y1 && label_area.y2 <= key_area.y2);
 	}
+	assert(digit_font && symbol_font);
+	assert(lv_font_get_line_height(symbol_font) > lv_font_get_line_height(digit_font));
 
 	// The keys that carry a glyph rather than a letter are there too, and the
 	// four operations are spelled the way the rest of the interface spells
-	// them: a multiplication sign, not an asterisk.
+	// them: a multiplication sign, not an asterisk, and the minus sign the
+	// face draws half as long again as the hyphen it is often written with.
 	assert(find_label(keypad, "AC"));
 	assert(find_label(keypad, "="));
 	assert(find_label(keypad, "\xc2\xb1"));
 	assert(find_label(keypad, "%"));
 	assert(find_label(keypad, "\xc3\xb7"));
 	assert(find_label(keypad, "\xc3\x97"));
+	assert(find_label(keypad, "\xe2\x88\x92"));
 
 	// A sum typed on the glass. The display follows every key, which is the
 	// whole of what the page does with the model.

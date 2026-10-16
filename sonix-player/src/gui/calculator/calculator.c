@@ -38,11 +38,14 @@ typedef struct {
 	char value;        // the digit, or the operator
 } calc_key_t;
 
-// Top left to bottom right, the way the keys are laid out on the glass.
+// Top left to bottom right, the way the keys are laid out on the glass. The
+// minus key wears the minus sign (U+2212) rather than the hyphen, which is a
+// punctuation mark that happens to look like one: the face draws the sign half
+// as long again.
 static const calc_key_t KEYS[CALC_KEYS] = {
 	{KEY_CLEAR, "AC", 0},     {KEY_BACKSPACE, NULL, 0}, {KEY_PERCENT, "%", 0},      {KEY_OPERATOR, "\xC3\xB7", '/'},
 	{KEY_DIGIT, "7", '7'},    {KEY_DIGIT, "8", '8'},    {KEY_DIGIT, "9", '9'},      {KEY_OPERATOR, "\xC3\x97", '*'},
-	{KEY_DIGIT, "4", '4'},    {KEY_DIGIT, "5", '5'},    {KEY_DIGIT, "6", '6'},      {KEY_OPERATOR, "-", '-'},
+	{KEY_DIGIT, "4", '4'},    {KEY_DIGIT, "5", '5'},    {KEY_DIGIT, "6", '6'},      {KEY_OPERATOR, "\xE2\x88\x92", '-'},
 	{KEY_DIGIT, "1", '1'},    {KEY_DIGIT, "2", '2'},    {KEY_DIGIT, "3", '3'},      {KEY_OPERATOR, "+", '+'},
 	{KEY_SIGN, "\xC2\xB1", 0}, {KEY_DIGIT, "0", '0'},    {KEY_DECIMAL, ".", 0},     {KEY_EQUALS, "=", 0},
 };
@@ -94,6 +97,18 @@ static void key_cb(lv_event_t *e) {
 	display_refresh();
 }
 
+// The keys whose caption is a sign rather than a number or a letter. They are
+// drawn a size up, and in the bold weight: a face sets a multiplication sign a
+// little over half the height of the digits it sits beside and a hyphen a
+// tenth of it, so in the keypad's own size the operator column came out as
+// specks next to the numbers they work on -- on a 240-pixel panel, eight
+// pixels of multiply sign. A step up in size and the bold face bring them to
+// the digits' own height and weight. The digits, the percent and the decimal
+// point stay where they are: they were never hard to read.
+static bool key_is_symbol(calc_key_kind_t kind) {
+	return kind == KEY_OPERATOR || kind == KEY_SIGN || kind == KEY_EQUALS;
+}
+
 // A key. Number keys wear the ordinary card, the operators the accent's ink
 // and the equals key the accent itself, which is how a calculator says which
 // key finishes the sum.
@@ -119,7 +134,7 @@ static lv_obj_t *key_make(lv_obj_t *parent, const calc_key_t *key) {
 
 	lv_obj_t *label = lv_label_create(button);
 	lv_label_set_text(label, key->label);
-	lv_obj_set_style_text_font(label, &font_ui_24, 0);
+	lv_obj_set_style_text_font(label, key_is_symbol(key->kind) ? &font_ui_36_bold : &font_ui_24, 0);
 	if (equals) {
 		lv_obj_set_style_text_color(label, theme_on_accent(), 0);
 	} else if (key->kind == KEY_OPERATOR) {

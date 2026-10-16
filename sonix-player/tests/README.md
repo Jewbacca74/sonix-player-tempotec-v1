@@ -154,6 +154,10 @@ SONIX_SCREENSAVER_SNAPSHOTS=.build/saver make -C sonix-player/tests ui
 build and run the two new pages' plain-C halves: no LVGL, no screen, the same
 files the firmware compiles.
 
+The harness supplies two font metrics, a small one and a larger one, so the
+page can be checked to draw the calculator's symbols a step up instead of
+merely differently styled.
+
 `test_calculator` drives the model through the twenty keys: the display
 following every key, a digit after a result starting a new sum, chained
 operators applied as they are pressed, the sign on a result and on a number
@@ -181,7 +185,9 @@ It checks that both destinations are on the More page in every theme -- the
 tiles of Dark and Light, and the V1's single-column list under the palettes
 built on function glyphs -- that nothing on either page is drawn outside the
 panel, that every key is at least the size of the shell's own corner buttons
-and every notes row a finger target, that the calculator's display follows the
+and every notes row a finger target, that the calculator's symbol keys are
+drawn in the larger, bold font while its digits and the decimal point are not
+and that every caption stays inside the key it is drawn on, that the calculator's display follows the
 keys actually tapped and comes back holding the sum it was left with, that the
 error state is drawn in the language's own words, that a note opens with its
 file's text and its name as the title, that leaving the editor with writing
