@@ -21,6 +21,8 @@ sonix-player/compile_commands.json
 sonix-player/rockbox-toolchain
 
 sonix-player/lvgl/
+# The LVGL checkout, as a symlink to wherever it was cloned.
+sonix-player/lvgl
 sonix-player/opus-1.4/
 sonix-player/wavpack-*
 sonix-player/opusfile-*
@@ -50,3 +52,4 @@ subsonic-credentials.json
 subsonic-credentials.json.tmp
 sonix-player/tests/.build/
 sonix-player/tests/__pycache__/
+sonix-player/tools/__pycache__/

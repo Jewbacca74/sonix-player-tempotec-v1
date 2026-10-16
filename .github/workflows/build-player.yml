@@ -48,8 +48,11 @@ jobs:
       - name: Build the host player
         run: make -C sonix-player host -j"$(nproc)"
 
-      - name: Check main-menu and screensaver layouts (headless LVGL)
+      - name: Check the More, Calculator and Notes pages (headless LVGL)
         run: make -C sonix-player/tests ui -j"$(nproc)"
+
+      - name: Check the Calculator's arithmetic and the notes folder
+        run: make -C sonix-player/tests calculator notes -j"$(nproc)"
 
       - name: Check the Screensaver folder's picture rules
         run: make -C sonix-player/tests pictures

@@ -246,6 +246,8 @@ static bool gridpage_tokyo_icon(const char *label, const lv_image_dsc_t **icon, 
 		{"books", &icon_files_book, THEME_SEMANTIC_AMBER},
 		{"file_explorer", &icon_folder, THEME_SEMANTIC_BLUE},
 		{"flappy_bird", &icon_bird, THEME_SEMANTIC_PURPLE},
+		{"calculator", &icon_calculator, THEME_SEMANTIC_CYAN},
+		{"notes", &icon_notes, THEME_SEMANTIC_PURPLE},
 	};
 
 	if (!label || !icon || !tone) {

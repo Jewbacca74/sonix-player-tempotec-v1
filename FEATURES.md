@@ -132,6 +132,45 @@ a self-signed certificate), and HLS.
   in vertical mode they move one screen at a time and cross chapter boundaries
   at the ends. Play/Pause and volume remain available for background audio.
 
+## Tools
+
+> **Calculator** and **Notes** are in the **More** menu, under the file
+> manager. Both are drawn for the panel they are on: on the 240x320 V1 the
+> twenty keys stay a finger's width, and the whole page -- display, keypad and
+> labels -- fits without scrolling.
+
+- **Calculator** - a display and the twenty keys of an ordinary pocket
+  calculator: the four operations, sign, percent, backspace and clear. The sum
+  in progress is kept while you leave the page and come back. The keys are
+  laid out from the panel's own measurements, so the same page fills a V1 and a
+  480-pixel HiBy player. The operator keys are drawn a size up and in bold: a
+  face sets a multiplication sign a little over half the height of the digits
+  it sits beside and a hyphen a tenth of it, so at the digits' own size the
+  operator column reads as specks next to the numbers it works on.
+- **Notes** - the `Notes` folder of the card, listed: every text file in it,
+  one row per note, newest names where the sort puts them, and a row at the
+  top that makes a new one. A note opens **to be read**: the text fills the
+  page, there is no keyboard, and a tap on the text scrolls it rather than
+  placing a caret. The pencil in the corner is what turns the page into an
+  editor -- the keyboard comes up, the note makes room for it, and the pencil
+  becomes the check that puts the writing away again. While a note is being
+  written the file goes back to the card when you press the check, when you
+  leave the page, and a couple of seconds after you stop typing, so a note
+  survives a flat battery; a note that was only read is left exactly as it is.
+  The folder is read every time the page is opened, so a note written on a
+  computer turns up without a restart.
+  > A note longer than the editor holds (16,384 characters, which is far
+  > past anything typed on the glass keyboard) is shown by the file manager's
+  > text viewer when it is tapped, with a line at the end saying so, rather
+  > than opened in the editor -- writing it there would stop at the limit and
+  > cut the rest of the file off. Notes are read without a wait: the editor
+  > is filled in one assignment rather than a character at a time.
+  > Notes live in `Notes` on the card, beside `Ebook`, `Audiobooks`, `Games`
+  > and `PEQ`. `.txt`, `.md`, `.lrc`, `.nfo` and `.ini` files are notes,
+  > written as UTF-8; a file saved as UTF-16 or Windows-1252 is read and shown
+  > correctly too, and a note longer than the editor holds is offered to the
+  > file manager's viewer instead of being cut short here.
+
 ## Games
 
 > **Flappy Bird** is in the **More** menu. It is played on the glass, it leaves
