@@ -165,8 +165,8 @@ Showcase of **OLED** appearance: true black backgrounds with white as the accent
       <br><sub><b>Settings</b></sub>
     </td>
     <td align="center">
-      <a href="screenshots/oled/now-playing.png"><img src="screenshots/oled/now-playing.png" width="180" alt="OLED now playing"></a>
-      <br><sub><b>Now Playing</b></sub>
+      <a href="screenshots/oled/now-playing.png"><img src="screenshots/oled/now-playing.png" width="180" alt="OLED now playing: Gold BBS'S by The Alchemist &amp; Conway The Machine"></a>
+      <br><sub><b>Now Playing — Gold BBS'S (LULU)</b></sub>
     </td>
     <td align="center">
       <a href="screenshots/oled/file-browser.png"><img src="screenshots/oled/file-browser.png" width="180" alt="OLED file browser"></a>
