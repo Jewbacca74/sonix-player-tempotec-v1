@@ -271,6 +271,7 @@ static void unloaded_cb(lv_event_t *e) {
 }
 
 void btreceiverpage_init(gui_config_t *cfg) {
+	bool compact = cfg->screen_width < 320;
 	lv_obj_t *container = settingsrow_page(btreceiverpage_screen, cfg, "btreceiver_title");
 
 	// The codec button, in the corner every other page puts its options in.
@@ -291,18 +292,27 @@ void btreceiverpage_init(gui_config_t *cfg) {
 	// Straight into the flex flow with no alignment of its own: the container
 	// settingsrow_page() builds already centres its children, and an object
 	// positioned by alignment leaves the flow and is measured as taking no
-	// space.
+	// space. On the V1 the 200 px source nearly fills the display and crowds
+	// the receiver status below it, so scale both its drawing and layout box.
 	big_icon = lv_image_create(container);
 	lv_image_set_src(big_icon, &icon_bluetooth_receiver_page);
-	lv_obj_set_style_margin_top(big_icon, 40, 0);
+	int icon_size = compact ? 96 : 200;
+	int source_side = LV_MAX((int)icon_bluetooth_receiver_page.header.w,
+							 (int)icon_bluetooth_receiver_page.header.h);
+	lv_obj_set_size(big_icon, icon_size, icon_size);
+	lv_image_set_inner_align(big_icon, LV_IMAGE_ALIGN_CENTER);
+	if (source_side > 0) {
+		lv_image_set_scale(big_icon, (uint32_t)(LV_SCALE_NONE * icon_size / source_side));
+	}
+	lv_obj_set_style_margin_top(big_icon, compact ? 8 : 40, 0);
 
 	format_label = lv_label_create(container);
 	lv_obj_set_width(format_label, lv_pct(100));
 	lv_label_set_long_mode(format_label, LV_LABEL_LONG_WRAP);
 	lv_obj_add_style(format_label, &theme_style_text, 0);
 	lv_obj_set_style_text_align(format_label, LV_TEXT_ALIGN_CENTER, 0);
-	lv_obj_set_style_text_font(format_label, &font_ui_24_bold, 0);
-	lv_obj_set_style_margin_top(format_label, 20, 0);
+	lv_obj_set_style_text_font(format_label, compact ? &font_ui_20_bold : &font_ui_24_bold, 0);
+	lv_obj_set_style_margin_top(format_label, compact ? 6 : 20, 0);
 	lv_label_set_text(format_label, "");
 
 	device_label = lv_label_create(container);
@@ -310,8 +320,8 @@ void btreceiverpage_init(gui_config_t *cfg) {
 	lv_label_set_long_mode(device_label, LV_LABEL_LONG_DOT);
 	lv_obj_set_style_text_align(device_label, LV_TEXT_ALIGN_CENTER, 0);
 	lv_obj_add_style(device_label, &theme_style_text_dim, 0);
-	lv_obj_set_style_text_font(device_label, &font_ui_22, 0);
-	lv_obj_set_style_margin_top(device_label, 10, 0);
+	lv_obj_set_style_text_font(device_label, compact ? &font_ui_18 : &font_ui_22, 0);
+	lv_obj_set_style_margin_top(device_label, compact ? 2 : 10, 0);
 	lv_label_set_text(device_label, "");
 
 	// The track the sender names, under the device it comes from. Hidden when
@@ -322,8 +332,8 @@ void btreceiverpage_init(gui_config_t *cfg) {
 	lv_label_set_long_mode(title_label, LV_LABEL_LONG_DOT);
 	lv_obj_set_style_text_align(title_label, LV_TEXT_ALIGN_CENTER, 0);
 	lv_obj_add_style(title_label, &theme_style_text, 0);
-	lv_obj_set_style_text_font(title_label, &font_ui_24, 0);
-	lv_obj_set_style_margin_top(title_label, 18, 0);
+	lv_obj_set_style_text_font(title_label, compact ? &font_ui_18 : &font_ui_24, 0);
+	lv_obj_set_style_margin_top(title_label, compact ? 6 : 18, 0);
 	lv_label_set_text(title_label, "");
 	lv_obj_set_hidden(title_label, true);
 
@@ -332,8 +342,8 @@ void btreceiverpage_init(gui_config_t *cfg) {
 	lv_label_set_long_mode(status_label, LV_LABEL_LONG_WRAP);
 	lv_obj_set_style_text_align(status_label, LV_TEXT_ALIGN_CENTER, 0);
 	lv_obj_add_style(status_label, &theme_style_text_dim, 0);
-	lv_obj_set_style_text_font(status_label, &font_ui_22, 0);
-	lv_obj_set_style_margin_top(status_label, 10, 0);
+	lv_obj_set_style_text_font(status_label, compact ? &font_ui_16 : &font_ui_22, 0);
+	lv_obj_set_style_margin_top(status_label, compact ? 2 : 10, 0);
 	lv_label_set_text(status_label, "");
 	status_normal_color = lv_obj_get_style_text_color(status_label, LV_PART_MAIN);
 
