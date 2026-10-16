@@ -33,7 +33,7 @@
 
 lv_obj_t *music_screen, *streaming_screen, *wireless_screen;
 lv_obj_t *audiobooks_screen, *morepage_screen, *settings_screen, *player_screen;
-lv_obj_t *ebookpage_screen;
+lv_obj_t *ebookpage_screen, *browser_screen;
 
 lv_font_t font_ui_14, font_ui_16, font_ui_18, font_ui_20, font_ui_20_bold;
 lv_font_t font_ui_22, font_ui_22_bold, font_ui_24, font_ui_24_bold;
@@ -318,6 +318,7 @@ int main(int argc, char **argv) {
 	wireless_screen = lv_obj_create(NULL);
 	audiobooks_screen = lv_obj_create(NULL);
 	ebookpage_screen = lv_obj_create(NULL);
+	browser_screen = lv_obj_create(NULL);
 	morepage_screen = lv_obj_create(NULL);
 	settings_screen = lv_obj_create(NULL);
 	player_screen = lv_obj_create(NULL);
@@ -349,6 +350,24 @@ int main(int argc, char **argv) {
 	lv_obj_send_event(books_toggle, LV_EVENT_VALUE_CHANGED, NULL);
 	assert(!main_menu_books());
 	assert(find_label(lv_obj_get_child(grid, 3), tr("audiobooks")));
+
+	assert(!main_menu_browse());
+	assert(find_label(lv_obj_get_child(grid, 0), tr("music")));
+	lv_obj_t *browse_label = find_label(appearance_screen, tr("appearance_home_browse"));
+	assert(browse_label);
+	lv_obj_t *browse_toggle = child_of_type(lv_obj_get_parent(browse_label), &lv_switch_class);
+	assert(!lv_obj_has_state(browse_toggle, LV_STATE_CHECKED));
+	lv_obj_set_state(browse_toggle, LV_STATE_CHECKED, true);
+	lv_obj_send_event(browse_toggle, LV_EVENT_VALUE_CHANGED, NULL);
+	assert(main_menu_browse());
+	assert(find_label(lv_obj_get_child(grid, 0), tr("music_browse")));
+	lv_obj_send_event(lv_obj_get_child(grid, 0), LV_EVENT_CLICKED, NULL);
+	assert(lv_screen_active() == browser_screen);
+	lv_screen_load(main_menu_screen);
+	lv_obj_set_state(browse_toggle, LV_STATE_CHECKED, false);
+	lv_obj_send_event(browse_toggle, LV_EVENT_VALUE_CHANGED, NULL);
+	assert(!main_menu_browse());
+	assert(find_label(lv_obj_get_child(grid, 0), tr("music")));
 
 	const grid_entry_t entries[] = {
 		{"music_all_tracks", &icon_menu_music, &music_screen, NULL},

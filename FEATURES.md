@@ -162,6 +162,7 @@ a self-signed certificate), and HLS.
 ## Settings
 
 - **Appearance** - dark and light, plus the V1 palettes Tokyo Night, Amber on Black and OLED (true black with no grey cards, white as its accent, and a main menu without the title and tagline); twelve accent colors, clock position, a dynamic tint that borrows the accent's hue for backgrounds and cards, and a toggle to show/hide the battery percentage.
+- **Appearance → Browse on home screen** - replaces the Music tile with Browse, opening the card’s file browser directly. Off by default; Music remains available when switched off.
 - **Appearance → Show Books on home screen** - replaces the Audiobooks tile with Books, opening the EPUB shelf directly from home. Off by default; Audiobooks remain available when switched off.
 - **Appearance → Main menu icons only** - optionally hide the six main-menu tile labels and show larger, centered icons. Dedicated native-pixel art avoids stretching small toolbar glyphs or repeatedly filtering the colored illustrations. Applies immediately in every theme and is saved across restarts; other menus, the status bar and the now-playing strip are unchanged. Off by default.
 - **Appearance → Boot screen** - the picture the next power-on opens with: Retrospace (the default), Space, Travelling in space, or Stock, the firmware's own light and dark pictures. The choice is written to the flash marker the boot script reads, so it takes effect at the next boot.
