@@ -196,8 +196,8 @@ To inspect the pages, set `SONIX_PAGE_SNAPSHOTS` to an output prefix:
 SONIX_PAGE_SNAPSHOTS=.build/page make -C sonix-player/tests ui
 ```
 
-This writes ignored `.build/page-<board>-<page>.ppm` files, one per page, per
-shape and per panel size.
+This writes ignored `.build/page-<board>-<page>-<theme>.ppm` files: one per
+page, per More-page shape, per theme that draws one and per panel size.
 
 ## Screensaver folder rules
 

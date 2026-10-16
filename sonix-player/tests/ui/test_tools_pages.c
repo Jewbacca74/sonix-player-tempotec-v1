@@ -328,6 +328,24 @@ static lv_obj_t *visible_shape(lv_obj_t *page, bool *is_grid) {
 	return rows;
 }
 
+/* The theme a snapshot was taken under, for its file name: the More page is
+ * laid out as tiles or as the V1 list depending on the theme, so a run that
+ * keeps one snapshot per shape would keep the last theme that used it. */
+static const char *theme_tag(void) {
+	switch (theme_get_kind()) {
+	case THEME_KIND_LIGHT:
+		return "light";
+	case THEME_KIND_TOKYO_NIGHT:
+		return "tokyo";
+	case THEME_KIND_AMBER_ON_BLACK:
+		return "amber";
+	case THEME_KIND_OLED:
+		return "oled";
+	default:
+		return "dark";
+	}
+}
+
 static void check_more_page(gui_config_t *cfg, const char *tag) {
 	lv_screen_load(morepage_screen);
 	lv_obj_update_layout(morepage_screen);
@@ -674,7 +692,7 @@ int main(int argc, char **argv) {
 		theme_set_kind((theme_kind_t)kind);
 		const char *shape = (bp_is_tempotec_v1() && theme_uses_function_glyphs()) ? "rows" : "tiles";
 		char tag[64];
-		snprintf(tag, sizeof(tag), "%s-more-%s", bp_is_tempotec_v1() ? "v1" : "hiby", shape);
+		snprintf(tag, sizeof(tag), "%s-more-%s-%s", bp_is_tempotec_v1() ? "v1" : "hiby", shape, theme_tag());
 		check_more_page(&cfg, tag);
 	}
 	theme_set_kind(THEME_KIND_DARK);
