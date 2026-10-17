@@ -136,7 +136,17 @@ the star here, as it is in Immersive, but drawn a step under the star's size
 (`POSTER_HEART_SCALE`, 22 px against 26 on the V1): the heart fills more of its
 32 px canvas than the star does, and on a deck that is a row of type rather
 than a picture to stand over, the smaller mark reads as a marker and not as a
-second headline. Without artwork the empty sleeve is the
+second headline.
+
+The one edge the arrangement leaves -- where the foot of the sleeve meets the
+top of the deck -- is softened rather than drawn: a gradient from nothing to
+the deck's own colour stands over the last `POSTER_FADE_HEIGHT` pixels of the
+picture (36, the length of the ramp in the reference), so the photograph dims
+into the controls and the two read as one ground. It is a style of two stops
+with per-stop opacity (`poster_fade_grad`), retinted to the panel colour on
+every theme change (`poster_fade_paint`), and up only while Poster has a
+sleeve to melt (`poster_fade_apply`, from `cover_show()`): an empty sleeve
+keeps its own foot, and the other arrangements keep the edges they have. Without artwork the empty sleeve is the
 cover's own colour from edge to edge, and the blurred copy stays down: the
 deck no longer shows it through, and the sleeve covers everything above it.
 

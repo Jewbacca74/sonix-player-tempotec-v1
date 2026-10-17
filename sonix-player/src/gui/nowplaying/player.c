@@ -173,6 +173,10 @@ static int polls_since_stop = POLLS_FAST_AFTER_STOP;
 #define FAV_STAR_SCALE_WIDE 256
 #define POSTER_HEART_SCALE 176
 #define POSTER_HEART_SCALE_WIDE 208
+// How much of the sleeve's foot melts into the deck in Poster: a gradient from
+// nothing to the deck's own colour over this many pixels of the picture's
+// bottom, so the two grounds meet without a line between them (poster_fade).
+#define POSTER_FADE_HEIGHT 36
 #define COMPACT_PLAY_BTN 44
 #define COMPACT_SKIP_BTN 42
 #define COMPACT_SLEEVE_MARGIN 2
@@ -990,6 +994,9 @@ static enum {
 // in the existing themes. Amber on Black keeps its signal accent in either
 // state. Local style props are laid over the theme styles and removed again
 // when needed so the no-cover panel keeps following the selected palette.
+// Poster's fade, up or down with the sleeve it melts: see the Poster section.
+static void poster_fade_apply(void);
+
 // The picture at the width of the screen, and the note that stands in for it.
 //
 // One place, because Studio hides both -- the sleeve there is a smaller picture
@@ -1021,6 +1028,7 @@ static void cover_show(bool have_cover) {
 	if (cover_art_group && backdrop_full) {
 		lv_obj_set_style_bg_opa(cover_art_group, !have_cover && !studio ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
 	}
+	poster_fade_apply(); // the melt at the sleeve's foot follows the picture
 }
 
 static void set_over_cover(bool on) {
@@ -2933,6 +2941,41 @@ static bool immersive_take_back(void) {
 static bool poster_up;
 static int poster_saved_art_h; // the sleeve's height before Poster moved it, see poster_take_back()
 
+// The foot of the sleeve, melted into the deck: a gradient from nothing to the
+// deck's own colour over the last pixels of the picture, so the photograph and
+// the controls read as one ground rather than two panels meeting at a line.
+static lv_obj_t *poster_fade;
+static lv_style_t poster_fade_style;
+static lv_grad_dsc_t poster_fade_grad; // its two stops: nothing, then the deck's colour
+
+// The colour the deck stands on in Poster -- the theme's panel colour, which is
+// what the sleeve has to melt into.
+static lv_color_t poster_deck_ground(void) {
+	return lv_obj_get_style_bg_color(player_menu, LV_PART_MAIN);
+}
+
+// Retints the fade's stops to the deck's colour and asks for it to be drawn
+// again: once at creation, and after every change of theme.
+static void poster_fade_paint(void) {
+	if (!poster_fade) {
+		return;
+	}
+	lv_color_t ground = poster_deck_ground();
+	poster_fade_grad.stops[0].color = ground;
+	poster_fade_grad.stops[1].color = ground;
+	lv_obj_report_style_change(&poster_fade_style);
+}
+
+// The fade up or down. It belongs to a loaded sleeve in Poster and to nothing
+// else: an empty sleeve keeps its own foot, and every other arrangement either
+// has no edge here to soften or wants the one it has.
+static void poster_fade_apply(void) {
+	if (!poster_fade) {
+		return;
+	}
+	lv_obj_set_hidden(poster_fade, !(layout_poster_now && current_cover.pixels != NULL));
+}
+
 static void poster_put(void) {
 	if (!cover_art_group || !cover_panel) {
 		return;
@@ -3636,6 +3679,7 @@ static void player_refresh_theme(void) {
 	if (cover_art_group && backdrop_full) {
 		lv_obj_set_style_bg_color(cover_art_group, theme()->cover_bg, 0);
 	}
+	poster_fade_paint(); // the deck's ground may have moved with the palette
 	lv_obj_set_style_image_recolor(cover_placeholder_icon, theme()->text_secondary, 0);
 	// The backdrop over a loaded cover is always the dark treatment -- same
 	// look in both themes; only the no-cover panel follows the theme.
@@ -5976,6 +6020,32 @@ void player_init(gui_config_t *cfg) {
 	lv_obj_set_style_clip_corner(cover_img, true, 0);
 	lv_obj_center(cover_img);
 	lv_obj_set_hidden(cover_img, true);
+
+	// Poster's fade: a gradient from nothing to the deck's own colour over the
+	// foot of the sleeve, so the photograph melts into the controls instead of
+	// meeting them at a line. Over the artwork's frame and under the words'
+	// page built below; hidden except when Poster has a sleeve to melt
+	// (poster_fade_apply, from cover_show).
+	poster_fade = lv_obj_create(cover_panel);
+	lv_obj_set_size(poster_fade, cover_box_w, POSTER_FADE_HEIGHT);
+	lv_obj_align(poster_fade, LV_ALIGN_BOTTOM_MID, 0, 0);
+	lv_obj_set_style_radius(poster_fade, 0, 0);
+	lv_obj_set_style_border_width(poster_fade, 0, 0);
+	lv_obj_set_style_pad_all(poster_fade, 0, 0);
+	lv_obj_set_scrollable(poster_fade, false);
+	lv_obj_set_clickable(poster_fade, false);
+	lv_style_init(&poster_fade_style);
+	lv_style_set_bg_opa(&poster_fade_style, LV_OPA_COVER);
+	poster_fade_grad.stops_count = 2;
+	poster_fade_grad.dir = LV_GRAD_DIR_VER;
+	poster_fade_grad.stops[0].opa = LV_OPA_TRANSP;
+	poster_fade_grad.stops[0].frac = 0;
+	poster_fade_grad.stops[1].opa = LV_OPA_COVER;
+	poster_fade_grad.stops[1].frac = 255;
+	lv_style_set_bg_grad(&poster_fade_style, &poster_fade_grad);
+	lv_obj_add_style(poster_fade, &poster_fade_style, 0);
+	poster_fade_paint(); // the stops take the deck's colour
+	lv_obj_set_hidden(poster_fade, true);
 
 	// Immersive's frosted foot: the image object the blurred band lands in,
 	// parked at the foot of the artwork's frame at the size of the deck. A
