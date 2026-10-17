@@ -1618,6 +1618,15 @@ static void layout_pick_cb(lv_event_t *e) {
 	layout_refresh();
 }
 
+// The sleeve's colour on the play button and the progress bar, in whichever
+// arrangement is up. The page owns the setting, as for the layout above; this
+// only stores it and lets the repaint it does show behind this page.
+static lv_obj_t *cover_tint_switch;
+
+static void cover_tint_cb(lv_event_t *e) {
+	player_cover_tint_set(lv_obj_has_state(lv_event_get_target(e), LV_STATE_CHECKED));
+}
+
 // ---------------------------------------------------------------------------
 // Library
 //
@@ -1726,6 +1735,16 @@ static void build_display_page(gui_config_t *cfg) {
 	// stream from a phone and an audiobook all get the standard one whatever
 	// this says. Studio asks for less and takes all of them.
 	option_note(container, "musicsettings_local_only_note");
+
+	// The sleeve's main colour on the play button and the played part of the
+	// progress bar, whatever arrangement is up. It costs nothing to keep: the
+	// colour is already worked out from the artwork the page decoded, so an
+	// on switch is two repaints a track and an off one is the page as it was.
+	settingsrow_toggle(container, "musicsettings_cover_tint", &cover_tint_switch, cover_tint_cb);
+	option_note(container, "musicsettings_cover_tint_note");
+	if (player_cover_tint_get()) {
+		lv_obj_add_state(cover_tint_switch, LV_STATE_CHECKED);
+	}
 
 	// Whether a start with a remembered track lands on the now-playing page
 	// rather than on the home screen. Read once, at startup (main.c).
