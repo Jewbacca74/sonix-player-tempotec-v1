@@ -1190,16 +1190,27 @@ static lv_color_t alt_mark(void) {
 			   : tone_shaped(ALT_MARK_SAT, ALT_MARK_LUMA);
 }
 
+// The sleeve's colour as the cover tint switch asks for it: alt_mark() without
+// its monochrome guard. That guard is the palettes' own business -- Amber on
+// Black and OLED are one hue on purpose, and the Waveform arrangement
+// respects it -- but a switch the user has found and turned on is an
+// instruction, and leaving it silently doing nothing on those two themes
+// makes it read as broken rather than as a palette being kept. So where the
+// switch is on, the record wins on every theme; where it is off, nothing here
+// is asked at all and the guard stands exactly as it did.
+static lv_color_t cover_mark(void) { return tone_shaped(ALT_MARK_SAT, ALT_MARK_LUMA); }
+
 static lv_color_t chrome_accent(void) {
+	// Switched on, the sleeve's colour comes before every palette answer
+	// below, the monochrome ones included: the record winning over the theme
+	// is the whole of what the switch says. album_tone is 0 until a cover is
+	// on screen, so a track with no artwork keeps exactly the colours it has
+	// always had.
+	if (cover_tint && album_tone) {
+		return cover_mark();
+	}
 	if (theme_is_monochrome()) {
 		return theme_player_chrome_color(THEME_PLAYER_CHROME_PLAYBACK);
-	}
-	// Switched on, the sleeve's colour comes before the palette's own answers
-	// below: the record winning over the theme is the whole of what the
-	// switch says. album_tone is 0 until a cover is on screen, so a track
-	// with no artwork keeps exactly the colours it has always had.
-	if (cover_tint && album_tone) {
-		return alt_mark();
 	}
 	// Tokyo Night's play/pause glyph, and whatever else lights up with it,
 	// wears the deck's violet rather than the theme accent: the accent stays
@@ -1219,7 +1230,7 @@ static lv_color_t chrome_accent(void) {
 // theme changes, and are no part of this either way.
 static lv_color_t progress_tint(void) {
 	if (cover_tint && album_tone) {
-		return alt_mark(); // which keeps the monochrome palettes on their own colour
+		return cover_mark(); // the switch's colour, on the monochrome palettes too
 	}
 	return theme_is_monochrome() ? theme_player_chrome_color(THEME_PLAYER_CHROME_PLAYBACK) : theme()->accent;
 }
@@ -1254,6 +1265,7 @@ static void paint_transport_tint(void) {
 		update_repeat_button();
 	}
 	paint_progress_tint();
+	wave_drawn = -1; // the bars, where they are up, are the old colour
 	lyrics_repaint_lit(); // the sung line wears it too
 }
 
@@ -3333,7 +3345,10 @@ static void wave_paint(int played_px) {
 	uint8_t *alpha = wave_buf + (size_t)w * h * 2;
 	memset(alpha, 0, (size_t)w * h);
 
-	lv_color_t tint = alt_mark();
+	// The arrangement's own colour normally -- on a monochrome palette that
+	// is the deck's, not the sleeve's -- and the switch's where that is on, so
+	// the bars and the rest of the transport never disagree about it.
+	lv_color_t tint = cover_tint && album_tone ? cover_mark() : alt_mark();
 	uint16_t packed = (uint16_t)(((tint.red & 0xF8) << 8) | ((tint.green & 0xFC) << 3) | (tint.blue >> 3));
 
 	int bar_w, left;
