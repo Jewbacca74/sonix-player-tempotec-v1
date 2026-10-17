@@ -72,7 +72,8 @@ static void update_format_label(const device_state_t *state);
 static void update_repeat_button(void);
 
 // The colour the chrome on this page is drawn in: the theme's accent normally,
-// and the sleeve's own while the alternative layout is up. Everything else on
+// and the sleeve's own while the alternative layout is up, or in any
+// arrangement while the cover tint is switched on. Everything else on
 // that layout takes its colour from the record -- the pills, the star's disc,
 // the shape of the track -- and a blue play button in the middle of it was the
 // one thing that still belonged to some other page.
@@ -357,6 +358,15 @@ static bool layout_poster_now;  // and for the fifth: the sleeve at the width of
 static bool layout_wave_now;
 
 static uint32_t album_tone; // the sleeve's colour, 0 when there is no sleeve
+
+// Whether the play/pause glyph and the played stretch of the progress bar
+// take that colour in every arrangement, and not only in the alternative
+// one. A setting of its own (Music > Display options), off unless it was
+// switched on: the page then follows the record instead of the theme, which
+// is a matter of taste and not a thing to visit on everybody. The two skip
+// glyphs are no part of it -- they are drawn in set_over_cover(), which this
+// never reaches, and keep the colour they have always had.
+static bool cover_tint;
 
 static lv_obj_t *song_text_obj; // the title and artist, wherever they live now
 static lv_obj_t *song_side_obj; // the star and the format, likewise
@@ -1184,6 +1194,13 @@ static lv_color_t chrome_accent(void) {
 	if (theme_is_monochrome()) {
 		return theme_player_chrome_color(THEME_PLAYER_CHROME_PLAYBACK);
 	}
+	// Switched on, the sleeve's colour comes before the palette's own answers
+	// below: the record winning over the theme is the whole of what the
+	// switch says. album_tone is 0 until a cover is on screen, so a track
+	// with no artwork keeps exactly the colours it has always had.
+	if (cover_tint && album_tone) {
+		return alt_mark();
+	}
 	// Tokyo Night's play/pause glyph, and whatever else lights up with it,
 	// wears the deck's violet rather than the theme accent: the accent stays
 	// with the progress bar, which is what the palette preview promises.
@@ -1191,6 +1208,29 @@ static lv_color_t chrome_accent(void) {
 		return theme_player_chrome_color(THEME_PLAYER_CHROME_PLAYBACK);
 	}
 	return layout_wave_now ? alt_mark() : theme()->accent;
+}
+
+// What the played stretch of the progress bar and the middle of its knob are
+// drawn in. Its own answer and not chrome_accent()'s: the two have never been
+// the same colour on every palette -- Tokyo Night's bar keeps the theme
+// accent while its play glyph wears the deck's violet -- so the cover tint
+// needs a way to take the bar over that leaves that alone. The knob's white
+// ring and the unplayed stretch are set when the page is built and when the
+// theme changes, and are no part of this either way.
+static lv_color_t progress_tint(void) {
+	if (cover_tint && album_tone) {
+		return alt_mark(); // which keeps the monochrome palettes on their own colour
+	}
+	return theme_is_monochrome() ? theme_player_chrome_color(THEME_PLAYER_CHROME_PLAYBACK) : theme()->accent;
+}
+
+static void paint_progress_tint(void) {
+	if (!progress_slider) {
+		return;
+	}
+	lv_color_t tint = progress_tint();
+	lv_obj_set_style_bg_color(progress_slider, tint, LV_PART_INDICATOR);
+	lv_obj_set_style_bg_color(progress_slider, tint, LV_PART_KNOB);
 }
 
 // The type on that surface. Worked out rather than fixed so that a change to
@@ -1202,8 +1242,9 @@ static lv_color_t alt_ink(void) {
 
 static void lyrics_repaint_lit(void);
 
-// The two glyphs that wear the accent, repainted whenever the accent of the
-// moment can have moved: the play/pause glyph and the repeat/shuffle mode.
+// The two glyphs that wear the accent, and the bar that wears its own,
+// repainted whenever the accent of the moment can have moved: the play/pause
+// glyph, the repeat/shuffle mode and the played stretch of the progress bar.
 static void paint_transport_tint(void) {
 	if (play_btn_icon) {
 		lv_obj_set_style_image_recolor(play_btn_icon, chrome_accent(), 0);
@@ -1212,6 +1253,7 @@ static void paint_transport_tint(void) {
 	if (repeat_btn_icon) {
 		update_repeat_button();
 	}
+	paint_progress_tint();
 	lyrics_repaint_lit(); // the sung line wears it too
 }
 
@@ -3659,11 +3701,9 @@ static void player_refresh_theme(void) {
 		player_clear_footer_edge();
 	}
 	lv_color_t progress_rest = lv_color_make(255, 255, 255);
-	lv_color_t playback = theme()->accent;
 	lv_color_t overflow = lv_color_make(150, 150, 150);
 	if (mono) {
 		progress_rest = theme_player_chrome_color(THEME_PLAYER_CHROME_PROGRESS_REST);
-		playback = theme_player_chrome_color(THEME_PLAYER_CHROME_PLAYBACK);
 		overflow = theme_player_chrome_color(THEME_PLAYER_CHROME_OVERFLOW);
 	} else if (theme_is_tokyo_night()) {
 		// The ellipsis takes the deck's muted grey-violet; the bar keeps the
@@ -3688,8 +3728,7 @@ static void player_refresh_theme(void) {
 	if (!layout_wave_now) {
 		lv_obj_set_style_bg_opa(progress_slider, mono ? LV_OPA_COVER : LV_OPA_30, LV_PART_MAIN);
 	}
-	lv_obj_set_style_bg_color(progress_slider, playback, LV_PART_INDICATOR);
-	lv_obj_set_style_bg_color(progress_slider, playback, LV_PART_KNOB);
+	paint_progress_tint(); // the theme's colour, or the sleeve's while the tint is on
 	set_over_cover(chrome_over_cover); // recolours the player chrome for the new palette
 	update_fav_button();
 	if (more_btn_icon) {
@@ -4828,6 +4867,23 @@ void player_layout_set(player_layout_t layout) {
 	device_state_t state;
 	device_state_get(&state);
 	update_layout(&state);
+}
+
+bool player_cover_tint_get(void) { return cover_tint; }
+
+void player_cover_tint_set(bool enabled) {
+	if (enabled == cover_tint) {
+		return;
+	}
+	cover_tint = enabled;
+	config_set_bool("screen", "player_cover_tint", enabled);
+	config_save();
+
+	// The sleeve's colour is already at hand for whatever is on screen, so
+	// the switch shows at once, in the middle of a track: no cover is decoded
+	// again and nothing is laid out again. The glyphs and the bar are simply
+	// repainted in the other colour -- the sleeve's, or back to the theme's.
+	paint_transport_tint();
 }
 
 void player_output_unplugged(const char *what) {
@@ -6184,7 +6240,9 @@ void player_init(gui_config_t *cfg) {
 	cover_set_backdrop_light(false);
 
 	// Whichever arrangement was left selected, now that every widget it moves
-	// exists.
+	// exists -- and whether the controls follow the sleeve's colour, which is
+	// off unless it was switched on.
+	cover_tint = config_get_bool("screen", "player_cover_tint", false);
 	int saved = (int)config_get_int("screen", "player_layout_alt", 0);
 	layout_choice = (saved == (int)PLAYER_LAYOUT_ALTERNATIVE)  ? PLAYER_LAYOUT_ALTERNATIVE
 						: (saved == (int)PLAYER_LAYOUT_STUDIO)	   ? PLAYER_LAYOUT_STUDIO

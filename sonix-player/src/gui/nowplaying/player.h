@@ -62,6 +62,16 @@ typedef enum {
 player_layout_t player_layout_get(void);
 void player_layout_set(player_layout_t layout);
 
+// Whether the play/pause glyph and the played part of the progress bar take
+// the playing sleeve's main colour instead of the theme's accent, in every
+// arrangement (the Waveform arrangement is drawn in that colour already).
+// Previous and next keep their own colour either way. Off by default; the
+// switch lives beside the layout pills in Music > Display options. Changing
+// it only repaints: the colour is the one already worked out from the
+// artwork on screen, so nothing is decoded and playback is untouched.
+bool player_cover_tint_get(void);
+void player_cover_tint_set(bool enabled);
+
 // The output the music was going to has just been unplugged -- a jack pulled
 // out, a USB-C DAC removed, headphones that walked out of range. Pauses, so
 // that taking the headphones off does not cost three tracks of an album, and
