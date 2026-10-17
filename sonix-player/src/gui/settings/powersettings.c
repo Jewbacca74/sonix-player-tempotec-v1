@@ -43,6 +43,7 @@ static lv_obj_t *led_on_switch, *led_off_switch, *led_off_card;
 static lv_obj_t *led_bright_value, *led_bright_slider;
 static lv_obj_t *led_trans_value, *led_trans_slider;
 static lv_obj_t *key_lock_switch;
+static lv_obj_t *hold_menu_switch;
 static lv_obj_t *standby_switch;
 static lv_obj_t *charge_note;
 static lv_obj_t *axp_limit_switch, *axp_current_switch; // the R1's two, instead of the slider
@@ -128,6 +129,10 @@ void powersettings_apply(void) {
 	led_set_transition_ms(LED_TRANSITION_MIN_MS + (led_transition_index() * LED_TRANSITION_STEP_MS));
 
 	input_set_key_lock(config_get_bool("power", "lock_keys_screen_off", false));
+
+	// What a held power key does: the menu with Power off and Reboot, or the
+	// power-off itself with nothing to confirm.
+	input_set_power_hold_menu(config_get_bool("power", "hold_power_menu", true));
 }
 
 static void refresh_labels(void) {
@@ -172,6 +177,7 @@ static void refresh_labels(void) {
 	}
 
 	set_checked(key_lock_switch, config_get_bool("power", "lock_keys_screen_off", false));
+	set_checked(hold_menu_switch, config_get_bool("power", "hold_power_menu", true));
 
 	if (config_get_bool("power", "standby_mem", true)) {
 		lv_obj_add_state(standby_switch, LV_STATE_CHECKED);
@@ -268,6 +274,16 @@ static void key_lock_toggled_cb(lv_event_t *e) {
 	refresh_labels();
 }
 
+// The button thread reads the option at the moment a hold reaches its
+// deadline, so this is in force from the next hold of the power key onwards.
+static void hold_menu_toggled_cb(lv_event_t *e) {
+	(void)e;
+	config_set_bool("power", "hold_power_menu", lv_obj_has_state(hold_menu_switch, LV_STATE_CHECKED));
+	config_save();
+	powersettings_apply();
+	refresh_labels();
+}
+
 static void auto_off_toggled_cb(lv_event_t *e) {
 	(void)e;
 	config_set_bool("power", "auto_off", lv_obj_has_state(auto_off_switch, LV_STATE_CHECKED));
@@ -337,6 +353,17 @@ void powersettings_init(gui_config_t *cfg) {
 	// No "turn Wi-Fi off in standby" entry: parking the radio is automatic, and
 	// wifi_in_use() in power.c knows on its own when not to turn it off --
 	// Qobuz, Tidal, podcasts, radio, AirPlay, DLNA, transfers.
+
+	// What a held power key does (system.c): the menu with its two slides, or
+	// the power-off itself. Next to the key lock because both are about the
+	// buttons rather than about the battery.
+	settingsrow_toggle(container, "power_hold_for_menu", &hold_menu_switch, hold_menu_toggled_cb);
+	lv_obj_t *hold_menu_note = lv_label_create(container);
+	lv_label_set_long_mode(hold_menu_note, LV_LABEL_LONG_WRAP);
+	lv_obj_set_width(hold_menu_note, lv_pct(100));
+	lv_obj_add_style(hold_menu_note, &theme_style_text_dim, 0);
+	lv_obj_set_style_text_font(hold_menu_note, &font_ui_22, 0);
+	lv_label_set_text(hold_menu_note, tr("power_hold_for_menu_note"));
 
 	// The lock gesture for the buttons on the case (system.c).
 	settingsrow_toggle(container, "power_lock_keys_screen_off", &key_lock_switch, key_lock_toggled_cb);

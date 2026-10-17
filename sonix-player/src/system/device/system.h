@@ -111,6 +111,15 @@ void storage_release_for_shutdown(void);
 // until set.
 void input_set_key_lock(bool on);
 
+// "Hold power for the menu": with it on -- the default -- holding the power key
+// brings up the power menu, and switching off or rebooting takes a slide to
+// confirm on the screen. With it off the same hold switches the player off
+// where it stands, no menu and nothing to confirm, which is what a player kept
+// in a pocket wants: one gesture, and the hand holding it knows the music has
+// stopped without looking. Reboot is then only reachable with the option back
+// on, the menu being the one place the interface offers it.
+void input_set_power_hold_menu(bool on);
+
 #ifdef HOST_BUILD
 // Feeds one key press or release to the button thread, as if it had come off
 // an evdev node. `code` is a KEY_* from linux/input.h.
