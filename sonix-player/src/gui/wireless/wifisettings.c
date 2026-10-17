@@ -74,6 +74,17 @@ static char pending_ssid[WIFI_SSID_MAX];
 static lv_obj_t *password_eye_btn;
 static lv_obj_t *password_eye_icon;
 
+// The "Add hidden network" row at the foot of the list, and the manual-entry
+// page it opens: a hidden network has no name in the air to tap, so the name
+// -- and, there being no scan entry to learn it from, whether it wants a
+// passphrase at all -- has to be typed. Built once, like the passphrase page.
+static lv_obj_t *add_hidden_row;
+static lv_obj_t *manual_screen;
+static lv_obj_t *manual_ssid_field;
+static lv_obj_t *manual_password_field;
+static lv_obj_t *manual_eye_icon;
+static keyboard_t *manual_keyboard;
+
 // The icon shows what the next tap WILL DO: with the password hidden it is the
 // open eye ("show it"), with the password in clear the crossed-out eye ("hide
 // it again").
@@ -254,15 +265,15 @@ static void ask_for_password(const char *ssid) {
 static void show_row_menu(lv_obj_t *anchor, bool current) {
 	if (current) {
 		static const popover_item_t items[] = {
-			{"details", details_action, NULL},
-			{"disconnect", disconnect_action, NULL},
-			{"wifi_forget_network", forget_action, NULL},
+			{"details", details_action, NULL, false},
+			{"disconnect", disconnect_action, NULL, false},
+			{"wifi_forget_network", forget_action, NULL, false},
 		};
 		popover_show(anchor, items, 3);
 	} else {
 		static const popover_item_t items[] = {
-			{"connect", connect_action, NULL},
-			{"wifi_forget_network", forget_action, NULL},
+			{"connect", connect_action, NULL, false},
+			{"wifi_forget_network", forget_action, NULL, false},
 		};
 		popover_show(anchor, items, 2);
 	}
@@ -469,10 +480,20 @@ static void rebuild_list(void) {
 		lv_obj_set_hidden(current_list, true);
 		lv_obj_set_hidden(section_label, true);
 		lv_obj_set_hidden(list, true);
+		if (add_hidden_row) {
+			lv_obj_set_hidden(add_hidden_row, true);
+		}
 		return;
 	}
 	lv_obj_set_hidden(section_label, false);
 	lv_obj_set_hidden(list, false);
+	if (add_hidden_row) {
+		// Not part of the rebuilt list on purpose: it has to stay put while a
+		// sweep replaces the rows above it, and it is the one entry that is
+		// there even when the sweep found nothing -- which, for the network
+		// it exists for, is always.
+		lv_obj_set_hidden(add_hidden_row, false);
+	}
 
 	wifi_network_t networks[WIFI_MAX_NETWORKS];
 	int count = wifi_get_networks(networks, WIFI_MAX_NETWORKS);
@@ -786,6 +807,153 @@ static void build_password_page(gui_config_t *cfg) {
 }
 
 // ---------------------------------------------------------------------------
+// the manual-entry page, for hidden networks
+// ---------------------------------------------------------------------------
+//
+// The same two-field shape as the sign-in pages: the keyboard writes into
+// whichever field was touched last, and only that one shows a caret.
+
+static void manual_eye_refresh(void) {
+	if (!manual_eye_icon || !manual_password_field) {
+		return;
+	}
+	bool hidden = lv_textarea_get_password_mode(manual_password_field);
+	lv_image_set_src(manual_eye_icon, hidden ? &icon_eye : &icon_eye_off);
+	keyboard_refresh_password(manual_password_field);
+}
+
+static void manual_eye_cb(lv_event_t *e) {
+	(void)e;
+	bool hidden = lv_textarea_get_password_mode(manual_password_field);
+	lv_textarea_set_password_mode(manual_password_field, !hidden);
+	manual_eye_refresh();
+}
+
+static void manual_focus_field(lv_obj_t *field) {
+	lv_obj_t *other = field == manual_ssid_field ? manual_password_field : manual_ssid_field;
+	keyboard_set_field(manual_keyboard, field);
+	lv_obj_add_state(field, LV_STATE_FOCUSED);
+	lv_obj_remove_state(other, LV_STATE_FOCUSED);
+	// LVGL blinks every textarea's caret from creation, so two fields would
+	// blink together and neither would say where the typing is going.
+	keyboard_show_caret(field, true);
+	keyboard_show_caret(other, false);
+}
+
+static void manual_field_focus_cb(lv_event_t *e) { manual_focus_field(lv_event_get_target(e)); }
+
+static void manual_accept_cb(lv_event_t *e) {
+	(void)e;
+	const char *ssid = lv_textarea_get_text(manual_ssid_field);
+	if (!ssid || !ssid[0]) {
+		// The one thing this page cannot guess, and the only field it insists
+		// on: the password may be blank (an open network), the name may not.
+		toast_error("wifi_enter_network_name");
+		manual_focus_field(manual_ssid_field);
+		return;
+	}
+	// Copied into the connect job before this returns, so the fields can be
+	// cleared straight away -- the passphrase, above all, should not sit in
+	// a field nobody is looking at any more.
+	wifi_connect_hidden(ssid, lv_textarea_get_text(manual_password_field));
+	lv_textarea_set_text(manual_password_field, "");
+	switch_screen(wifisettings_screen);
+}
+
+// The row at the foot of the list. Every visit starts empty: a name left over
+// from the last network joined here would invite a tap on "ok" that joins it
+// again, and its passphrase would still be sitting in the second field.
+static void add_hidden_clicked_cb(lv_event_t *e) {
+	(void)e;
+	if (switcher_back_drag_active()) {
+		return; // a swipe across the row, not a tap on it
+	}
+	lv_textarea_set_text(manual_ssid_field, "");
+	lv_textarea_set_text(manual_password_field, "");
+	lv_textarea_set_password_mode(manual_password_field, true);
+	manual_eye_refresh();
+	keyboard_reset(manual_keyboard);
+	keyboard_set_visible(manual_keyboard, true);
+	manual_focus_field(manual_ssid_field);
+	switch_screen(manual_screen);
+}
+
+static lv_obj_t *make_manual_field(gui_config_t *cfg, const char *placeholder, int y) {
+	bool compact = cfg->screen_width < 320;
+	lv_obj_t *field = lv_textarea_create(manual_screen);
+	lv_textarea_set_one_line(field, true);
+	lv_textarea_set_placeholder_text(field, tr(placeholder));
+	lv_obj_set_size(field, cfg->screen_width - 2 * cfg->padding, compact ? 44 : 62);
+	lv_obj_set_scrollbar_mode(field, LV_SCROLLBAR_MODE_OFF);
+	lv_obj_align(field, LV_ALIGN_TOP_LEFT, cfg->padding, y);
+	lv_obj_add_style(field, &theme_style_card, 0);
+	lv_obj_set_style_radius(field, 12, 0);
+	lv_obj_set_style_border_width(field, 0, 0);
+	lv_obj_set_style_shadow_width(field, 0, 0);
+	lv_obj_set_style_pad_all(field, compact ? 8 : 14, 0);
+	lv_obj_set_style_text_font(field, &font_ui_24, 0);
+	keyboard_style_caret(field);
+	lv_obj_add_event_cb(field, manual_field_focus_cb, LV_EVENT_CLICKED, NULL);
+	return field;
+}
+
+static void build_manual_page(gui_config_t *cfg) {
+	bool compact = cfg->screen_width < 320;
+	manual_screen = lv_obj_create(NULL);
+	lv_obj_add_style(manual_screen, &theme_style_screen, 0);
+
+	// A shorter heading than the row that leads here, and the whole width to
+	// hold it: this page has no corner buttons for it to make room for.
+	lv_obj_t *manual_title = settingsrow_title(manual_screen, cfg, "wifi_hidden_network");
+	settingsrow_title_corner_slots(manual_title, cfg, 0);
+
+	int top = settingsrow_content_top(cfg);
+	int pitch = compact ? 50 : 78;
+
+	manual_ssid_field = make_manual_field(cfg, "wifi_network_name", top);
+	manual_password_field = make_manual_field(cfg, "password", top + pitch);
+
+	// As on the passphrase page: bullets from the first keystroke, and the
+	// eye over the field's right edge to read the whole of it back.
+	keyboard_style_password(manual_password_field, PASSWORD_SHOW_MS);
+	lv_obj_set_style_pad_right(manual_password_field, 60, 0);
+
+	lv_obj_t *eye = lv_btn_create(manual_screen);
+	int eye_size = compact ? 44 : 56;
+	lv_obj_set_size(eye, eye_size, eye_size);
+	lv_obj_align(eye, LV_ALIGN_TOP_RIGHT, -cfg->padding, top + pitch);
+	lv_obj_set_style_bg_opa(eye, LV_OPA_TRANSP, 0);
+	lv_obj_set_style_shadow_width(eye, 0, 0);
+	lv_obj_set_style_border_width(eye, 0, 0);
+	lv_obj_set_style_pad_all(eye, 0, 0);
+	lv_obj_add_event_cb(eye, manual_eye_cb, LV_EVENT_CLICKED, NULL);
+
+	manual_eye_icon = lv_image_create(eye);
+	lv_obj_add_style(manual_eye_icon, &theme_style_icon, 0);
+	lv_obj_set_style_image_opa(manual_eye_icon, LV_OPA_70, 0);
+	lv_obj_center(manual_eye_icon);
+	manual_eye_refresh();
+
+	// What makes this page different from the list, in one line. The compact
+	// panel has no room for it between the fields and the keyboard, and the
+	// behaviour it describes -- type the name, the password may be blank --
+	// is the behaviour of every page shaped like this one.
+	lv_obj_t *note = lv_label_create(manual_screen);
+	lv_label_set_long_mode(note, LV_LABEL_LONG_WRAP);
+	lv_obj_set_width(note, cfg->screen_width - 2 * cfg->padding);
+	lv_obj_align(note, LV_ALIGN_TOP_LEFT, cfg->padding, top + 2 * pitch + 8);
+	lv_obj_add_style(note, &theme_style_text_dim, 0);
+	lv_obj_set_style_text_font(note, &font_ui_18, 0);
+	lv_label_set_text(note, tr("wifi_hidden_network_note"));
+	lv_obj_set_hidden(note, compact);
+
+	manual_keyboard = keyboard_create(manual_screen, cfg->screen_width, compact ? 144 : 316, manual_ssid_field, NULL,
+									  "ok", manual_accept_cb, NULL);
+
+	switcher_attach_back_gesture(manual_screen);
+}
+
+// ---------------------------------------------------------------------------
 // the details page
 // ---------------------------------------------------------------------------
 
@@ -857,12 +1025,17 @@ void wifisettings_init(gui_config_t *cfg) {
 	section_label = make_heading(container, "wifi_available_networks");
 	list = make_rows(container);
 
+	// Under the list rather than in it, so a sweep rebuilding the rows cannot
+	// take it away: the network it is for will not be found by any sweep.
+	add_hidden_row = settingsrow_add(container, "wifi_add_hidden_network", NULL, add_hidden_clicked_cb, NULL);
+
 	scan_btn = corner_button(wifisettings_screen, cfg, &icon_wifi_search, &scan_icon);
 	lv_obj_add_event_cb(scan_btn, scan_clicked_cb, LV_EVENT_CLICKED, NULL);
 	lv_obj_add_state(scan_btn, LV_STATE_DISABLED); // until the radio answers
 	lv_obj_set_style_image_opa(scan_icon, LV_OPA_20, 0);
 
 	build_password_page(cfg);
+	build_manual_page(cfg);
 	build_details_page(cfg);
 
 	poll_timer = lv_timer_create(poll_cb, WIFI_PAGE_POLL_MS, NULL);

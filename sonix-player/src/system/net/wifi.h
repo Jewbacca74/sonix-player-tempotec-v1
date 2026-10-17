@@ -124,6 +124,18 @@ int wifi_get_networks(wifi_network_t *out, int max);
 // network wpa_supplicant already knows is re-selected rather than added again.
 void wifi_connect(const char *ssid, const char *psk);
 
+// Joins a network that does not broadcast its name. Such a network never
+// appears in the scan list -- there is no name to show or tap -- so the user
+// types the name by hand (see the Wi-Fi page's "Add hidden network"). The
+// difference from wifi_connect() is wpa_supplicant's scan_ssid: with it set,
+// the supplicant sends a directed probe for this name and will match the
+// access point that answers without ever broadcasting it. It is saved with
+// the network, so re-selecting it later (and the supplicant's own retries)
+// keeps finding it; a plain wifi_connect() on the saved entry is enough from
+// then on. `psk` follows the same rule as above: NULL or empty joins it as
+// an open network.
+void wifi_connect_hidden(const char *ssid, const char *psk);
+
 // Leaves the current network without forgetting it.
 void wifi_disconnect(void);
 

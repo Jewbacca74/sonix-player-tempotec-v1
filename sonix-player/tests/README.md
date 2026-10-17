@@ -42,6 +42,22 @@ the sound is leaving over the USB-C port. The three routing answers (Bluetooth,
 a card on the port, that card's volume control) are stubbed; the curve, the
 coefficients and the scaling are the real ones.
 
+## Wi-Fi hidden networks
+
+`make -C sonix-player/tests wifi` checks the one command that makes a hidden
+network joinable. It links the real `wifi.c` and drives it against a fake
+`wpa_cli` shell script placed first on `PATH` (the worker reaches it through
+`execvp`, exactly as on the device): joining a hidden network has to write
+`set_network <id> scan_ssid 1` -- before the passphrase, before the network is
+selected -- for a network created on the spot and for one wpa_supplicant
+already knows, and never for an ordinary visible network. A passphrase too
+short to store has to be refused as a wrong passphrase without the supplicant
+being told anything. The config store, sys_server and the power/clock helpers
+are stubbed; `tests/stubs/` carries the two LVGL typedefs `power.h` needs so
+this stays a plain-C suite. The Wi-Fi page itself -- the "Add hidden network"
+row and the manual-entry page behind it -- is covered by `test_wifi_pages`
+in the headless UI suite below.
+
 ## Real codec integration
 
 Install the normal host development libraries (Debian/Ubuntu example):
