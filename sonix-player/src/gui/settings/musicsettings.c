@@ -1596,6 +1596,7 @@ static lv_obj_t *layout_standard_pill;
 static lv_obj_t *layout_alternative_pill;
 static lv_obj_t *layout_studio_pill;
 static lv_obj_t *layout_immersive_pill;
+static lv_obj_t *layout_poster_pill;
 
 static void layout_refresh(void) {
 	if (!layout_standard_pill) {
@@ -1606,6 +1607,7 @@ static void layout_refresh(void) {
 	settingsrow_pill_active(layout_alternative_pill, chosen == PLAYER_LAYOUT_ALTERNATIVE);
 	settingsrow_pill_active(layout_studio_pill, chosen == PLAYER_LAYOUT_STUDIO);
 	settingsrow_pill_active(layout_immersive_pill, chosen == PLAYER_LAYOUT_IMMERSIVE);
+	settingsrow_pill_active(layout_poster_pill, chosen == PLAYER_LAYOUT_POSTER);
 }
 
 static void layout_pick_cb(lv_event_t *e) {
@@ -1712,6 +1714,8 @@ static void build_display_page(gui_config_t *cfg) {
 		settingsrow_pill(layout_pills, "musicsettings_layout_studio", PLAYER_LAYOUT_STUDIO, layout_pick_cb);
 	layout_immersive_pill =
 		settingsrow_pill(layout_pills, "musicsettings_layout_immersive", PLAYER_LAYOUT_IMMERSIVE, layout_pick_cb);
+	layout_poster_pill =
+		settingsrow_pill(layout_pills, "musicsettings_layout_poster", PLAYER_LAYOUT_POSTER, layout_pick_cb);
 
 	layout_refresh();
 	theme_register_refresh(layout_refresh);

@@ -269,10 +269,10 @@ static int sleeve_radius;
 // its colour from the sleeve rather than from the theme, which is why it only
 // looks like anything at all over artwork.
 //
-// Studio and Immersive each have a section of their own below, beside the one
-// set of widgets every arrangement shares, and each is put up and taken down by
-// a pair of functions named after it (studio_put/take_back, the same for
-// Immersive) from apply_layout().
+// Studio, Immersive and Poster each have a section of their own below, beside
+// the one set of widgets every arrangement shares, and each is put up and taken
+// down by a pair of functions named after it (studio_put/take_back, the same
+// for Immersive and for Poster) from apply_layout().
 //
 // One set of widgets, moved between parents, and not four pages: the title, the
 // star and the transport all have behaviour behind them, and a second copy of
@@ -339,6 +339,7 @@ static player_layout_t layout_choice; // the setting, saved in the config
 static bool layout_alt_now;		// and whether the current source can use it
 static bool layout_studio_now;	// likewise for the third arrangement
 static bool layout_immersive_now; // and for the fourth: the sleeve from edge to edge
+static bool layout_poster_now;  // and for the fifth: the sleeve at the width of the screen, the deck on its own ground
 // The shape of the track and the sleeve's colour: up with the alternative
 // layout, and kept when the words are shown over it.
 static bool layout_wave_now;
@@ -393,6 +394,13 @@ static lv_style_t compact_clear_style; // the two surfaces the full blur shows t
 // which of the two the picture on hand was asked for at.
 static bool cover_shape_immersive;
 
+// Poster draws the sleeve at the width of the screen rather than at the
+// smaller square the compact panel floats, so the picture on hand is the wrong
+// size the moment the setting changes, the same way it is the wrong shape
+// going in or out of Immersive. `cover_shape_poster` says whether the picture
+// on hand was asked for at that width.
+static bool cover_shape_poster;
+
 // Immersive asks for the blurred copy as the FOOT of the photograph, at the
 // size of the deck, rather than as the whole screen: it stands over the part
 // of the picture it frosts, so the artwork stays there to be seen through it
@@ -400,7 +408,11 @@ static bool cover_shape_immersive;
 // shape the picture on hand was made at, as the two above are.
 static bool backdrop_is_band;
 
-static bool backdrop_fills_screen(void) { return layout_studio_now || backdrop_full; }
+// Poster keeps the deck on its own opaque ground rather than showing the
+// blurred sleeve through it, so on this board the screen-sized blur is not
+// wanted while Poster is in force: the sleeve itself covers everything above
+// the deck, and the deck covers the rest.
+static bool backdrop_fills_screen(void) { return layout_studio_now || (backdrop_full && !layout_poster_now); }
 
 static double current_total_length = 0; // cached from the last device_state snapshot, so slider math works between polls
 static char progress_label_text[32];
@@ -1006,6 +1018,12 @@ static void cover_show(bool have_cover) {
 static void set_over_cover(bool on) {
 	chrome_over_cover = on;
 
+	// Poster's deck stands on its own opaque ground rather than on the blurred
+	// sleeve, so the chrome on it keeps the theme's colours whatever is
+	// playing; the chevron still parks over the artwork, which reaches the top
+	// of the screen in that arrangement.
+	bool over = on && !layout_poster_now;
+
 	// Amber on Black and OLED: the deck's own role colours, over artwork or not.
 	bool mono = theme_is_monochrome();
 	bool tokyo = theme_is_tokyo_night();
@@ -1024,7 +1042,7 @@ static void set_over_cover(bool on) {
 			// The track name keeps the deck's violet over artwork and over the
 			// plain page alike; the two clocks beside it stay light.
 			lv_obj_set_style_text_color(text_objs[i], theme_player_chrome_color(THEME_PLAYER_CHROME_PRIMARY), 0);
-		} else if (on) {
+		} else if (over) {
 			lv_obj_set_style_text_color(text_objs[i], lv_color_white(), 0);
 		} else {
 			lv_obj_remove_local_style_prop(text_objs[i], LV_STYLE_TEXT_COLOR, 0);
@@ -1041,7 +1059,7 @@ static void set_over_cover(bool on) {
 			lv_obj_set_style_text_color(dim_objs[i], theme_semantic_color(THEME_SEMANTIC_CYAN), 0);
 		} else if (tokyo && dim_objs[i] == format_label) {
 			lv_obj_set_style_text_color(dim_objs[i], theme_player_chrome_color(THEME_PLAYER_CHROME_SECONDARY), 0);
-		} else if (on) {
+		} else if (over) {
 			lv_obj_set_style_text_color(dim_objs[i], lv_color_make(200, 200, 200), 0);
 		} else {
 			lv_obj_remove_local_style_prop(dim_objs[i], LV_STYLE_TEXT_COLOR, 0);
@@ -1060,7 +1078,7 @@ static void set_over_cover(bool on) {
 			// behind them: the blurred backdrop is dark in either case.
 			lv_obj_set_style_image_recolor(icon_objs[i], theme_semantic_color(THEME_SEMANTIC_CYAN), 0);
 			lv_obj_set_style_image_recolor_opa(icon_objs[i], LV_OPA_COVER, 0);
-		} else if (on) {
+		} else if (over) {
 			lv_obj_set_style_image_recolor(icon_objs[i], lv_color_white(), 0);
 			lv_obj_set_style_image_recolor_opa(icon_objs[i], LV_OPA_COVER, 0);
 		} else if (theme_uses_function_glyphs()) {
@@ -1867,6 +1885,12 @@ static void lyrics_look(bool on) {
 		// than beside them.
 		if (layout_immersive_now) {
 			immersive_deck_clear();
+		}
+		// And Poster's: the removing above took the deck's opacity with the
+		// words' own, and Poster's ground is opaque whether the words are up
+		// or not.
+		if (layout_poster_now) {
+			lv_obj_set_style_bg_opa(player_menu, LV_OPA_COVER, 0);
 		}
 	}
 	lyrics_look_on = on;
@@ -2755,6 +2779,7 @@ static void studio_put(void) {
 // copying behaviour.
 static void player_apply_geometry(bool force);
 static void placeholder_place(void);
+static void placeholder_rescale(void);
 
 // The controls' block, made clear. On this board it always is; on the others it
 // carries the panel's fill, and a picture is behind it here rather than beside
@@ -2881,22 +2906,100 @@ static bool immersive_take_back(void) {
 	return true;
 }
 
+// ---------------------------------------------------------------------------
+// Poster: the sleeve at the width of the screen, the deck on its own ground
+//
+// The sleeve is scaled to the width of the screen and held at its top, with
+// square corners and no inset: the whole picture from side to side, nothing
+// cropped off its sides and nothing stretched -- which is the difference from
+// Immersive, where the photograph fills the screen and, the screen not being
+// square, takes its crop from the two sides. What Poster cannot show is the
+// part of the picture below the top of the deck: the deck stands in front of
+// the sleeve rather than over it, on its own opaque ground, so the foot of the
+// sleeve is behind the deck and not cut out of the picture. The split of the
+// panel is the standard one's (compact_deck_height), so what stands above the
+// deck is as much of the sleeve as the deck leaves room for, at the largest
+// size the screen allows.
+// ---------------------------------------------------------------------------
+
+static bool poster_up;
+static int poster_saved_art_h; // the sleeve's height before Poster moved it, see poster_take_back()
+
+static void poster_put(void) {
+	if (!cover_art_group || !cover_panel) {
+		return;
+	}
+	if (!poster_up) {
+		poster_saved_art_h = cover_art_h;
+	}
+	poster_up = true;
+
+	// The sleeve at the width of the screen, and square: the picture was
+	// asked for at exactly that size (reload_cover), so it is drawn one
+	// pixel to one. Held at the top of the panel; what the deck leaves no
+	// room for falls under the panel's own clip.
+	cover_art_w = cover_box_w;
+	cover_art_h = cover_box_w;
+	lv_obj_set_size(cover_art_group, cover_art_w, cover_art_h);
+	lv_obj_align(cover_art_group, LV_ALIGN_TOP_MID, 0, 0);
+	// Square corners: rounded ones would leave four arcs of the panel's
+	// colour inside the edges the picture is meant to reach.
+	lv_obj_set_style_radius(cover_art_group, 0, 0);
+	lv_obj_set_style_radius(cover_img, 0, 0);
+
+	// The deck stands on the page's own panel colour rather than on the
+	// blurred sleeve: opaque ground, not glass. A local property, over both
+	// the theme's panel style and the clear style this board's deck wears.
+	if (player_menu) {
+		lv_obj_set_style_bg_opa(player_menu, LV_OPA_COVER, 0);
+	}
+
+	placeholder_rescale();
+	cover_show(current_cover.pixels != NULL);
+	lyrics_layout(); // the words' page is measured against this one
+}
+
+// Gives back the frame, the corners and the deck's ground as every other
+// arrangement keeps them. Returns true when it was the arrangement in force,
+// which is what the geometry has to be told: the sleeve is not the square it
+// hands out any more, and its own answer only changes when the deck does.
+static bool poster_take_back(void) {
+	if (!poster_up) {
+		return false;
+	}
+	poster_up = false;
+
+	lv_obj_set_style_radius(cover_art_group, sleeve_radius, 0);
+	lv_obj_set_style_radius(cover_img, sleeve_radius, 0);
+	if (cover_art_h != poster_saved_art_h) {
+		cover_art_h = poster_saved_art_h;
+		lv_obj_set_size(cover_art_group, cover_art_w, cover_art_h);
+	}
+	if (player_menu) {
+		lv_obj_remove_local_style_prop(player_menu, LV_STYLE_BG_OPA, 0);
+	}
+	placeholder_rescale();
+	cover_show(current_cover.pixels != NULL);
+	return true;
+}
+
 static void apply_layout(void) {
 	if (!alt_title_pill || !song_text_obj) {
 		return;
 	}
 
-	// Always first: the two arrangements below know nothing about Studio or
-	// Immersive, so they have to find the ellipsis and the star where those
-	// two left them, and the sleeve the shape they gave it.
+	// Always first: the arrangements below know nothing about Studio, Immersive
+	// or Poster, so they have to find the ellipsis and the star where those
+	// left them, and the sleeve the shape they gave it.
 	studio_take_back();
 	bool was_immersive = immersive_take_back();
+	bool was_poster = poster_take_back();
 
 	// The panel split follows the arrangement (the alternative one leaves the
 	// names on the sleeve, so its deck is shorter and the sleeve taller).
 	// Before the pill room is worked out below, which is measured from the
 	// sleeve.
-	player_apply_geometry(was_immersive);
+	player_apply_geometry(was_immersive || was_poster);
 
 	if (layout_alt_now) {
 		// A pill each, and not one pill with two lines in it: the title and the
@@ -3000,8 +3103,16 @@ static void apply_layout(void) {
 	} else if (layout_studio_now) {
 		studio_put(); // likewise, through studio_place()
 	} else {
+		if (layout_poster_now) {
+			poster_put(); // which places the words' page with it
+		}
 		lyrics_layout();
-		full_backdrop_apply(); // studio_take_back() took the V1's blur down with Studio's
+		// studio_take_back() took the V1's blur down with Studio's, and Poster
+		// wants it down as well: its deck is opaque ground and the sleeve
+		// covers everything above it. What is on hand is settled by the reload
+		// a change of arrangement triggers; until it lands, the deck's own
+		// opacity hides the blur behind it.
+		full_backdrop_apply();
 	}
 	align_title_with_star(); // the title may have just left its row, or come back to it
 
@@ -3026,15 +3137,17 @@ static void update_layout(const device_state_t *state) {
 	bool lyrics = lyrics_wanted && local;
 	bool studio = layout_choice == PLAYER_LAYOUT_STUDIO;
 	bool immersive = layout_choice == PLAYER_LAYOUT_IMMERSIVE;
+	bool poster = layout_choice == PLAYER_LAYOUT_POSTER;
 	bool wave = layout_choice == PLAYER_LAYOUT_ALTERNATIVE && local;
 	bool alt = wave;
 
-	if (studio == layout_studio_now && immersive == layout_immersive_now && alt == layout_alt_now &&
-		wave == layout_wave_now && lyrics == lyrics_allowed && alt_title_pill) {
+	if (studio == layout_studio_now && immersive == layout_immersive_now && poster == layout_poster_now &&
+		alt == layout_alt_now && wave == layout_wave_now && lyrics == lyrics_allowed && alt_title_pill) {
 		return;
 	}
 	layout_studio_now = studio;
 	layout_immersive_now = immersive;
+	layout_poster_now = poster;
 	layout_alt_now = alt;
 	layout_wave_now = wave;
 	lyrics_allowed = lyrics;
@@ -3051,10 +3164,11 @@ static void update_layout(const device_state_t *state) {
 
 	// The blurred copy is made at the shape of whatever shows it, and the
 	// sleeve at the size the arrangement draws it, so moving in or out of
-	// Studio or Immersive means the ones on hand are the wrong shape and the
-	// picture is asked for again. Only on a change of arrangement, which is a
-	// setting the user has just touched.
-	if ((studio != backdrop_is_studio || immersive != cover_shape_immersive) && cover_shown_path[0]) {
+	// Studio, Immersive or Poster means the ones on hand are the wrong shape
+	// and the picture is asked for again. Only on a change of arrangement,
+	// which is a setting the user has just touched.
+	if ((studio != backdrop_is_studio || immersive != cover_shape_immersive || poster != cover_shape_poster) &&
+		cover_shown_path[0]) {
 		reload_cover(cover_shown_path);
 	}
 }
@@ -3265,6 +3379,7 @@ static void reload_cover(const char *filepath) {
 		backdrop_is_band = layout_immersive_now;
 		backdrop_is_full = backdrop_fills_screen() && !backdrop_is_band;
 		cover_shape_immersive = layout_immersive_now;
+		cover_shape_poster = layout_poster_now;
 		// The band faces the way the picture does, like every blur that is
 		// looked at rather than looked through, and it is cut from the foot of
 		// the photograph -- the part of it the deck stands over.
@@ -3280,7 +3395,10 @@ static void reload_cover(const char *filepath) {
 		// being spent again and again on an answer that never changes. In
 		// Immersive the box IS the screen -- immersive_put() has already put
 		// the panel at that shape -- so the picture comes back cropped to fill
-		// it and is drawn at one pixel to one.
+		// it and is drawn at one pixel to one. In Poster the box is the square
+		// of the screen's width -- poster_put() has already put the frame at
+		// that size -- so the whole picture comes back and is drawn at one
+		// pixel to one, held at the top of the panel.
 		int cover_w = backdrop_is_studio ? studio_cover_geometry(NULL) : cover_art_w;
 		int cover_h = backdrop_is_studio ? cover_w : cover_art_h;
 		coverloader_request_player(filepath, cover_w, cover_h, backdrop_w,
@@ -5057,9 +5175,11 @@ static int compact_sleeve_side(void) {
 	return side & ~1;
 }
 
-// Both arrangements keep the sleeve centred side to side.
+// Both arrangements keep the sleeve centred side to side. Poster keeps it at
+// the top of the panel instead: the sleeve reaches the bezel there, and the
+// deck stands in front of its foot.
 static void compact_place_sleeve(void) {
-	lv_obj_align(cover_art_group, LV_ALIGN_TOP_MID, 0, compact_sleeve_top());
+	lv_obj_align(cover_art_group, LV_ALIGN_TOP_MID, 0, layout_poster_now ? 0 : compact_sleeve_top());
 }
 
 // The height of the V1's deck for the arrangement on show: its rows at the
@@ -5146,6 +5266,11 @@ static void placeholder_place(void) {
 		// so the middle of the picture is under them: what the mark is centred
 		// in is the part of it that is left.
 		dy = -menu_height / 2;
+	} else if (layout_poster_now) {
+		// The sleeve is the panel's own width held at its top, so what can be
+		// seen of it is the panel's own rectangle: the mark centres in that,
+		// which is where the align already puts it.
+		dy = 0;
 	} else if (bp_is_tempotec_v1()) {
 		dy = compact_sleeve_top() + cover_art_h / 2 - cover_box_h / 2;
 	}
@@ -5179,6 +5304,12 @@ static void player_apply_geometry(bool force) {
 	cover_box_h = want_cover;
 
 	int side = compact_sleeve_side();
+	if (layout_poster_now) {
+		// The sleeve is the whole width of the screen and stays square: the
+		// deck then stands in front of the foot of the picture rather than
+		// beside a smaller square of it.
+		side = cover_box_w;
+	}
 	cover_art_w = side;
 	cover_art_h = side;
 	backdrop_h = menu_height;
@@ -5970,14 +6101,16 @@ void player_init(gui_config_t *cfg) {
 	// exists.
 	int saved = (int)config_get_int("screen", "player_layout_alt", 0);
 	layout_choice = (saved == (int)PLAYER_LAYOUT_ALTERNATIVE)  ? PLAYER_LAYOUT_ALTERNATIVE
-					: (saved == (int)PLAYER_LAYOUT_STUDIO)	   ? PLAYER_LAYOUT_STUDIO
-					: (saved == (int)PLAYER_LAYOUT_IMMERSIVE) ? PLAYER_LAYOUT_IMMERSIVE
-															  : PLAYER_LAYOUT_STANDARD;
-	// apply_layout() below puts the standard one up first: none of the three
+						: (saved == (int)PLAYER_LAYOUT_STUDIO)	   ? PLAYER_LAYOUT_STUDIO
+						: (saved == (int)PLAYER_LAYOUT_IMMERSIVE) ? PLAYER_LAYOUT_IMMERSIVE
+						: (saved == (int)PLAYER_LAYOUT_POSTER)	   ? PLAYER_LAYOUT_POSTER
+																  : PLAYER_LAYOUT_STANDARD;
+	// apply_layout() below puts the standard one up first: none of the four
 	// others is in force until it says so.
 	layout_alt_now = false;
 	layout_studio_now = false;
 	layout_immersive_now = false;
+	layout_poster_now = false;
 	apply_layout();
 
 	theme_register_refresh(player_refresh_theme);

@@ -116,6 +116,25 @@ frosts on one screen would be one too many. With no artwork the band stays down
 and the page is its own colour with the theme's ink, exactly as the standard
 arrangement draws it.
 
+The fifth arrangement, **Poster**, is the sleeve at the width of the screen
+with the deck on its own ground below it: the picture is asked for at the
+square of the panel's width and drawn one pixel to one, held at the top of the
+panel with square corners and no inset, so it reaches the bezel on three sides
+and nothing is cropped off its own sides and nothing is stretched -- which is
+the difference from Immersive, where the photograph fills the screen and, the
+screen not being square, takes its crop from the two sides. What the deck
+leaves no room for is not in the picture either: the deck stands in front of
+the sleeve's foot on the theme's own opaque panel colour rather than on the
+blurred copy or on a frost, so the page reads as two grounds, the photograph
+above and the controls below, with the one edge between them at the top of the
+deck. The split of the panel is the standard arrangement's own
+(`compact_deck_height()`), so the sleeve is as large as the deck allows and no
+larger; the chrome on the deck keeps the theme's colours while the chevron and
+the source marks take their chance in white over the sharp part, as they do
+over every sleeve in the player. Without artwork the empty sleeve is the
+cover's own colour from edge to edge, and the blurred copy stays down: the
+deck no longer shows it through, and the sleeve covers everything above it.
+
 The **screensaver** follows the same split. Dark and Light keep the arrangement
 they have always had: the artwork stops where the blurred strip begins, and the
 title, the artist and the time are read on the player's own blurred copy in

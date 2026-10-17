@@ -44,18 +44,19 @@ bool player_queue_position(int *position, int *count);
 // keep the values they have always had.
 //
 // Which one is actually in force also depends on what is playing: see the note
-// on layout_alternative in player.c. Waveform is for a file on the card; Studio
-// and Immersive take whatever is playing, a station included.
+// on layout_alternative in player.c. Waveform is for a file on the card; Studio,
+// Immersive and Poster take whatever is playing, a station included.
 //
 // The names below are the ones the code has always used; the pills say
-// Normale, Waveform, Alternativo and Immersiva. ALTERNATIVE is the one the pill
-// calls Waveform, and STUDIO the one it calls Alternativo.
+// Normale, Waveform, Alternativo, Immersiva and Poster. ALTERNATIVE is the one
+// the pill calls Waveform, and STUDIO the one it calls Alternativo.
 // ---------------------------------------------------------------------------
 typedef enum {
 	PLAYER_LAYOUT_STANDARD = 0,
 	PLAYER_LAYOUT_ALTERNATIVE = 1,
 	PLAYER_LAYOUT_STUDIO = 2,
 	PLAYER_LAYOUT_IMMERSIVE = 3, // the sleeve from edge to edge, the controls on a fade over it
+	PLAYER_LAYOUT_POSTER = 4,	 // the sleeve at the width of the screen, whole from side to side, the deck below it
 } player_layout_t;
 
 player_layout_t player_layout_get(void);
