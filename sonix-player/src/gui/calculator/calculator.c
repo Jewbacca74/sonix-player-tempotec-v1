@@ -55,6 +55,24 @@ static const calc_key_t KEYS[CALC_KEYS] = {
 static calc_model_t model = {.shown = "0"};
 
 static lv_obj_t *display_label;
+static lv_obj_t *operation_label;
+
+static const char *operation_symbol(char op) {
+	switch (op) {
+	case '+': return "+";
+	case '-': return "\xE2\x88\x92";
+	case '*': return "\xC3\x97";
+	case '/': return "\xC3\xB7";
+	case '%': return "%";
+	default: return "";
+	}
+}
+
+static void operation_refresh(char op) {
+	if (operation_label) {
+		lv_label_set_text(operation_label, operation_symbol(op));
+	}
+}
 
 // What the display shows: the model's own text, or the error state's, which is
 // the one string here that has to be read in the user's language.
@@ -70,12 +88,14 @@ static void key_cb(lv_event_t *e) {
 
 	switch (key->kind) {
 	case KEY_CLEAR:
+		operation_refresh(0);
 		calc_key_clear(&model);
 		break;
 	case KEY_BACKSPACE:
 		calc_key_backspace(&model);
 		break;
 	case KEY_PERCENT:
+		operation_refresh('%');
 		calc_key_percent(&model);
 		break;
 	case KEY_DIGIT:
@@ -88,9 +108,11 @@ static void key_cb(lv_event_t *e) {
 		calc_key_sign(&model);
 		break;
 	case KEY_OPERATOR:
+		operation_refresh(key->value);
 		calc_key_operator(&model, key->value);
 		break;
 	case KEY_EQUALS:
+		operation_refresh(0);
 		calc_key_equals(&model);
 		break;
 	}
@@ -152,6 +174,9 @@ static lv_obj_t *key_labels[CALC_KEYS];
 // the operators' in the accent itself. Both are hand-set, so they have to be
 // set again after a theme or accent change: a style would follow on its own.
 static void calc_refresh_theme(void) {
+	if (operation_label) {
+		lv_obj_set_style_text_color(operation_label, theme()->accent, 0);
+	}
 	for (int i = 0; i < CALC_KEYS; i++) {
 		if (!key_labels[i]) {
 			continue;
@@ -175,6 +200,16 @@ void calculator_init(gui_config_t *cfg) {
 	lv_obj_add_style(calculator_screen, &theme_style_screen, 0);
 	lv_obj_t *title = settingsrow_title(calculator_screen, cfg, "calculator");
 	settingsrow_title_corner_slots(title, cfg, 0);
+
+	// Keep the last arithmetic key visible in the header: on the V1's small
+	// touch panel this gives an immediate, legible check of the tapped key.
+	operation_label = lv_label_create(calculator_screen);
+	lv_obj_set_style_text_font(operation_label, &font_ui_36_bold, 0);
+	lv_obj_set_style_text_color(operation_label, theme()->accent, 0);
+	lv_obj_set_width(operation_label, settingsrow_corner_button_size(cfg));
+	lv_obj_set_style_text_align(operation_label, LV_TEXT_ALIGN_CENTER, 0);
+	lv_obj_align(operation_label, LV_ALIGN_TOP_RIGHT, -cfg->padding, cfg->top_bar_height + cfg->padding + (cfg->screen_width < 320 ? 6 : 10));
+	operation_refresh(0);
 
 	const int padding = cfg->padding;
 	const int gap = bp_pick(4, 10);
