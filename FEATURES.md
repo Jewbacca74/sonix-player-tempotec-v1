@@ -95,6 +95,10 @@ a self-signed certificate), and HLS.
   shown.
 - **AirPlay** - the player appears as an AirPlay target.
 - **DLNA** - the player appears as a renderer.
+- **Wi-Fi** - scan and join the networks in the air, and hidden ones too:
+  "Add hidden network" at the foot of the Wi-Fi page takes a name and
+  passphrase typed by hand (blank for an open network) and probes for the
+  network by name, since it never appears in the scan list.
 - **Wi-Fi transfer** - a browser on the same network gets the card: upload
   files and whole folders, rename, move, delete, download, show hidden files.
   Reachable at `sonix-transfer.local`.

@@ -106,7 +106,7 @@ typedef enum {
 	JOB_NONE = 0,
 	JOB_POWER,	   // arg_int: 1 on, 0 off
 	JOB_SCAN,
-	JOB_CONNECT,   // arg_a: ssid, arg_b: psk ("" = open)
+	JOB_CONNECT,   // arg_a: ssid, arg_b: psk ("" = open), hidden: scan_ssid
 	JOB_DISCONNECT,
 	JOB_FORGET,	   // arg_a: ssid
 } job_type_t;
@@ -116,6 +116,7 @@ typedef struct {
 	char arg_a[WIFI_SSID_MAX];
 	char arg_b[128];
 	int arg_int;
+	bool hidden; // JOB_CONNECT only: the name is not broadcast, probe for it
 } job_t;
 
 #define JOB_QUEUE_LEN 8
@@ -826,7 +827,23 @@ typedef enum {
 	DIRECT_UNAVAILABLE, // wpa_cli did not run
 } direct_result_t;
 
-static direct_result_t connect_direct(const char *ssid, const char *psk) {
+// Tells wpa_supplicant to look for this network by name rather than waiting
+// to hear it: scan_ssid makes it send a directed probe and accept the answer
+// of an access point that never broadcasts its SSID, which is the whole of
+// what a "hidden network" is. Saved with the network by the save_config in
+// connect_direct(), so the setting survives both re-selection and a reboot.
+// False when the supplicant would not take it.
+static bool set_scan_ssid(const char *id_text) {
+	char out[256];
+	wpa4("set_network", id_text, "scan_ssid", "1", out, sizeof(out));
+	if (!wpa_ok(out)) {
+		printf("wifi: scan_ssid was refused (%s)\n", out[0] ? out : "no reply");
+		return false;
+	}
+	return true;
+}
+
+static direct_result_t connect_direct(const char *ssid, const char *psk, bool hidden) {
 	char out[256];
 	char id_text[16];
 	char quoted_value[2 * WIFI_SSID_MAX + 3];
@@ -855,6 +872,12 @@ static direct_result_t connect_direct(const char *ssid, const char *psk) {
 			return DIRECT_REFUSED;
 		}
 
+		// Before the key and before anything is selected: a hidden network
+		// configured without this is a network nothing will ever answer to.
+		if (hidden && !set_scan_ssid(id_text)) {
+			return DIRECT_REFUSED;
+		}
+
 		if (psk && psk[0]) {
 			if (!set_psk(id_text, psk)) {
 				set_fail(WIFI_FAIL_WRONG_KEY);
@@ -865,6 +888,14 @@ static direct_result_t connect_direct(const char *ssid, const char *psk) {
 		}
 	} else {
 		snprintf(id_text, sizeof(id_text), "%d", id);
+		// Joined by hand as a hidden network, but wpa_supplicant already has
+		// it -- created by the stock player, say, or by an earlier visit to
+		// the list. Its stored setting is not trusted to include scan_ssid,
+		// so it is set again; on a network that already has it, that changes
+		// nothing.
+		if (hidden && !set_scan_ssid(id_text)) {
+			return DIRECT_REFUSED;
+		}
 		// A saved network whose password is being re-entered. key_mgmt goes
 		// with it: a network first joined as an open one carries key_mgmt=NONE,
 		// and a passphrase set over the top of that is never used.
@@ -971,7 +1002,7 @@ static bool text_is_shell_safe(const char *text) {
 	return text[0] && strpbrk(text, ":;&|<>()$`\\\"'*?[]#~!\n\t") == NULL;
 }
 
-static void do_connect(const char *ssid, const char *psk) {
+static void do_connect(const char *ssid, const char *psk, bool hidden) {
 	bool sent = false;
 	bool has_psk = psk && psk[0];
 
@@ -992,8 +1023,8 @@ static void do_connect(const char *ssid, const char *psk) {
 
 	// The length is worth having in the log next to the name: a name that came
 	// out short is the whole story, and quotes alone do not show it.
-	printf("wifi: joining \"%s\" (%d characters, %s)\n", ssid, (int)strlen(ssid),
-		   has_psk ? "with a passphrase" : "open");
+	printf("wifi: joining \"%s\" (%d characters, %s%s)\n", ssid, (int)strlen(ssid),
+		   has_psk ? "with a passphrase" : "open", hidden ? ", hidden" : "");
 
 	// wpa_cli first, sys_server second, which is the other way round from every
 	// other request in this file -- and deliberately.
@@ -1005,12 +1036,16 @@ static void do_connect(const char *ssid, const char *psk) {
 	// answers OK to a command it has already mangled. The direct route speaks
 	// to wpa_cli through execv, with no shell anywhere and the quoting done
 	// here, so a name with a #, a space or an accent survives it.
-	direct_result_t direct = connect_direct(ssid, psk);
+	direct_result_t direct = connect_direct(ssid, psk, hidden);
 	sent = direct == DIRECT_OK;
 
 	if (direct == DIRECT_UNAVAILABLE && have_sysserver()) {
 		// No wpa_cli on this firmware. The daemon is what is left, and it gets
-		// only the names it can carry intact.
+		// only the names it can carry intact. Its command carries no scan_ssid
+		// either, so a hidden network asked for here is left to whatever the
+		// daemon makes of a bare SSID_CONNECT -- on a firmware with wpa_cli
+		// (the normal case) this path is never taken and the flag is set
+		// directly above.
 		if (!text_is_shell_safe(ssid) || (has_psk && !text_is_shell_safe(psk))) {
 			printf("wifi: no wpa_cli, and sys_server cannot carry this name or passphrase intact\n");
 		} else {
@@ -1320,7 +1355,7 @@ static void *wifi_worker(void *arg) {
 				break;
 
 			case JOB_CONNECT:
-				do_connect(job.arg_a, job.arg_b);
+				do_connect(job.arg_a, job.arg_b, job.hidden);
 				poll_status();
 				break;
 
@@ -1519,18 +1554,22 @@ int wifi_get_networks(wifi_network_t *out, int max) {
 	return count;
 }
 
-void wifi_connect(const char *ssid, const char *psk) {
+static void queue_connect(const char *ssid, const char *psk, bool hidden) {
 	if (!ssid || !ssid[0]) {
 		return;
 	}
 	set_opkind(WIFI_OPKIND_CONNECT);
 	set_op(WIFI_OP_BUSY, ssid);
 
-	job_t job = {.type = JOB_CONNECT};
+	job_t job = {.type = JOB_CONNECT, .hidden = hidden};
 	snprintf(job.arg_a, sizeof(job.arg_a), "%s", ssid);
 	snprintf(job.arg_b, sizeof(job.arg_b), "%s", psk ? psk : "");
 	post_job(&job);
 }
+
+void wifi_connect(const char *ssid, const char *psk) { queue_connect(ssid, psk, false); }
+
+void wifi_connect_hidden(const char *ssid, const char *psk) { queue_connect(ssid, psk, true); }
 
 void wifi_disconnect(void) {
 	// Reported like the other two: leaving a network is something the user
