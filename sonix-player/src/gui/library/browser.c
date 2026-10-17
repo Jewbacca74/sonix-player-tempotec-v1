@@ -1012,6 +1012,33 @@ static void shuffle_button_cb(lv_event_t *e) {
 
 void browser_open_dir_public(const char *path) { browser_open_dir(path); }
 
+// The home screen's Browse tile starts on the card's Music folder, where the
+// V1's music conventionally lives, rather than on the card root. A card laid
+// out another way (artist folders straight at the root, say) still gets the
+// browser, on its root -- which is where the tile opened before.
+//
+// Only the path is set here. Switching the page in makes browser_refresh()
+// read it, on the reader thread; reading it here as well would list the same
+// folder twice on the way in, and that pause is the one the reader thread
+// exists to hide.
+void browser_start_in_music_folder(void) {
+	char start[sizeof(current_path)];
+	snprintf(start, sizeof(start), "%s/Music", root_path);
+
+	// Case-blind on the card (FAT and exFAT resolve "music" here too), and one
+	// stat rather than a listing of the root to find out.
+	struct stat st;
+	if (stat(start, &st) != 0 || !S_ISDIR(st.st_mode)) {
+		snprintf(start, sizeof(start), "%s", root_path);
+	}
+
+	if (strcmp(start, current_path) == 0) {
+		return;
+	}
+	strncpy(current_path, start, sizeof(current_path) - 1);
+	current_path[sizeof(current_path) - 1] = '\0';
+}
+
 void browser_refresh(void) {
 	if (current_path[0]) {
 		browser_open_dir(current_path);
