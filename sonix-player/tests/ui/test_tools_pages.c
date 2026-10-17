@@ -640,6 +640,12 @@ static void check_notes_page(gui_config_t *cfg, const char *dir, const char *tag
 
 	lv_obj_t *field = find_class(noteeditor_screen, &lv_textarea_class);
 	assert(field);
+	// The shared caret is a one-pixel accent line in either state, so thin
+	// letters remain legible while typing.
+	assert(lv_obj_get_style_border_width(field, LV_PART_CURSOR) == 1);
+	lv_obj_add_state(field, LV_STATE_FOCUSED);
+	assert(lv_obj_get_style_border_width(field, LV_PART_CURSOR) == 1);
+	lv_obj_remove_state(field, LV_STATE_FOCUSED);
 	// The file holds a final newline -- textfile_write() puts one on every note
 	// -- and the editor shows the file as it is.
 	assert(strcmp(lv_textarea_get_text(field), "milk and bread\n") == 0);
