@@ -45,11 +45,11 @@ void keyboard_refresh_type(void);
 // Call when the keyboard-language page changes the lists.
 void keyboard_refresh_layout(void);
 
-// The caret every text field in the interface wears: accent coloured, a
-// little thicker than LVGL's hairline, and blinking. Applied to the focused
+// The caret every text field in the interface wears: a blinking, one-pixel
+// accent line that keeps thin letter strokes legible. Applied to the focused
 // state as well, because LVGL's own theme styles LV_PART_CURSOR|
-// LV_STATE_FOCUSED and would otherwise put its thin default caret straight
-// back the moment the field is touched.
+// LV_STATE_FOCUSED and would otherwise put its default caret straight back
+// the moment the field is touched.
 void keyboard_style_caret(lv_obj_t *field);
 
 // Turns a field's caret on or off. Needed where there are two fields (the

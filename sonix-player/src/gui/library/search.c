@@ -708,11 +708,10 @@ static void run_search(const char *query, bool keep_place) {
 	show_category(cat);
 }
 
-// The caret's own look: accent-coloured and a little thicker than LVGL's
-// hairline, drawn as the cursor part's left border. Applied to the focused
-// state too, because LVGL's built-in theme styles the cursor on
-// LV_PART_CURSOR|LV_STATE_FOCUSED, and would otherwise hand the caret back to
-// the default on the first tap in the field.
+// The caret's own look: a narrow accent line, drawn as the cursor part's
+// left border. Applied to the focused state too, because LVGL's built-in
+// theme styles the cursor on LV_PART_CURSOR|LV_STATE_FOCUSED, and would
+// otherwise hand the caret back to the default on the first tap in the field.
 static void caret_apply_style(void) { keyboard_style_caret(field); }
 
 // Shows the clear button only when there is something to clear.

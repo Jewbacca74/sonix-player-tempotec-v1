@@ -1246,9 +1246,9 @@ void keyboard_set_field(keyboard_t *kb, lv_obj_t *field) {
 	}
 }
 
-// The caret is the left border of the CURSOR part, not a block: three pixels
-// of accent, like a system text field's cursor.
-#define KB_CARET_WIDTH 3
+// The caret is the left border of the CURSOR part, not a block: one accent
+// pixel, so thin letter strokes remain legible while it blinks.
+#define KB_CARET_WIDTH 1
 
 void keyboard_style_caret(lv_obj_t *field) {
 	if (!field) {
@@ -1312,8 +1312,8 @@ void keyboard_style_caret(lv_obj_t *field) {
 // The gap between two bullets runs from +1.5 to +8.5 of that point, so its
 // centre is at -spacing/2. The CURSOR part's left padding is the only lever
 // that moves the caret (x1 = position - padding - border), hence the negative
-// value: -spacing/2 to reach the centre of the gap, -KB_CARET_WIDTH+1 because
-// what must end up centred is the three-pixel strip, not its left edge.
+// value: -spacing/2 to reach the centre of the gap, -KB_CARET_WIDTH+1 to
+// account for the caret's width rather than putting its left edge there.
 //
 // Applies only while the bullets are visible, exactly like the letter spacing.
 #define KB_PASSWORD_CARET_PAD (KB_PASSWORD_LETTER_SPACE / 2 - KB_CARET_WIDTH + 1)
