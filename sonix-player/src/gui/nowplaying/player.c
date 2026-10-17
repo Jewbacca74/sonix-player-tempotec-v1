@@ -3477,7 +3477,20 @@ static void reload_cover(const char *filepath) {
 
 	// Backdrop gone: the chrome goes back to following the theme.
 	set_over_cover(false);
-	album_tone = 0;
+	// The sleeve's colour is not dropped here when another picture has been
+	// asked for. It used to be, and for the whole of the decode the page was
+	// then painted as if there were no sleeve at all -- the theme's colours,
+	// the accent included -- until the new picture landed and its colour took
+	// over: a flash of a colour belonging to neither record, between the old
+	// sleeve's and the new one's. So the old colour stands until the picture
+	// it describes is replaced, which is what the cover itself already does
+	// while refresh_cover() is asking whether the next track's artwork is the
+	// one on screen. A track with nothing coming loses it at once, here or --
+	// where that is only known once the worker answers -- in
+	// apply_cover_result().
+	if (!filepath || !filepath[0]) {
+		album_tone = 0;
+	}
 	paint_alt_tint();
 
 	lv_obj_invalidate(cover_panel);
@@ -3638,12 +3651,14 @@ static void apply_cover_result(void) {
 			}
 		}
 
+		// The sleeve's own colour first, and only then the chrome: what
+		// set_over_cover() paints is then painted in it straight away, with no
+		// repaint after it between the picture landing and the controls
+		// taking its colour.
+		album_tone = cover_dominant_tone(&current_cover);
+
 		// The dark backdrop is up: light chrome, in both themes.
 		set_over_cover(true);
-
-		// And the sleeve's own colour, which is what the alternative layout is
-		// drawn in.
-		album_tone = cover_dominant_tone(&current_cover);
 		paint_alt_tint();
 
 		// The words' background, ready before they are pulled in.
@@ -3655,6 +3670,14 @@ static void apply_cover_result(void) {
 	if (!has_cover) {
 		cover_shown_id = 0; // nothing to compare the next track against
 		lyrics_bg_forget(); // no picture, nothing to blur
+		// And the previous sleeve's colour goes with it: reload_cover() held
+		// it over the decode so the controls never sat in the theme's accent
+		// in between, and this -- no artwork after all -- is where the track
+		// it belonged to stops standing for the page.
+		if (album_tone) {
+			album_tone = 0;
+			paint_alt_tint();
+		}
 	}
 	if (lyrics_progress > 0) {
 		lyrics_look(true); // Studio's backdrop has arrived, or there is none
