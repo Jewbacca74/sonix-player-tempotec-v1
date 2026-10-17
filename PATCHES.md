@@ -131,7 +131,12 @@ deck. The split of the panel is the standard arrangement's own
 (`compact_deck_height()`), so the sleeve is as large as the deck allows and no
 larger; the chrome on the deck keeps the theme's colours while the chevron and
 the source marks take their chance in white over the sharp part, as they do
-over every sleeve in the player. Without artwork the empty sleeve is the
+over every sleeve in the player. The favourite marker is the heart rather than
+the star here, as it is in Immersive, but drawn a step under the star's size
+(`POSTER_HEART_SCALE`, 22 px against 26 on the V1): the heart fills more of its
+32 px canvas than the star does, and on a deck that is a row of type rather
+than a picture to stand over, the smaller mark reads as a marker and not as a
+second headline. Without artwork the empty sleeve is the
 cover's own colour from edge to edge, and the blurred copy stays down: the
 deck no longer shows it through, and the sleeve covers everything above it.
 
