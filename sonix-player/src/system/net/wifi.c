@@ -843,6 +843,32 @@ static bool set_scan_ssid(const char *id_text) {
 	return true;
 }
 
+// The scan the row the user tapped was built from, asked again at the moment
+// of the join: is this network in it, and does it broadcast with privacy?
+//
+// "No passphrase" is two different joins and the caller cannot tell them
+// apart on its own -- a network the air reports as open, and a saved one
+// whose stored key is being reused (the tap passes no passphrase either
+// way). Only the radio separates them. Not listed counts as secured: an
+// out-of-range saved network is exactly the one whose stored settings are
+// all there is to join by.
+static bool scan_find(const char *ssid, bool *secured) {
+	static char buf[16384];
+	read_scan_results(buf, sizeof(buf));
+
+	char *save_line = NULL;
+	for (char *line = strtok_r(buf, "\n", &save_line); line; line = strtok_r(NULL, "\n", &save_line)) {
+		wifi_network_t net;
+		if (parse_scan_line(line, &net) && strcmp(net.ssid, ssid) == 0) {
+			if (secured) {
+				*secured = net.secured;
+			}
+			return true;
+		}
+	}
+	return false;
+}
+
 static direct_result_t connect_direct(const char *ssid, const char *psk, bool hidden) {
 	char out[256];
 	char id_text[16];
@@ -905,6 +931,24 @@ static direct_result_t connect_direct(const char *ssid, const char *psk, bool hi
 				return DIRECT_REFUSED;
 			}
 			wpa4("set_network", id_text, "key_mgmt", "WPA-PSK", out, sizeof(out));
+		} else {
+			// The other way round, and only when the radio agrees. The scan
+			// lists this network and it broadcasts without privacy, so the
+			// entry's stored security is out of date: a passphrase from
+			// before the hotspot's password was turned off, or the stock
+			// player's own idea of the network's security. Left as
+			// key_mgmt=WPA-PSK it can never match an access point that no
+			// longer encrypts, and the supplicant scans straight past it --
+			// not one authentication attempt -- until every join times out.
+			//
+			// A network the scan reports as secured, or does not list at
+			// all, keeps what it has: that is the stored-key join, and
+			// writing NONE over it is how a saved network gets destroyed by
+			// tapping it.
+			bool secured = true;
+			if (scan_find(ssid, &secured) && !secured) {
+				wpa4("set_network", id_text, "key_mgmt", "NONE", out, sizeof(out));
+			}
 		}
 	}
 
@@ -1088,6 +1132,16 @@ static void do_connect(const char *ssid, const char *psk, bool hidden) {
 	if (associated) {
 		request_dhcp();
 	} else {
+		// What the air says, said first: an access point that is not there
+		// at all and one that is there but was never matched -- a leftover
+		// key_mgmt, say, or a name the radio no longer hears -- look the
+		// same from wpa_state alone, and the scan is the only witness that
+		// can tell them apart after the fact.
+		bool secured = true;
+		bool listed = scan_find(ssid, &secured);
+		printf("wifi: the access point is %s the scan results%s\n", listed ? "still listed in" : "not listed in",
+			   listed ? (secured ? " (secured)" : " (open)") : "");
+
 		// The access point turned the handshake down. Two things say so, and
 		// either is enough: wpa_supplicant parks a network it cannot
 		// authenticate with (TEMP-DISABLED), and the join got as far as the

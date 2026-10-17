@@ -86,7 +86,11 @@ static const char FAKE_WPA_CLI[] =
 	"  add_network) printf '0\\n';;\n"
 	"  status) printf 'wpa_state=COMPLETED\\nssid=Whatever\\nip_address=192.168.1.50\\naddress=aa:bb:cc:dd:ee:ff\\n';;\n"
 	"  signal_poll) printf 'RSSI=-52\\n';;\n"
-	"  scan_results) printf 'bssid / frequency / signal / flags / ssid\\n';;\n"
+	"  scan_results)\n"
+	"    printf 'bssid / frequency / signal / flags / ssid\\n'\n"
+	"    if [ -n \"$FAKE_WPA_SCAN_SSID\" ]; then\n"
+	"      printf 'aa:bb:cc:dd:ee:ff\\t2412\\t-52\\t%s\\t%s\\n' \"$FAKE_WPA_SCAN_FLAGS\" \"$FAKE_WPA_SCAN_SSID\"\n"
+	"    fi;;\n"
 	"  *) printf 'OK\\n';;\n"
 	"esac\n";
 
@@ -227,6 +231,51 @@ int main(void) {
 	assert(known_scan >= 0 && known_select > known_scan);
 	assert(unlink(saved_path) == 0);
 
+	/* A saved network the scan reports as open: the access point's password
+	 * was turned off since the entry was written, or the stock player wrote
+	 * the entry with security of its own. The leftover key_mgmt is exactly
+	 * what makes the supplicant scan past an access point that no longer
+	 * encrypts -- not one authentication attempt, every join timing out --
+	 * so joining it must rewrite the entry as open. */
+	saved = fopen(saved_path, "w");
+	assert(saved);
+	assert(fclose(saved) == 0);
+	assert(setenv("FAKE_WPA_SCAN_SSID", "SavedHidden", 1) == 0);
+	assert(setenv("FAKE_WPA_SCAN_FLAGS", "[ESS]", 1) == 0);
+	clear_log();
+	wifi_connect("SavedHidden", NULL);
+	assert(wait_op(ssid, sizeof(ssid)) == WIFI_OP_OK);
+	log = slurp(log_path);
+	assert(log_find(log, "add_network|") < 0);
+	int open_key = log_find(log, "set_network|0|key_mgmt|NONE|");
+	int open_select = log_find(log, "select_network|0|");
+	assert(open_key >= 0 && open_select > open_key);
+
+	/* The same saved network, but the scan reports it secured: the stored
+	 * key is being reused, and the entry must not be touched -- writing
+	 * key_mgmt=NONE over it is how a saved network gets destroyed by
+	 * tapping it. */
+	assert(setenv("FAKE_WPA_SCAN_FLAGS", "[WPA2-PSK-CCMP][ESS]", 1) == 0);
+	clear_log();
+	wifi_connect("SavedHidden", NULL);
+	assert(wait_op(ssid, sizeof(ssid)) == WIFI_OP_OK);
+	log = slurp(log_path);
+	assert(log_find(log, "add_network|") < 0);
+	assert(log_find(log, "set_network|0|key_mgmt|") < 0);
+	assert(log_find(log, "select_network|0|") >= 0);
+
+	/* And a saved network the scan does not list at all: out of range, its
+	 * stored entry is everything there is to join by, and it stays. */
+	assert(unsetenv("FAKE_WPA_SCAN_SSID") == 0);
+	assert(unsetenv("FAKE_WPA_SCAN_FLAGS") == 0);
+	clear_log();
+	wifi_connect("SavedHidden", NULL);
+	assert(wait_op(ssid, sizeof(ssid)) == WIFI_OP_OK);
+	log = slurp(log_path);
+	assert(log_find(log, "set_network|0|key_mgmt|") < 0);
+	assert(log_find(log, "select_network|0|") >= 0);
+	assert(unlink(saved_path) == 0);
+
 	/* A passphrase wpa_supplicant will not store is refused up front, as a
 	 * wrong passphrase, without the fake supplicant being told to store
 	 * anything. (The status poll the worker runs behind every job is a read,
@@ -240,6 +289,7 @@ int main(void) {
 	log = slurp(log_path);
 	assert(log_find(log, "add_network") < 0 && log_find(log, "set_network") < 0 && log_find(log, "select_network") < 0);
 
-	printf("PASS wifi hidden-network join (scan_ssid on new and saved networks only)\n");
+	printf("PASS wifi join (scan_ssid for hidden networks only; a saved network the scan "
+		   "reports as open gets key_mgmt=NONE, a secured or out-of-range one keeps its entry)\n");
 	return 0;
 }
