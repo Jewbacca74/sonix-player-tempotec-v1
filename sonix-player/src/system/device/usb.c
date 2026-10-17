@@ -350,7 +350,14 @@ static void ensure_storage_gadget(void) {
 			 "echo 1 > functions/mass_storage.0/lun.0/nofua; "
 			 "echo 0 > functions/mass_storage.0/lun.0/cdrom; "
 			 "echo '' > functions/mass_storage.0/lun.0/file; "
-			 "echo '%s' > functions/mass_storage.0/lun.0/inquiry_string 2>/dev/null; "
+			 // Not every kernel has this attribute, and the shell reports a
+			 // redirection it cannot make itself -- past the 2>/dev/null, which
+			 // only silences the command -- so a kernel without it printed
+			 // "can't create ...: Permission denied" into the log at every
+			 // setup. Writing it only where it exists keeps the log clean on
+			 // both kinds.
+			 "[ -e functions/mass_storage.0/lun.0/inquiry_string ] && "
+			 "echo '%s' > functions/mass_storage.0/lun.0/inquiry_string; "
 			 "fi; "
 			 "[ -e configs/c.1/mass_storage.0 ] || ln -s functions/mass_storage.0 configs/c.1; "
 			 "grep -q '[a-zA-Z0-9]' UDC || echo $(ls /sys/class/udc/ | head -n1) > UDC",

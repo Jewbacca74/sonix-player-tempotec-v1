@@ -268,17 +268,49 @@ static time_t ntp_last_attempt;
 static void *ntp_worker(void *unused) {
 	(void)unused;
 
-	time_t before = time(NULL);
+	int rc = -1;
+	time_t after = 0;
+	long stepped = 0;
 
 	// The firmware's own binary and servers. `-t 5` is the only addition: the
 	// stock player backgrounds the command with `&` and forgets it, which is
 	// fine for a shell but leaves this thread sitting in system() until DNS
 	// gives up.
-	int rc = system(NTPDATE_BIN " -t 5 " NTP_SERVERS " >/dev/null 2>&1");
-	time_t after = time(NULL);
+	//
+	// Two attempts, not one. The trigger is the moment the link reports an
+	// address, which can be a moment before UDP actually flows; a first try
+	// that runs into that fails, and the half-hour cooldown then leaves the
+	// clock uncorrected for the rest of the session.
+	for (int attempt = 0; attempt < 2; attempt++) {
+		if (attempt) {
+			sleep(15);
+		}
+
+		// What the clock said, and what real time said, before ntpdate runs.
+		// The difference of the two differences is the step ntpdate applied:
+		// CLOCK_BOOTTIME (monotonic as the fallback) does not move when the
+		// wall clock is set, while time() does, so the seconds ntpdate itself
+		// spent -- DNS, the query timeouts, a network only just up -- are not
+		// read as a correction. A boot where the answer took sixteen seconds
+		// used to be logged as the clock being stepped by sixteen.
+		time_t before = time(NULL);
+		time_t boot_before = boottime_now();
+
+		rc = system(NTPDATE_BIN " -t 5 " NTP_SERVERS " >/dev/null 2>&1");
+		after = time(NULL);
+		stepped = (long)(after - before) - (long)(boottime_now() - boot_before);
+
+		if (rc == 0) {
+			break;
+		}
+	}
 
 	if (rc == 0 && after >= CLOCK_PLAUSIBLE_FROM) {
-		printf("clock: ntpdate agreed with the network (%+ld s)\n", (long)(after - before));
+		if (stepped >= 1 || stepped <= -1) {
+			printf("clock: ntpdate agreed with the network (stepped %+ld s)\n", stepped);
+		} else {
+			printf("clock: ntpdate agreed with the network (no step needed)\n");
+		}
 
 		// The RTC is what carries this across the next power-off, and it is
 		// the thing most likely to have been wrong in the first place.
