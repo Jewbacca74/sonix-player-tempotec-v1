@@ -1156,8 +1156,9 @@ static void log_key_event(const char *node, const struct input_event *ev) {
 #define VOLUME_REPEAT_PERIOD_MS 70
 #define VOLUME_STEP_PERCENT 1
 
-// Hold the power key this long and the shutdown menu comes up instead of the
-// screen simply toggling.
+// Hold the power key this long and it stops being a screen toggle: what the
+// hold does then is the power menu, or the power-off itself -- see
+// input_set_power_hold_menu().
 #define POWER_LONG_PRESS_MS 1200
 
 static uint32_t now_ms(void) {
@@ -1202,6 +1203,24 @@ void input_set_key_lock(bool on) {
 static bool key_lock_gesture_armed(void) { return key_lock_when_off && !power_screen_is_on(); }
 
 static bool keys_locked(void) { return key_lock_when_off && key_lock_engaged && !power_screen_is_on(); }
+
+// ---------------------------------------------------------------------------
+// What a held power key is: the menu, or the power-off itself
+//
+// The option in Power settings decides. With it on -- the default -- the hold
+// brings up the power menu, and switching off or rebooting takes a slide to
+// confirm on the screen. With it off the same hold switches the player off
+// where it stands: one gesture, nothing to read and nothing to confirm, which
+// is what a player that lives in a pocket wants, since the hand holding it
+// knows from the gesture alone that the music has stopped.
+//
+// Reboot is then only reachable with the option back on: the power menu is the
+// one place the interface offers it.
+// ---------------------------------------------------------------------------
+
+static volatile bool power_hold_menu = true; // the option, on until told otherwise
+
+void input_set_power_hold_menu(bool on) { power_hold_menu = on; }
 
 // ---------------------------------------------------------------------------
 // Key combinations: volume up + power (screenshot), volume down + power (key
@@ -1666,10 +1685,11 @@ static void *input_thread_func(void *arg) {
 			}
 
 			// While a combination is active its keys are no longer themselves:
-			// the volume does not move and the power menu does not open. The
-			// check is here and not only on press because the combination can
-			// complete LATER, on the other node's thread, while this one is
-			// already repeating.
+			// the volume does not move, and the held power key neither opens
+			// the power menu nor -- with the menu switched off -- powers the
+			// player down. The check is here and not only on press because the
+			// combination can complete LATER, on the other node's thread, while
+			// this one is already repeating.
 			bool suppressed = combo_active();
 
 			// The wait may have ended for another deadline than the held key's.
@@ -1692,9 +1712,18 @@ static void *input_thread_func(void *arg) {
 					   (int32_t)(now - (held_since + POWER_LONG_PRESS_MS)) >= 0) {
 				long_press_done = true;
 				if (!suppressed) {
-					printf("input: power held, opening the power menu\n");
 					power_notify_activity();
-					gui_notify_power_menu();
+					if (power_hold_menu) {
+						printf("input: power held, opening the power menu\n");
+						gui_notify_power_menu();
+					} else {
+						// The hold is the whole gesture: off, with no menu and
+						// nothing on the screen to confirm. Still posted to the
+						// GUI thread -- power_shutdown() blanks the panel and
+						// touches LVGL, neither of which belongs here.
+						printf("input: power held, switching off\n");
+						gui_notify_power_off();
+					}
 				}
 			}
 			continue;
@@ -1801,8 +1830,9 @@ static void *input_thread_func(void *arg) {
 			dbl_first = !second_click && !combo && is_double_button(ev.code, info->headset);
 
 			if (combo) {
-				// No volume repeat and no countdown to the power menu for as
-				// long as the combination lasts.
+				// No volume repeat, and no countdown to what a held power key
+				// does -- the menu or the power-off -- for as long as the
+				// combination lasts.
 				held = -1;
 				continue;
 			}

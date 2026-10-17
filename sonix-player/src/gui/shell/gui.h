@@ -114,6 +114,11 @@ void gui_notify_volume(int percent);
 // The power key was held down.
 void gui_notify_power_menu(void);
 
+// The power key was held down with the power menu switched off in Power
+// settings: the hold is the whole gesture, and the player is to go off with
+// nothing to confirm. power_shutdown() does not return.
+void gui_notify_power_off(void);
+
 // Whether obj is still one of the objects on a display. It compares the pointer
 // against the live widget tree and never reads through it, so a pointer to an
 // object already deleted is safe to pass. LVGL's lv_obj_is_in_widget_tree(),

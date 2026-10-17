@@ -214,6 +214,13 @@ a self-signed certificate), and HLS.
 
 - **Power** - standby, LED behaviour, automatic power-off from thirty seconds to
   six hours, and a charge limit from 80 to 100 %.
+- **Power → Hold power for the menu** - what a held power button does. On, the
+  default, the hold brings up the power menu and switching off or rebooting
+  takes a slide to confirm. Off, the same hold switches the player off where it
+  stands, with nothing on the screen to read or to confirm - for a player that
+  lives in a pocket, where the hand holding it wants to know the music has
+  stopped without looking at it. The menu is the only place the interface offers
+  a reboot, so that comes back with the option.
 - **LED effects** - on the V1 and the R3 Pro II the status light is driven
   directly rather than through the firmware's preset patterns: it fades in on
   power-on, cross-fades between colours, breathes red while charging, turns

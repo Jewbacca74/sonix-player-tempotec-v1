@@ -581,6 +581,18 @@ static void power_menu_async_cb(void *unused) {
 
 void gui_notify_power_menu(void) { gui_post(power_menu_async_cb, NULL); }
 
+// The same held key with the power menu switched off in Power settings: the
+// hold is the whole gesture and the player goes off where it stands. Posted
+// rather than run on the button thread, because power_shutdown() blanks the
+// panel and tears the page down around it.
+static void power_off_async_cb(void *unused) {
+	(void)unused;
+	printf("power: switching off on a held power key\n");
+	power_shutdown();
+}
+
+void gui_notify_power_off(void) { gui_post(power_off_async_cb, NULL); }
+
 
 void gui_init(gui_config_t *cfg) {
 	// The card's fonts, before any page is built: a UI font stored as
