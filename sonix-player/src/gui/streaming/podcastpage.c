@@ -1984,10 +1984,14 @@ static void row_long_cb(lv_event_t *e) {
 
 static void pill_clicked_cb(lv_event_t *e);
 
-static lv_obj_t *make_pill(lv_obj_t *parent, const char *text, job_kind_t kind) {
+static lv_obj_t *make_pill(lv_obj_t *parent, const char *text, job_kind_t kind, bool compact) {
 	lv_obj_t *btn = lv_btn_create(parent);
-	lv_obj_set_size(btn, LV_SIZE_CONTENT, 56);
-	lv_obj_set_style_pad_hor(btn, 20, 0);
+	lv_obj_set_size(btn, LV_SIZE_CONTENT, compact ? 36 : 56);
+	// The regular 20 px insets make the two English labels wider than the
+	// V1's entire 240 px panel, even before Large text is selected. Match the
+	// compact choice pills used by settingsrow: the labels still keep a clear
+	// touch target, while both sections fit at every V1 text-size setting.
+	lv_obj_set_style_pad_hor(btn, compact ? 8 : 20, 0);
 	lv_obj_set_style_radius(btn, LV_RADIUS_CIRCLE, 0); // Adwaita-style pill
 	lv_obj_set_style_shadow_width(btn, 0, 0);
 	lv_obj_set_style_border_width(btn, 0, 0);
@@ -2046,6 +2050,7 @@ static void refresh_pills(void) {
 
 static void build_page(gui_config_t *cfg) {
 	g_cfg = cfg;
+	const bool compact = cfg->screen_width < 320;
 	podcast_screen = lv_obj_create(NULL);
 	lv_obj_add_event_cb(podcast_screen, list_loaded_cb, LV_EVENT_SCREEN_LOADED, NULL);
 	lv_obj_add_event_cb(podcast_screen, list_unloaded_cb, LV_EVENT_SCREEN_UNLOADED, NULL);
@@ -2070,7 +2075,7 @@ static void build_page(gui_config_t *cfg) {
 	lv_obj_set_style_border_width(column, 0, 0);
 	lv_obj_set_style_radius(column, 0, 0);
 	lv_obj_set_style_pad_all(column, 0, 0);
-	lv_obj_set_style_pad_gap(column, 12, 0);
+	lv_obj_set_style_pad_gap(column, compact ? 6 : 12, 0);
 	lv_obj_set_scrollable(column, false);
 	lv_obj_set_flex_flow(column, LV_FLEX_FLOW_COLUMN);
 	lv_obj_set_flex_align(column, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
@@ -2081,15 +2086,21 @@ static void build_page(gui_config_t *cfg) {
 	lv_obj_set_style_border_width(pill_row, 0, 0);
 	lv_obj_set_style_pad_ver(pill_row, 0, 0);
 	lv_obj_set_style_pad_hor(pill_row, cfg->padding, 0);
-	lv_obj_set_style_pad_gap(pill_row, 10, 0);
-	lv_obj_set_scrollable(pill_row, false);
+	lv_obj_set_style_pad_gap(pill_row, compact ? 6 : 10, 0);
+	// Compact insets keep the shipped translations on one row. A card font can
+	// still be unusually wide, however, so retain horizontal scrolling as a
+	// fallback instead of clipping the trailing edge of Trending. Larger
+	// panels preserve the original non-scrolling selector.
+	lv_obj_set_scrollable(pill_row, compact);
+	lv_obj_set_scroll_dir(pill_row, LV_DIR_HOR);
+	lv_obj_set_scrollbar_mode(pill_row, LV_SCROLLBAR_MODE_OFF);
 	lv_obj_set_flex_flow(pill_row, LV_FLEX_FLOW_ROW);
 	// Presses that miss a pill belong to the column below, which carries the
 	// swipe-back and the player sheet.
 	lv_obj_set_event_bubble(pill_row, true);
 
-	pill_followed = make_pill(pill_row, "podcast_my_podcasts", JOB_FOLLOWED);
-	pill_trending = make_pill(pill_row, "podcast_trending", JOB_TRENDING);
+	pill_followed = make_pill(pill_row, "podcast_my_podcasts", JOB_FOLLOWED, compact);
+	pill_trending = make_pill(pill_row, "podcast_trending", JOB_TRENDING, compact);
 	refresh_pills();
 	theme_register_refresh(refresh_pills);
 
@@ -2328,6 +2339,9 @@ static void pill_clicked_cb(lv_event_t *e) {
 	if (switcher_back_drag_active() || player_sheet_drag_active()) {
 		return;
 	}
+	// If a translation or card font needed the compact row's scrolling
+	// fallback, settle the chosen section fully inside the panel.
+	lv_obj_scroll_to_view(lv_event_get_current_target(e), LV_ANIM_ON);
 	run_home_view((job_kind_t)(intptr_t)lv_event_get_user_data(e));
 }
 
