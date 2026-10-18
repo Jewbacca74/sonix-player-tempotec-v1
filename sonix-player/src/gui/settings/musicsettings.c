@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "lvgl/lvgl.h"
 
@@ -1524,11 +1525,11 @@ static void quality_badges_cb(lv_event_t *e) {
 // on: a switch that is on and shows nothing anywhere is one nobody can read.
 static lv_obj_t *artist_switch;
 static lv_obj_t *artist_pills;
-#define ARTIST_PILLS 5
+#define ARTIST_PILLS 7
 static lv_obj_t *artist_pill[ARTIST_PILLS];
-static const int ARTIST_PILL_BITS[ARTIST_PILLS] = {MEDIALIST_ARTIST_TRACKS, MEDIALIST_ARTIST_ALBUMS,
-												   MEDIALIST_ARTIST_GENRES, MEDIALIST_ARTIST_FAVOURITES,
-												   MEDIALIST_ARTIST_PLAYLISTS};
+static const int ARTIST_PILL_BITS[ARTIST_PILLS] = {
+	MEDIALIST_ARTIST_TRACKS,	 MEDIALIST_ARTIST_ALBUMS,	MEDIALIST_ARTIST_GENRES,	  MEDIALIST_ARTIST_YEARS,
+	MEDIALIST_ARTIST_FAVOURITES, MEDIALIST_ARTIST_PLAYLISTS, MEDIALIST_ARTIST_MOST_PLAYED};
 
 static void artist_refresh(void) {
 	if (!artist_switch) {
@@ -1628,17 +1629,526 @@ static void cover_tint_cb(lv_event_t *e) {
 }
 
 // ---------------------------------------------------------------------------
+// Rearrange main page
+//
+// The tiles on the Music page, ordered and shown or hidden with the same
+// two-section grip drag as the control centre and keyboard layout pages.
+// ---------------------------------------------------------------------------
+
+static const struct {
+	const char *slug;
+	const char *label;
+} TILE_INFO[MUSIC_TILE_COUNT] = {
+	[MUSIC_TILE_ALL_TRACKS] = {"all_tracks", "music_all_tracks"},
+	[MUSIC_TILE_ALBUMS] = {"albums", "albums"},
+	[MUSIC_TILE_ARTISTS] = {"artists", "artists"},
+	[MUSIC_TILE_ALBUM_ARTISTS] = {"album_artists", "music_album_artists"},
+	[MUSIC_TILE_GENRES] = {"genres", "music_genres"},
+	[MUSIC_TILE_YEARS] = {"years", "music_years"},
+	[MUSIC_TILE_PLAYLISTS] = {"playlists", "playlists"},
+	[MUSIC_TILE_MOST_PLAYED] = {"most_played", "music_most_played"},
+	[MUSIC_TILE_BROWSE] = {"browse", "music_browse"},
+};
+
+const char *musicsettings_tile_label(music_tile_id_t id) {
+	if (id < 0 || id >= MUSIC_TILE_COUNT) {
+		return "";
+	}
+	return TILE_INFO[id].label;
+}
+
+static int parse_tile_slug(const char *s, size_t len) {
+	for (int i = 0; i < MUSIC_TILE_COUNT; i++) {
+		if ( strlen(TILE_INFO[i].slug) == len && strncmp(TILE_INFO[i].slug, s, len) == 0) {
+			return i;
+		}
+	}
+	return -1;
+}
+
+static int parse_tile_list(const char *csv, music_tile_id_t *out, int max, bool *seen) {
+	if (!csv || !csv[0] || !out || max <= 0) {
+		return 0;
+	}
+	int count = 0;
+	const char *p = csv;
+	while (*p && count < max) {
+		while (*p == ' ' || *p == ',') {
+			p++;
+		}
+		if (!*p) {
+			break;
+		}
+		const char *end = p;
+		while (*end && *end != ',' && *end != ' ') {
+			end++;
+		}
+		int id = parse_tile_slug(p, (size_t)(end - p));
+		if (id >= 0 && !seen[id]) {
+			seen[id] = true;
+			out[count++] = (music_tile_id_t)id;
+		}
+		p = end;
+	}
+	return count;
+}
+
+static void load_tile_arrangement(music_tile_id_t *active, int *active_count, music_tile_id_t *hidden,
+								  int *hidden_count) {
+	bool seen[MUSIC_TILE_COUNT] = {false};
+	char active_csv[256] = "";
+	char hidden_csv[256] = "";
+	const char *saved_active = config_get("music", "main_tiles", "");
+	const char *saved_hidden = config_get("music", "main_tiles_hidden", "");
+	if (saved_active) {
+		snprintf(active_csv, sizeof(active_csv), "%s", saved_active);
+	}
+	if (saved_hidden) {
+		snprintf(hidden_csv, sizeof(hidden_csv), "%s", saved_hidden);
+	}
+
+	int act_n = parse_tile_list(active_csv, active, MUSIC_TILE_COUNT, seen);
+	int hid_n = parse_tile_list(hidden_csv, hidden, MUSIC_TILE_COUNT, seen);
+
+	for (int i = 0; i < MUSIC_TILE_COUNT; i++) {
+		if (!seen[i] && act_n < MUSIC_TILE_COUNT) {
+			active[act_n++] = (music_tile_id_t)i;
+		}
+	}
+	if (act_n == 0 && hid_n > 0) {
+		active[act_n++] = hidden[0];
+		memmove(&hidden[0], &hidden[1], (size_t)(hid_n - 1) * sizeof(music_tile_id_t));
+		hid_n--;
+	}
+	*active_count = act_n;
+	*hidden_count = hid_n;
+}
+
+int musicsettings_main_tiles(music_tile_id_t *out, int max) {
+	music_tile_id_t active[MUSIC_TILE_COUNT];
+	music_tile_id_t hidden[MUSIC_TILE_COUNT];
+	int act_n = 0, hid_n = 0;
+	load_tile_arrangement(active, &act_n, hidden, &hid_n);
+	if (out && max > 0) {
+		int n = act_n < max ? act_n : max;
+		memcpy(out, active, (size_t)n * sizeof(music_tile_id_t));
+		return n;
+	}
+	return act_n;
+}
+
+int musicsettings_hidden_tiles(music_tile_id_t *out, int max) {
+	music_tile_id_t active[MUSIC_TILE_COUNT];
+	music_tile_id_t hidden[MUSIC_TILE_COUNT];
+	int act_n = 0, hid_n = 0;
+	load_tile_arrangement(active, &act_n, hidden, &hid_n);
+	if (out && max > 0) {
+		int n = hid_n < max ? hid_n : max;
+		memcpy(out, hidden, (size_t)n * sizeof(music_tile_id_t));
+		return n;
+	}
+	return hid_n;
+}
+
+static void format_tile_csv(const music_tile_id_t *list, int count, char *buf, size_t size) {
+	size_t used = 0;
+	if (size > 0) {
+		buf[0] = '\0';
+	}
+	for (int i = 0; i < count; i++) {
+		music_tile_id_t id = list[i];
+		if (id < 0 || id >= MUSIC_TILE_COUNT) {
+			continue;
+		}
+		int n = snprintf(buf + used, size - used, "%s%s", used > 0 ? "," : "", TILE_INFO[id].slug);
+		if (n < 0 || (size_t)n >= size - used) {
+			break;
+		}
+		used += (size_t)n;
+	}
+}
+
+static void rearrange_populate(void);
+
+void musicsettings_set_main_tiles(const music_tile_id_t *active, int active_count, const music_tile_id_t *hidden,
+								  int hidden_count) {
+	bool seen[MUSIC_TILE_COUNT] = {false};
+	music_tile_id_t clean_active[MUSIC_TILE_COUNT];
+	music_tile_id_t clean_hidden[MUSIC_TILE_COUNT];
+	int act_n = 0, hid_n = 0;
+
+	for (int i = 0; active && i < active_count && act_n < MUSIC_TILE_COUNT; i++) {
+		music_tile_id_t id = active[i];
+		if (id >= 0 && id < MUSIC_TILE_COUNT && !seen[id]) {
+			seen[id] = true;
+			clean_active[act_n++] = id;
+		}
+	}
+	for (int i = 0; hidden && i < hidden_count && hid_n < MUSIC_TILE_COUNT; i++) {
+		music_tile_id_t id = hidden[i];
+		if (id >= 0 && id < MUSIC_TILE_COUNT && !seen[id]) {
+			seen[id] = true;
+			clean_hidden[hid_n++] = id;
+		}
+	}
+	for (int i = 0; i < MUSIC_TILE_COUNT; i++) {
+		if (!seen[i]) {
+			clean_active[act_n++] = (music_tile_id_t)i;
+		}
+	}
+	if (act_n == 0 && hid_n > 0) {
+		clean_active[act_n++] = clean_hidden[0];
+		memmove(&clean_hidden[0], &clean_hidden[1], (size_t)(hid_n - 1) * sizeof(music_tile_id_t));
+		hid_n--;
+	}
+
+	char act_csv[256];
+	char hid_csv[256];
+	format_tile_csv(clean_active, act_n, act_csv, sizeof(act_csv));
+	format_tile_csv(clean_hidden, hid_n, hid_csv, sizeof(hid_csv));
+	config_set("music", "main_tiles", act_csv);
+	config_set("music", "main_tiles_hidden", hid_csv);
+	config_save();
+
+	rearrange_populate();
+	music_refresh_layout();
+}
+
+#define REARRANGE_ROW_HEIGHT bp_pick(44, 84)
+#define REARRANGE_ROW_GAP bp_pick(6, 12)
+#define REARRANGE_EDGE_ZONE 70
+#define REARRANGE_EDGE_STEP 18
+
+static lv_obj_t *rearrange_screen;
+static lv_obj_t *rearrange_body;
+static lv_obj_t *rearrange_in_use_list;
+static lv_obj_t *rearrange_not_in_use_list;
+static lv_obj_t *rearrange_ghost;
+static lv_obj_t *rearrange_ghost_label;
+static lv_obj_t *rearrange_line;
+static lv_obj_t *rearrange_dragged_row;
+static int rearrange_drag_grab_y;
+
+lv_obj_t *musicsettings_library_screen(void) { return library_screen; }
+lv_obj_t *musicsettings_rearrange_screen(void) { return rearrange_screen; }
+
+static music_tile_id_t rearrange_row_tile(lv_obj_t *row) {
+	return (music_tile_id_t)(intptr_t)lv_obj_get_user_data(row);
+}
+
+static void rearrange_save_from_lists(void) {
+	if (!rearrange_in_use_list || !rearrange_not_in_use_list) {
+		return;
+	}
+	music_tile_id_t active[MUSIC_TILE_COUNT];
+	music_tile_id_t hidden[MUSIC_TILE_COUNT];
+	int act_n = 0, hid_n = 0;
+
+	uint32_t in_n = lv_obj_get_child_count(rearrange_in_use_list);
+	for (uint32_t i = 0; i < in_n && act_n < MUSIC_TILE_COUNT; i++) {
+		active[act_n++] = rearrange_row_tile(lv_obj_get_child(rearrange_in_use_list, (int)i));
+	}
+	uint32_t out_n = lv_obj_get_child_count(rearrange_not_in_use_list);
+	for (uint32_t i = 0; i < out_n && hid_n < MUSIC_TILE_COUNT; i++) {
+		hidden[hid_n++] = rearrange_row_tile(lv_obj_get_child(rearrange_not_in_use_list, (int)i));
+	}
+	musicsettings_set_main_tiles(active, act_n, hidden, hid_n);
+}
+
+static void rearrange_row_clicked_cb(lv_event_t *e) {
+	if (rearrange_dragged_row || player_sheet_drag_active() || switcher_back_drag_active()) {
+		return;
+	}
+	lv_obj_t *row = lv_event_get_current_target(e);
+	lv_obj_t *parent = lv_obj_get_parent(row);
+	if (parent == rearrange_in_use_list) {
+		if (lv_obj_get_child_count(rearrange_in_use_list) <= 1) {
+			return;
+		}
+		lv_obj_set_parent(row, rearrange_not_in_use_list);
+	} else if (parent == rearrange_not_in_use_list) {
+		lv_obj_set_parent(row, rearrange_in_use_list);
+	}
+	rearrange_save_from_lists();
+}
+
+static lv_obj_t *rearrange_drop_target(lv_coord_t y, uint32_t *index_out, lv_coord_t *line_y_out) {
+	lv_area_t not_area;
+	lv_obj_get_coords(rearrange_not_in_use_list, &not_area);
+
+	bool from_in_use = lv_obj_get_parent(rearrange_dragged_row) == rearrange_in_use_list;
+	bool last_in_use = from_in_use && lv_obj_get_child_count(rearrange_in_use_list) <= 1;
+	lv_obj_t *list = (!last_in_use && y >= not_area.y1 - 24) ? rearrange_not_in_use_list : rearrange_in_use_list;
+
+	uint32_t count = lv_obj_get_child_count(list);
+	for (uint32_t i = 0; i < count; i++) {
+		lv_obj_t *child = lv_obj_get_child(list, (int)i);
+		lv_area_t a;
+		lv_obj_get_coords(child, &a);
+		if (y < (a.y1 + a.y2) / 2) {
+			*index_out = i;
+			*line_y_out = a.y1 - REARRANGE_ROW_GAP / 2 - 2;
+			return list;
+		}
+	}
+
+	*index_out = count;
+	if (count > 0) {
+		lv_area_t a;
+		lv_obj_get_coords(lv_obj_get_child(list, (int)count - 1), &a);
+		*line_y_out = a.y2 + REARRANGE_ROW_GAP / 2 - 2;
+	} else {
+		lv_area_t a;
+		lv_obj_get_coords(list, &a);
+		*line_y_out = a.y1 + 12;
+	}
+	return list;
+}
+
+static void rearrange_drag_end(void) {
+	if (!rearrange_dragged_row) {
+		return;
+	}
+	lv_obj_set_style_opa(rearrange_dragged_row, LV_OPA_COVER, 0);
+	rearrange_dragged_row = NULL;
+	if (rearrange_ghost) {
+		lv_obj_set_hidden(rearrange_ghost, true);
+	}
+	if (rearrange_line) {
+		lv_obj_set_hidden(rearrange_line, true);
+	}
+}
+
+static void rearrange_grip_cb(lv_event_t *e) {
+	lv_obj_t *row = lv_event_get_user_data(e);
+	lv_event_code_t code = lv_event_get_code(e);
+
+	lv_indev_t *indev = lv_indev_active();
+	if (!indev) {
+		return;
+	}
+	lv_point_t p;
+	lv_indev_get_point(indev, &p);
+
+	if (code == LV_EVENT_PRESSED) {
+		rearrange_dragged_row = row;
+		lv_area_t a;
+		lv_obj_get_coords(row, &a);
+		rearrange_drag_grab_y = p.y - a.y1;
+
+		lv_label_set_text(rearrange_ghost_label, tr(musicsettings_tile_label(rearrange_row_tile(row))));
+		lv_obj_set_width(rearrange_ghost, lv_area_get_width(&a));
+		lv_obj_set_pos(rearrange_ghost, a.x1, a.y1);
+		lv_obj_set_hidden(rearrange_ghost, false);
+		lv_obj_move_foreground(rearrange_ghost);
+
+		lv_obj_set_style_opa(row, LV_OPA_30, 0);
+		return;
+	}
+
+	if (code == LV_EVENT_PRESSING) {
+		if (rearrange_dragged_row != row) {
+			return;
+		}
+		lv_obj_set_y(rearrange_ghost, p.y - rearrange_drag_grab_y);
+
+		lv_area_t view;
+		lv_obj_get_coords(rearrange_body, &view);
+		if (p.y < view.y1 + REARRANGE_EDGE_ZONE) {
+			lv_obj_scroll_by_bounded(rearrange_body, 0, REARRANGE_EDGE_STEP, LV_ANIM_OFF);
+		} else if (p.y > view.y2 - REARRANGE_EDGE_ZONE) {
+			lv_obj_scroll_by_bounded(rearrange_body, 0, -REARRANGE_EDGE_STEP, LV_ANIM_OFF);
+		}
+
+		uint32_t idx;
+		lv_coord_t line_y;
+		rearrange_drop_target(p.y, &idx, &line_y);
+		lv_obj_set_y(rearrange_line, line_y);
+		lv_obj_set_hidden(rearrange_line, false);
+		lv_obj_move_foreground(rearrange_line);
+		lv_obj_move_foreground(rearrange_ghost);
+		return;
+	}
+
+	if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
+		if (rearrange_dragged_row != row) {
+			return;
+		}
+		if (code == LV_EVENT_RELEASED) {
+			uint32_t idx;
+			lv_coord_t line_y;
+			lv_obj_t *list = rearrange_drop_target(p.y, &idx, &line_y);
+			if (lv_obj_get_parent(row) == list && (uint32_t)lv_obj_get_index(row) < idx) {
+				idx--;
+			}
+			if (lv_obj_get_parent(row) != list) {
+				lv_obj_set_parent(row, list);
+			}
+			lv_obj_move_to_index(row, (int32_t)idx);
+			rearrange_drag_end();
+			rearrange_save_from_lists();
+		} else {
+			rearrange_drag_end();
+		}
+	}
+}
+
+static void rearrange_make_row(lv_obj_t *list, music_tile_id_t id) {
+	lv_obj_t *row = lv_obj_create(list);
+	lv_obj_set_size(row, lv_pct(100), REARRANGE_ROW_HEIGHT);
+	lv_obj_add_style(row, &theme_style_card, 0);
+	lv_obj_set_style_radius(row, bp_pick(10, 12), 0);
+	lv_obj_set_style_border_width(row, 0, 0);
+	lv_obj_set_style_shadow_width(row, 0, 0);
+	lv_obj_set_style_pad_left(row, bp_pick(10, 20), 0);
+	lv_obj_set_style_pad_right(row, bp_pick(4, 6), 0);
+	lv_obj_set_style_pad_ver(row, 0, 0);
+	lv_obj_set_scrollable(row, false);
+	lv_obj_set_event_bubble(row, true);
+	lv_obj_set_user_data(row, (void *)(intptr_t)id);
+	lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+	lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	lv_obj_add_event_cb(row, rearrange_row_clicked_cb, LV_EVENT_CLICKED, NULL);
+
+	lv_obj_t *label = lv_label_create(row);
+	lv_label_set_text(label, tr(musicsettings_tile_label(id)));
+	lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
+	lv_obj_set_flex_grow(label, 1);
+	lv_obj_add_style(label, &theme_style_text, 0);
+	lv_obj_set_style_text_font(label, bp_is_tempotec_v1() ? &font_ui_18 : &font_ui_24, 0);
+
+	lv_obj_t *handle = lv_obj_create(row);
+	lv_obj_remove_style_all(handle);
+	lv_obj_set_size(handle, bp_pick(36, 68), REARRANGE_ROW_HEIGHT);
+	lv_obj_set_scrollable(handle, false);
+	lv_obj_set_scroll_chain_ver(handle, false);
+	lv_obj_add_event_cb(handle, rearrange_grip_cb, LV_EVENT_PRESSED, row);
+	lv_obj_add_event_cb(handle, rearrange_grip_cb, LV_EVENT_PRESSING, row);
+	lv_obj_add_event_cb(handle, rearrange_grip_cb, LV_EVENT_RELEASED, row);
+	lv_obj_add_event_cb(handle, rearrange_grip_cb, LV_EVENT_PRESS_LOST, row);
+
+	lv_obj_t *grip = lv_image_create(handle);
+	lv_image_set_src(grip, &icon_grip);
+	lv_obj_add_style(grip, &theme_style_icon, 0);
+	lv_obj_set_style_image_recolor_opa(grip, LV_OPA_COVER, 0);
+	lv_obj_set_style_image_opa(grip, LV_OPA_50, 0);
+	lv_obj_center(grip);
+}
+
+static lv_obj_t *rearrange_make_list(lv_obj_t *parent) {
+	lv_obj_t *list = lv_obj_create(parent);
+	lv_obj_remove_style_all(list);
+	lv_obj_set_width(list, lv_pct(100));
+	lv_obj_set_height(list, LV_SIZE_CONTENT);
+	lv_obj_set_style_min_height(list, REARRANGE_ROW_HEIGHT, 0);
+	lv_obj_set_style_pad_row(list, REARRANGE_ROW_GAP, 0);
+	lv_obj_set_scrollable(list, false);
+	lv_obj_set_event_bubble(list, true);
+	lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
+	return list;
+}
+
+static void rearrange_populate(void) {
+	if (!rearrange_in_use_list || !rearrange_not_in_use_list) {
+		return;
+	}
+	rearrange_drag_end();
+	lv_obj_clean(rearrange_in_use_list);
+	lv_obj_clean(rearrange_not_in_use_list);
+
+	music_tile_id_t active[MUSIC_TILE_COUNT];
+	music_tile_id_t hidden[MUSIC_TILE_COUNT];
+	int act_n = 0, hid_n = 0;
+	load_tile_arrangement(active, &act_n, hidden, &hid_n);
+
+	for (int i = 0; i < act_n; i++) {
+		rearrange_make_row(rearrange_in_use_list, active[i]);
+	}
+	for (int i = 0; i < hid_n; i++) {
+		rearrange_make_row(rearrange_not_in_use_list, hidden[i]);
+	}
+}
+
+static void rearrange_loaded_cb(lv_event_t *e) {
+	(void)e;
+	rearrange_populate();
+}
+
+static void rearrange_unloaded_cb(lv_event_t *e) {
+	(void)e;
+	rearrange_drag_end();
+}
+
+static void build_rearrange_page(gui_config_t *cfg) {
+	rearrange_screen = lv_obj_create(NULL);
+	rearrange_body = settingsrow_page(rearrange_screen, cfg, "musicsettings_rearrange_main_page");
+	settingsrow_title_corner_slots(settingsrow_page_title(rearrange_screen), cfg, 0);
+
+	rearrange_in_use_list = rearrange_make_list(rearrange_body);
+	lv_obj_t *not_heading = lv_label_create(rearrange_body);
+	lv_label_set_text(not_heading, tr("not_in_use"));
+	lv_obj_add_style(not_heading, &theme_style_text_dim, 0);
+	lv_obj_set_style_text_font(not_heading, bp_is_tempotec_v1() ? &font_ui_16 : &font_ui_22, 0);
+	lv_obj_set_style_pad_top(not_heading, bp_pick(8, 16), 0);
+	rearrange_not_in_use_list = rearrange_make_list(rearrange_body);
+
+	rearrange_line = lv_obj_create(rearrange_screen);
+	lv_obj_set_ignore_layout(rearrange_line, true);
+	lv_obj_set_size(rearrange_line, cfg->screen_width - 2 * cfg->padding, 4);
+	lv_obj_set_x(rearrange_line, cfg->padding);
+	lv_obj_add_style(rearrange_line, &theme_style_accent_bg, 0);
+	lv_obj_set_style_radius(rearrange_line, 2, 0);
+	lv_obj_set_style_border_width(rearrange_line, 0, 0);
+	lv_obj_set_style_shadow_width(rearrange_line, 0, 0);
+	lv_obj_set_clickable(rearrange_line, false);
+	lv_obj_set_hidden(rearrange_line, true);
+
+	rearrange_ghost = lv_obj_create(rearrange_screen);
+	lv_obj_set_ignore_layout(rearrange_ghost, true);
+	lv_obj_set_size(rearrange_ghost, cfg->screen_width - 2 * cfg->padding, REARRANGE_ROW_HEIGHT);
+	lv_obj_add_style(rearrange_ghost, &theme_style_card, 0);
+	lv_obj_set_style_radius(rearrange_ghost, bp_pick(10, 12), 0);
+	lv_obj_set_style_border_width(rearrange_ghost, 2, 0);
+	lv_obj_set_style_border_color(rearrange_ghost, theme()->accent, 0);
+	lv_obj_set_style_shadow_width(rearrange_ghost, 0, 0);
+	lv_obj_set_style_pad_left(rearrange_ghost, bp_pick(10, 20), 0);
+	lv_obj_set_style_pad_right(rearrange_ghost, bp_pick(14, 24), 0);
+	lv_obj_set_scrollable(rearrange_ghost, false);
+	lv_obj_set_clickable(rearrange_ghost, false);
+	lv_obj_set_flex_flow(rearrange_ghost, LV_FLEX_FLOW_ROW);
+	lv_obj_set_flex_align(rearrange_ghost, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	lv_obj_set_hidden(rearrange_ghost, true);
+
+	rearrange_ghost_label = lv_label_create(rearrange_ghost);
+	lv_obj_add_style(rearrange_ghost_label, &theme_style_text, 0);
+	lv_obj_set_style_text_font(rearrange_ghost_label, bp_is_tempotec_v1() ? &font_ui_18 : &font_ui_24, 0);
+
+	lv_obj_t *grip = lv_image_create(rearrange_ghost);
+	lv_image_set_src(grip, &icon_grip);
+	lv_obj_add_style(grip, &theme_style_icon, 0);
+	lv_obj_set_style_image_recolor_opa(grip, LV_OPA_COVER, 0);
+
+	rearrange_populate();
+	lv_obj_add_event_cb(rearrange_screen, rearrange_loaded_cb, LV_EVENT_SCREEN_LOADED, NULL);
+	lv_obj_add_event_cb(rearrange_screen, rearrange_unloaded_cb, LV_EVENT_SCREEN_UNLOADED, NULL);
+	switcher_attach_back_gesture(rearrange_screen);
+}
+
+// ---------------------------------------------------------------------------
 // Library
 //
 // How the library's lists are drawn: what an artist opens on, what a row says
-// under its title, and which tile the Music page leads with. Inside Display
-// options, which keeps what concerns the now-playing page and the rest.
+// under its title, and which tiles the Music page shows. Inside Display
+// options, and also reachable directly from the Music settings page.
 // ---------------------------------------------------------------------------
 
 static void build_library_page(gui_config_t *cfg) {
 	library_screen = lv_obj_create(NULL);
 	lv_obj_t *container = settingsrow_page(library_screen, cfg, "musicsettings_library");
 	settingsrow_title_corner_slots(settingsrow_page_title(library_screen), cfg, 0);
+
+	build_rearrange_page(cfg);
+	settingsrow_add(container, "musicsettings_rearrange_main_page", NULL, switch_screen_cb, rearrange_screen);
 
 	// On: an artist is a list of their records. Off: a flat list of their
 	// tracks, with the grouping button in the corner.
@@ -1653,8 +2163,10 @@ static void build_library_page(gui_config_t *cfg) {
 	artist_pill[0] = settingsrow_pill(artist_pills, "music_all_tracks", MEDIALIST_ARTIST_TRACKS, artist_pick_cb);
 	artist_pill[1] = settingsrow_pill(artist_pills, "albums", MEDIALIST_ARTIST_ALBUMS, artist_pick_cb);
 	artist_pill[2] = settingsrow_pill(artist_pills, "music_genres", MEDIALIST_ARTIST_GENRES, artist_pick_cb);
-	artist_pill[3] = settingsrow_pill(artist_pills, "favourites", MEDIALIST_ARTIST_FAVOURITES, artist_pick_cb);
-	artist_pill[4] = settingsrow_pill(artist_pills, "playlists", MEDIALIST_ARTIST_PLAYLISTS, artist_pick_cb);
+	artist_pill[3] = settingsrow_pill(artist_pills, "music_years", MEDIALIST_ARTIST_YEARS, artist_pick_cb);
+	artist_pill[4] = settingsrow_pill(artist_pills, "favourites", MEDIALIST_ARTIST_FAVOURITES, artist_pick_cb);
+	artist_pill[5] = settingsrow_pill(artist_pills, "playlists", MEDIALIST_ARTIST_PLAYLISTS, artist_pick_cb);
+	artist_pill[6] = settingsrow_pill(artist_pills, "music_most_played", MEDIALIST_ARTIST_MOST_PLAYED, artist_pick_cb);
 	option_note(container, "musicsettings_show_artist_note");
 	artist_refresh();
 	theme_register_refresh(artist_refresh);
@@ -1910,6 +2422,7 @@ void musicsettings_init(gui_config_t *cfg) {
 
 	build_display_page(cfg);
 	settingsrow_add(container, "musicsettings_display_options", NULL, switch_screen_cb, display_screen);
+	settingsrow_add(container, "musicsettings_library", NULL, switch_screen_cb, library_screen);
 
 	lastfmsettings_init(cfg);
 	settingsrow_add(container, "lastfm", NULL, switch_screen_cb, lastfmsettings_screen());

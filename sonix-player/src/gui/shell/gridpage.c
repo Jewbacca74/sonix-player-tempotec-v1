@@ -30,7 +30,7 @@ static int grid_gap(void) { return compact_grid() ? 6 : GRID_GAP; }
 // Night later. V1 has six tiles per page; the extra slots cover optional
 // builds without allocating per-tile theme objects.
 #define GRIDPAGE_THEME_PAGE_MAX 12
-#define GRIDPAGE_THEME_TILE_MAX 8
+#define GRIDPAGE_THEME_TILE_MAX 16
 typedef struct {
 	lv_obj_t *grid;
 	int count;
@@ -224,6 +224,8 @@ static bool gridpage_tokyo_icon(const char *label, const lv_image_dsc_t **icon, 
 		{"artists", &icon_artist, THEME_SEMANTIC_GREEN},
 		{"music_album_artists", &icon_artist_album, THEME_SEMANTIC_BLUE},
 		{"music_genres", &icon_genre, THEME_SEMANTIC_AMBER},
+		{"music_years", &icon_menu_year, THEME_SEMANTIC_AMBER},
+		{"music_most_played", &icon_menu_most_played, THEME_SEMANTIC_PURPLE},
 		{"music_browse", &icon_folder, THEME_SEMANTIC_MUTED},
 		{"playlists", &icon_list_music, THEME_SEMANTIC_CYAN},
 		{"wi_fi", &icon_wifi, THEME_SEMANTIC_BLUE},
@@ -312,13 +314,18 @@ static gridpage_theme_page_t *gridpage_theme_page_for(lv_obj_t *grid) {
 }
 
 static void gridpage_register_theme_page(lv_obj_t *grid, const grid_entry_t *entries, int count) {
-	if (!grid || !entries || count < 1 || count > GRIDPAGE_THEME_TILE_MAX ||
-			theme_page_count >= GRIDPAGE_THEME_PAGE_MAX) {
+	if (!grid || !entries || count < 0 || count > GRIDPAGE_THEME_TILE_MAX) {
 		return;
 	}
 
-	gridpage_theme_page_t *page = &theme_pages[theme_page_count++];
-	page->grid = grid;
+	gridpage_theme_page_t *page = gridpage_theme_page_for(grid);
+	if (!page) {
+		if (theme_page_count >= GRIDPAGE_THEME_PAGE_MAX) {
+			return;
+		}
+		page = &theme_pages[theme_page_count++];
+		page->grid = grid;
+	}
 	page->count = count;
 	for (int i = 0; i < count; i++) {
 		page->normal_icons[i] = entries[i].icon;
@@ -547,11 +554,18 @@ lv_obj_t *gridpage_build(lv_obj_t *screen, gui_config_t *cfg, const grid_entry_t
 	int tile_w = (usable_w - (columns - 1) * gap) / columns;
 	int tile_h = (usable_h - (rows - 1) * gap) / rows;
 
+	if (count > columns * rows) {
+		lv_obj_set_scrollable(grid, true);
+		lv_obj_set_scroll_dir(grid, LV_DIR_VER);
+		lv_obj_set_scrollbar_mode(grid, LV_SCROLLBAR_MODE_AUTO);
+	}
+
 	for (int i = 0; i < count; i++) {
 		// Five entries in a 2x3 page used to leave a conspicuous dead card-sized
 		// hole at bottom right.  Let the final destination span that row; pages
 		// with four entries still intentionally leave their third row empty.
-		bool lone_last = count == columns * rows - 1 && i == count - 1;
+		bool lone_last = (count == columns * rows - 1 || (count > columns * rows && count % columns == 1)) &&
+						 i == count - 1;
 		add_tile(grid, &entries[i], lone_last ? usable_w : tile_w, tile_h);
 	}
 
@@ -566,6 +580,35 @@ lv_obj_t *gridpage_build(lv_obj_t *screen, gui_config_t *cfg, const grid_entry_t
 	// bubbles any further.
 	gridpage_register_theme_page(grid, entries, count);
 	return grid;
+}
+
+void gridpage_replace_entries(lv_obj_t *grid, gui_config_t *cfg, const grid_entry_t *entries, int count, int columns,
+							  int rows) {
+	if (!grid || !cfg || !entries || columns < 1 || rows < 1) {
+		return;
+	}
+
+	lv_obj_clean(grid);
+	int gap = grid_gap();
+	int usable_w = (int)cfg->screen_width - (2 * (int)cfg->padding);
+	int usable_h = lv_obj_get_height(grid) - (2 * (int)cfg->padding);
+	int tile_w = (usable_w - (columns - 1) * gap) / columns;
+	int tile_h = (usable_h - (rows - 1) * gap) / rows;
+
+	if (count > columns * rows) {
+		lv_obj_set_scrollable(grid, true);
+		lv_obj_set_scroll_dir(grid, LV_DIR_VER);
+		lv_obj_set_scrollbar_mode(grid, LV_SCROLLBAR_MODE_AUTO);
+	} else {
+		lv_obj_set_scrollable(grid, false);
+	}
+
+	for (int i = 0; i < count; i++) {
+		bool lone_last = (count == columns * rows - 1 || (count > columns * rows && count % columns == 1)) &&
+						 i == count - 1;
+		add_tile(grid, &entries[i], lone_last ? usable_w : tile_w, tile_h);
+	}
+	gridpage_register_theme_page(grid, entries, count);
 }
 
 lv_obj_t *gridpage_empty_panel(lv_obj_t *screen, gui_config_t *cfg, const lv_image_dsc_t *icon, const char *text,

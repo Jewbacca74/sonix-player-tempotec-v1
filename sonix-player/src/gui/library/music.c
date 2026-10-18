@@ -82,14 +82,45 @@ static void open_album_artists(void) {
 	medialist_open(tr("music_album_artists"), LIBRARY_LIST_ALBUM_ARTISTS, LIBRARY_FILTER_NONE, NULL);
 }
 static void open_genres(void) { medialist_open(tr("music_genres"), LIBRARY_LIST_GENRES, LIBRARY_FILTER_NONE, NULL); }
+static void open_years(void) { medialist_open_years(); }
+static void open_playlists(void) { playlistpage_open(); }
+static void open_most_played(void) { medialist_open_most_played(); }
+static void open_browse(void) { switch_screen(browser_screen); }
 
-// Browse and Playlists trade places.
-static void open_tile_slot(void) {
-	if (musicsettings_playlists_first()) {
-		playlistpage_open();
-	} else {
-		switch_screen(browser_screen);
+static grid_entry_t entry_for_tile(music_tile_id_t id) {
+	switch (id) {
+	case MUSIC_TILE_ALL_TRACKS:
+		return (grid_entry_t){"music_all_tracks", &icon_menu_all, NULL, open_all_tracks};
+	case MUSIC_TILE_ALBUMS:
+		return (grid_entry_t){"albums", &icon_menu_album, NULL, open_albums};
+	case MUSIC_TILE_ARTISTS:
+		return (grid_entry_t){"artists", &icon_menu_artist, NULL, open_artists};
+	case MUSIC_TILE_ALBUM_ARTISTS:
+		return (grid_entry_t){"music_album_artists", &icon_menu_album_artist, NULL, open_album_artists};
+	case MUSIC_TILE_GENRES:
+		return (grid_entry_t){"music_genres", &icon_menu_genre, NULL, open_genres};
+	case MUSIC_TILE_YEARS:
+		return (grid_entry_t){"music_years", &icon_menu_year, NULL, open_years};
+	case MUSIC_TILE_PLAYLISTS:
+		return (grid_entry_t){"playlists", &icon_menu_playlist, NULL, open_playlists};
+	case MUSIC_TILE_MOST_PLAYED:
+		return (grid_entry_t){"music_most_played", &icon_menu_most_played, NULL, open_most_played};
+	case MUSIC_TILE_BROWSE:
+	default:
+		return (grid_entry_t){"music_browse", &icon_menu_explorer, NULL, open_browse};
 	}
+}
+
+static int music_build_entries(grid_entry_t *entries, int max) {
+	music_tile_id_t active[MUSIC_TILE_COUNT];
+	int count = musicsettings_main_tiles(active, MUSIC_TILE_COUNT);
+	if (count > max) {
+		count = max;
+	}
+	for (int i = 0; i < count; i++) {
+		entries[i] = entry_for_tile(active[i]);
+	}
+	return count;
 }
 
 static void playlists_cb(lv_event_t *e) {
@@ -118,7 +149,7 @@ static void scan_cb(lv_event_t *e) {
 
 static void compact_playlists_action(void *unused) {
 	(void)unused;
-	playlists_cb(NULL);
+	open_playlists();
 }
 static void compact_favourites_action(void *unused) {
 	(void)unused;
@@ -140,13 +171,23 @@ static void compact_genres_action(void *unused) {
 	(void)unused;
 	open_genres();
 }
+static void compact_years_action(void *unused) {
+	(void)unused;
+	open_years();
+}
+static void compact_most_played_action(void *unused) {
+	(void)unused;
+	open_most_played();
+}
 
 static void compact_more_cb(lv_event_t *e) {
 	popover_item_t items[] = {
-		{musicsettings_playlists_first() ? "music_browse" : "playlists", compact_playlists_action, NULL, false},
+		{"playlists", compact_playlists_action, NULL, false},
 		{"music_all_tracks", compact_all_tracks_action, NULL, false},
 		{"music_album_artists", compact_album_artists_action, NULL, false},
 		{"music_genres", compact_genres_action, NULL, false},
+		{"music_years", compact_years_action, NULL, false},
+		{"music_most_played", compact_most_played_action, NULL, false},
 		{"favourites", compact_favourites_action, NULL, false},
 		{"search", compact_search_action, NULL, false},
 	};
@@ -247,6 +288,9 @@ static void browse_music_cb(lv_event_t *e) { (void)e; switch_screen(browser_scre
 static void browse_search_cb(lv_event_t *e) { (void)e; search_cb(NULL); }
 static void shortcut_all_tracks_cb(lv_event_t *e) { (void)e; open_all_tracks(); }
 static void shortcut_genres_cb(lv_event_t *e) { (void)e; open_genres(); }
+static void shortcut_years_cb(lv_event_t *e) { (void)e; open_years(); }
+static void shortcut_playlists_cb(lv_event_t *e) { (void)e; open_playlists(); }
+static void shortcut_most_played_cb(lv_event_t *e) { (void)e; open_most_played(); }
 
 static void label_set_wrapped_translation(lv_obj_t *label, const char *key, bool wrap) {
 	const char *text = tr(key);
@@ -275,6 +319,9 @@ static lv_obj_t *music_shortcut_card(lv_obj_t *parent) {
 		{"music_all_tracks", &icon_music2, THEME_SEMANTIC_CYAN, false, shortcut_all_tracks_cb},
 		{"music_album_artist", &icon_artist_album, THEME_SEMANTIC_BLUE, true, browse_album_artists_cb},
 		{"music_genres", &icon_genre, THEME_SEMANTIC_AMBER, false, shortcut_genres_cb},
+		{"music_years", &icon_menu_year, THEME_SEMANTIC_AMBER, false, shortcut_years_cb},
+		{"playlists", &icon_list_music, THEME_SEMANTIC_GREEN, false, shortcut_playlists_cb},
+		{"music_most_played", &icon_menu_most_played, THEME_SEMANTIC_PURPLE, false, shortcut_most_played_cb},
 		{"favourites", &icon_star, THEME_SEMANTIC_RED, false, favourites_cb},
 	};
 	lv_obj_t *card = lv_obj_create(parent);
@@ -683,17 +730,10 @@ static lv_obj_t *corner_button(gui_config_t *cfg, int slot, const lv_image_dsc_t
 
 void music_init(gui_config_t *cfg) {
 	music_cfg = cfg;
-	const grid_entry_t entries[] = {
-		{"music_all_tracks", &icon_menu_all, NULL, open_all_tracks},
-		{"albums", &icon_menu_album, NULL, open_albums},
-		{"artists", &icon_menu_artist, NULL, open_artists},
-		{"music_album_artists", &icon_menu_album_artist, NULL, open_album_artists},
-		{"music_genres", &icon_menu_genre, NULL, open_genres},
-		// The V1's tile swaps Browse and Playlists with the music preference.
-		{"music_browse", &icon_menu_explorer, NULL, open_tile_slot},
-	};
+	grid_entry_t entries[MUSIC_TILE_COUNT];
+	int count = music_build_entries(entries, MUSIC_TILE_COUNT);
 
-	tile_grid = gridpage_build(music_screen, cfg, entries, (int)(sizeof(entries) / sizeof(entries[0])), 2, 3, true);
+	tile_grid = gridpage_build(music_screen, cfg, entries, count, 2, 3, true);
 
 	bool compact_header = cfg->screen_width < 320;
 	settingsrow_title_corner_slots(settingsrow_title(music_screen, cfg, "music"), cfg, compact_header ? 2 : 4);
@@ -730,10 +770,14 @@ void music_init(gui_config_t *cfg) {
 }
 
 void music_refresh_layout(void) {
-	bool playlists_first = musicsettings_playlists_first();
-	gridpage_set_tile(tile_grid, 5, playlists_first ? &icon_menu_playlist : &icon_menu_explorer,
-					  playlists_first ? "playlists" : "music_browse");
+	if (!tile_grid || !music_cfg) {
+		return;
+	}
+	grid_entry_t entries[MUSIC_TILE_COUNT];
+	int count = music_build_entries(entries, MUSIC_TILE_COUNT);
+	gridpage_replace_entries(tile_grid, music_cfg, entries, count, 2, 3);
 
+	bool playlists_first = musicsettings_playlists_first();
 	if (playlists_icon) {
 		lv_image_set_src(playlists_icon, playlists_first ? &icon_folder_corner : &icon_list_music);
 	}

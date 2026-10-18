@@ -17,6 +17,7 @@
 #include "src/gui/shell/gui.h"
 #include "src/gui/shell/icons.h"
 #include "src/gui/shell/keyboard.h"
+#include "src/gui/library/pictureview.h"
 #include "src/gui/library/textview.h"
 #include "src/gui/nowplaying/coverflow.h"
 #include "src/gui/nowplaying/player.h"
@@ -184,6 +185,7 @@ static const char *const EXT_AUDIO[] = {"iso", "dff", "dsf", "dts", "ape", "flac
 static const char *const EXT_AUDIOBOOK[] = {"m4b", "aa", "aax", NULL};
 static const char *const EXT_PLAYLIST[] = {"m3u", "m3u8", "cue", NULL};
 static const char *const EXT_IMAGE[] = {"bmp", "png", "jpg", "jpeg", "gif", "webp", NULL};
+static const char *const EXT_PICTURE[] = {"png", "jpg", "jpeg", NULL};
 static const char *const EXT_TEXT[] = {"lrc", "txt", "t", "ini", "nfo", NULL};
 static const char *const EXT_FIRMWARE[] = {"upt", NULL};
 static const char *const EXT_GAME[] = {"gb", "gbc", "sav", NULL};
@@ -969,14 +971,18 @@ static void row_clicked_cb(lv_event_t *e) {
 		return;
 	}
 
-	// A text file opens to be read. Any other file has nothing to open into,
-	// and the tap does nothing: the menu is what the three dots are for, and a
-	// row that opens a menu when pressed anywhere is a row that opens one every
-	// time a scroll ends on it.
+	// A text file opens to be read; a JPEG or PNG opens on the picture page.
+	// Any other file has nothing to open into, and the tap does nothing: the
+	// menu is what the three dots are for, and a row that opens a menu when
+	// pressed anywhere is a row that opens one every time a scroll ends on it.
 	if (!entries[index].dir) {
 		char file[PATH_MAX_LEN];
-		if (ext_in(ext_of(entries[index].name), EXT_TEXT) && child_path(entries[index].name, file, sizeof(file)) &&
+		const char *ext = ext_of(entries[index].name);
+		if (ext_in(ext, EXT_TEXT) && child_path(entries[index].name, file, sizeof(file)) &&
 			!textview_open(file)) {
+			gui_notify_popup("files_text_unreadable");
+		} else if (ext_in(ext, EXT_PICTURE) && child_path(entries[index].name, file, sizeof(file)) &&
+				   !pictureview_open(file)) {
 			gui_notify_popup("files_text_unreadable");
 		}
 		return;

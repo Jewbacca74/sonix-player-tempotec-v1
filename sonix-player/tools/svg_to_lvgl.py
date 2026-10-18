@@ -412,6 +412,8 @@ COLOR_ICONS = [
     ("explorer.png", "menu_explorer", SECTION_ICON_SIZE),
     # The tile Explorer swaps with when playlists are put first.
     ("playlist.png", "menu_playlist", SECTION_ICON_SIZE),
+    ("year.png", "menu_year", SECTION_ICON_SIZE),
+    ("most_played.png", "menu_most_played", SECTION_ICON_SIZE),
     ("streaming.png", "menu_streaming", MAIN_MENU_ICON_SIZE),
     ("wireless.png", "menu_wireless", MAIN_MENU_ICON_SIZE),
     # The Wireless section's own grid.

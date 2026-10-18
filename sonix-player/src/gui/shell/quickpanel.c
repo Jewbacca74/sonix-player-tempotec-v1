@@ -614,7 +614,7 @@ static void panel_prepare(void) {
 	if (max <= 0) {
 		max = 100;
 	}
-	long floor = max / 20 > 0 ? max / 20 : 1;
+	long floor = max / 100 > 0 ? max / 100 : 1;
 	lv_slider_set_range(brightness_slider, (int32_t)floor, (int32_t)max);
 	long value = power_get_brightness();
 	if (value < floor) {
@@ -2136,7 +2136,7 @@ void quickpanel_init(gui_config_t *cfg) {
 	brightness_slider = lv_slider_create(bright_row);
 	lv_obj_set_height(brightness_slider, 10);
 	lv_obj_set_flex_grow(brightness_slider, 1);
-	lv_slider_set_range(brightness_slider, 5, 100);
+	lv_slider_set_range(brightness_slider, 1, 100);
 	lv_obj_set_style_radius(brightness_slider, LV_RADIUS_CIRCLE, LV_PART_MAIN);
 	lv_obj_set_style_bg_color(brightness_slider, theme()->text_secondary, LV_PART_MAIN);
 	lv_obj_set_style_bg_opa(brightness_slider, LV_OPA_40, LV_PART_MAIN);

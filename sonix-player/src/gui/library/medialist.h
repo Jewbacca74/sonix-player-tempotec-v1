@@ -54,9 +54,11 @@ void medialist_set_quality_badges(bool on);
 #define MEDIALIST_ARTIST_GENRES 4
 #define MEDIALIST_ARTIST_FAVOURITES 8
 #define MEDIALIST_ARTIST_PLAYLISTS 16
+#define MEDIALIST_ARTIST_YEARS 32
+#define MEDIALIST_ARTIST_MOST_PLAYED 64
 #define MEDIALIST_ARTIST_ALL                                                                                       \
 	(MEDIALIST_ARTIST_TRACKS | MEDIALIST_ARTIST_ALBUMS | MEDIALIST_ARTIST_GENRES | MEDIALIST_ARTIST_FAVOURITES |   \
-	 MEDIALIST_ARTIST_PLAYLISTS)
+	 MEDIALIST_ARTIST_PLAYLISTS | MEDIALIST_ARTIST_YEARS | MEDIALIST_ARTIST_MOST_PLAYED)
 bool medialist_show_artist(void);
 int medialist_artist_lists(void);
 void medialist_set_show_artist(bool on, int lists);
@@ -80,6 +82,8 @@ void medialist_open(const char *title, library_list_t kind, library_filter_t fil
 // Opens one artist the way their disc button was last left: the records, or
 // the tracks strung out. What the search opens an artist with.
 void medialist_open_artist(const char *name);
+void medialist_open_years(void);
+void medialist_open_most_played(void);
 
 // Re-reads what is playing and moves the accent mark to whichever rows now
 // carry it. Called from the player whenever the track changes; cheap enough
