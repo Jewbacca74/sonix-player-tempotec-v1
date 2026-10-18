@@ -117,6 +117,7 @@ clean:
 # Optional headless LVGL layout regression tests. Reuse the production config,
 # disabling SDL, FreeType and device drivers; no audio service is linked.
 UI_SRC = $(ROOT)/tests/ui/test_main_menu.c $(ROOT)/src/gui/shell/main_menu.c \
+         $(ROOT)/src/gui/library/music.c $(ROOT)/src/gui/shell/popover.c \
          $(ROOT)/src/gui/shell/gridpage.c $(ROOT)/src/gui/settings/appearance.c \
          $(ROOT)/src/gui/shell/settingsrow.c $(ROOT)/src/gui/shell/theme.c \
          $(ROOT)/src/gui/shell/icons.c $(ROOT)/src/gui/shell/main_menu_icons.c \

@@ -591,8 +591,9 @@ void gridpage_replace_entries(lv_obj_t *grid, gui_config_t *cfg, const grid_entr
 
 	lv_obj_clean(grid);
 	int gap = grid_gap();
+	int top = settingsrow_content_top(cfg);
 	int usable_w = (int)cfg->screen_width - (2 * (int)cfg->padding);
-	int usable_h = lv_obj_get_height(grid) - (2 * (int)cfg->padding);
+	int usable_h = ((int)cfg->screen_height - top) - (2 * (int)cfg->padding);
 	int tile_w = (usable_w - (columns - 1) * gap) / columns;
 	int tile_h = (usable_h - (rows - 1) * gap) / rows;
 
@@ -602,6 +603,7 @@ void gridpage_replace_entries(lv_obj_t *grid, gui_config_t *cfg, const grid_entr
 		lv_obj_set_scrollbar_mode(grid, LV_SCROLLBAR_MODE_AUTO);
 	} else {
 		lv_obj_set_scrollable(grid, false);
+		lv_obj_scroll_to_y(grid, 0, LV_ANIM_OFF);
 	}
 
 	for (int i = 0; i < count; i++) {
@@ -610,6 +612,7 @@ void gridpage_replace_entries(lv_obj_t *grid, gui_config_t *cfg, const grid_entr
 		add_tile(grid, &entries[i], lone_last ? usable_w : tile_w, tile_h);
 	}
 	gridpage_register_theme_page(grid, entries, count);
+	lv_obj_update_layout(grid);
 }
 
 lv_obj_t *gridpage_empty_panel(lv_obj_t *screen, gui_config_t *cfg, const lv_image_dsc_t *icon, const char *text,

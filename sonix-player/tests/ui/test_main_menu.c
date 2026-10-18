@@ -10,10 +10,15 @@
 #include "src/gui/fonts/fonts.h"
 #include "src/gui/ebook/ebookpage.h"
 #include "src/gui/library/audiobooks.h"
+#include "src/gui/library/libraryscan.h"
+#include "src/gui/library/medialist.h"
 #include "src/gui/library/music.h"
+#include "src/gui/library/playlistpage.h"
+#include "src/gui/library/search.h"
 #include "src/gui/nowplaying/coverflow.h"
 #include "src/gui/nowplaying/player.h"
 #include "src/gui/settings/appearance.h"
+#include "src/gui/settings/musicsettings.h"
 #include "src/gui/settings/settings.h"
 #include "src/gui/shell/gridpage.h"
 #include "src/gui/shell/icons.h"
@@ -30,11 +35,14 @@
 #include "src/system/core/config.h"
 #include "src/system/core/lang.h"
 #include "src/system/device/bootlogo.h"
+#include "src/system/library/audiobookdb.h"
+#include "src/system/library/library.h"
 #include "src/system/playback/device_state.h"
+#include "src/system/playback/playlist.h"
 
-lv_obj_t *music_screen, *streaming_screen, *wireless_screen;
+lv_obj_t *streaming_screen, *wireless_screen;
 lv_obj_t *audiobooks_screen, *morepage_screen, *settings_screen, *player_screen;
-lv_obj_t *ebookpage_screen, *browser_screen;
+lv_obj_t *ebookpage_screen, *browser_screen, *musicsettings_screen;
 
 lv_font_t font_ui_14, font_ui_16, font_ui_18, font_ui_20, font_ui_20_bold;
 lv_font_t font_ui_22, font_ui_22_bold, font_ui_24, font_ui_24_bold;
@@ -94,8 +102,50 @@ void switcher_attach_back_gesture(lv_obj_t *obj) { (void)obj; }
 bool switcher_back_drag_active(void) { return false; }
 void player_sheet_attach_drag(lv_obj_t *obj, bool opening) { (void)obj; (void)opening; }
 bool player_sheet_drag_active(void) { return false; }
+void player_refresh_now_playing(void) {}
+void player_sheet_open(bool animated) { (void)animated; }
 void coverflow_attach_edge(lv_obj_t *obj, gui_config_t *cfg) { (void)obj; (void)cfg; }
 bool coverflow_drag_active(void) { return false; }
+void medialist_open(const char *title, library_list_t kind, library_filter_t filter, const char *value) {
+	(void)title; (void)kind; (void)filter; (void)value;
+}
+void medialist_open_years(void) {}
+void medialist_open_most_played(void) {}
+void playlistpage_open(void) {}
+void search_open(void) {}
+void libraryscan_choose_folders(void) {}
+bool library_scan_running(void) { return false; }
+int library_track_count(void) { return 42; }
+bool library_track_names(const char *path, char *title, size_t title_len, char *artist, size_t artist_len) {
+	(void)path; (void)title; (void)title_len; (void)artist; (void)artist_len;
+	return false;
+}
+int playlist_count(void) { return 0; }
+int playlist_current_index(void) { return -1; }
+unsigned playlist_revision(void) { return 0; }
+bool playlist_path_at(int index, char *out, size_t size) { (void)index; (void)out; (void)size; return false; }
+bool audiobookdb_book_for_file(const char *path, char *book_out, size_t size) {
+	(void)path; (void)book_out; (void)size;
+	return false;
+}
+bool device_state_play_queue_index(int index) { (void)index; return false; }
+void device_state_play_file(const char *path) { (void)path; }
+bool musicsettings_playlists_first(void) { return false; }
+
+static music_tile_id_t test_active_tiles[MUSIC_TILE_COUNT] = {
+	MUSIC_TILE_ALL_TRACKS, MUSIC_TILE_ALBUMS, MUSIC_TILE_ARTISTS,
+	MUSIC_TILE_ALBUM_ARTISTS, MUSIC_TILE_GENRES, MUSIC_TILE_YEARS,
+	MUSIC_TILE_PLAYLISTS, MUSIC_TILE_MOST_PLAYED, MUSIC_TILE_BROWSE,
+};
+static int test_active_tile_count = MUSIC_TILE_COUNT;
+
+int musicsettings_main_tiles(music_tile_id_t *out, int max) {
+	int n = test_active_tile_count < max ? test_active_tile_count : max;
+	if (out && n > 0) {
+		memcpy(out, test_active_tiles, (size_t)n * sizeof(music_tile_id_t));
+	}
+	return n;
+}
 
 static lv_obj_t *child_of_type(lv_obj_t *obj, const lv_obj_class_t *type) {
 	for (uint32_t i = 0; i < lv_obj_get_child_count(obj); i++) {
@@ -390,6 +440,40 @@ int main(int argc, char **argv) {
 	assert(slider_area.x1 - knob_overhang >= card_area.x1 + 1);
 	assert(slider_area.x2 + knob_overhang <= card_area.x2 - 1);
 
+	musicsettings_screen = lv_obj_create(NULL);
+	music_init(&cfg);
+	lv_obj_t *music_tile_grid = lv_obj_get_child(music_screen, 0);
+	assert(lv_obj_get_child_count(music_tile_grid) == MUSIC_TILE_COUNT);
+	assert(find_label(music_tile_grid, tr("music_years")));
+	assert(find_label(music_tile_grid, tr("music_most_played")));
+	if (bp_is_tempotec_v1()) {
+		lv_obj_t *tokyo_panel = lv_obj_get_child(music_screen, lv_obj_get_child_count(music_screen) - 1);
+		assert(find_label(tokyo_panel, tr("music_years")));
+		assert(find_label(tokyo_panel, tr("music_most_played")));
+	}
+
+	/* Rearrange and disable Years and Most played; verify both tile_grid and tokyo_music_panel update. */
+	test_active_tiles[0] = MUSIC_TILE_PLAYLISTS;
+	test_active_tiles[1] = MUSIC_TILE_ALBUMS;
+	test_active_tiles[2] = MUSIC_TILE_ARTISTS;
+	test_active_tiles[3] = MUSIC_TILE_ALL_TRACKS;
+	test_active_tiles[4] = MUSIC_TILE_GENRES;
+	test_active_tile_count = 5;
+	music_refresh_layout();
+	assert(lv_obj_get_child_count(music_tile_grid) == 5);
+	assert(find_label(lv_obj_get_child(music_tile_grid, 0), tr("playlists")));
+	assert(!find_label(music_tile_grid, tr("music_years")));
+	assert(!find_label(music_tile_grid, tr("music_most_played")));
+	if (bp_is_tempotec_v1()) {
+		lv_obj_t *tokyo_panel = lv_obj_get_child(music_screen, lv_obj_get_child_count(music_screen) - 1);
+		lv_obj_t *browse_card = lv_obj_get_child(tokyo_panel, 0);
+		lv_obj_t *browse_grid = lv_obj_get_child(browse_card, 1);
+		assert(find_label(lv_obj_get_child(browse_grid, 0), tr("playlists")));
+		assert(!find_label(tokyo_panel, tr("music_years")));
+		assert(!find_label(tokyo_panel, tr("music_most_played")));
+		assert(!find_label(tokyo_panel, tr("music_album_artist")));
+	}
+
 	const grid_entry_t entries[] = {
 		{"music_all_tracks", &icon_menu_music, &music_screen, NULL},
 		{"albums", &icon_album, &music_screen, NULL},
@@ -397,7 +481,7 @@ int main(int argc, char **argv) {
 		{"music_most_played", &icon_menu_most_played, &music_screen, NULL},
 		{"playlists", &icon_menu_playlist, &music_screen, NULL},
 	};
-	lv_obj_t *section_grid = gridpage_build(music_screen, &cfg, entries, 5, 2, 3, true);
+	lv_obj_t *section_grid = gridpage_build(streaming_screen, &cfg, entries, 5, 2, 3, true);
 	gridpage_set_tile_label_hidden(NULL, 0, true);
 	gridpage_set_tile_label_hidden(section_grid, -1, true);
 	gridpage_set_tile_label_hidden(section_grid, 99, true);
