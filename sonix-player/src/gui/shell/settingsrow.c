@@ -517,7 +517,7 @@ static void settingsrow_refresh_theme(void) {
 // accent fill, plain white knob lifted by a shadow.
 static lv_obj_t *make_slider(lv_obj_t *card, int steps, lv_event_cb_t cb) {
 	lv_obj_t *slider = lv_slider_create(card);
-	lv_obj_set_width(slider, lv_pct(100));
+	lv_obj_set_width(slider, compact_rows() ? lv_pct(92) : lv_pct(96));
 	lv_obj_set_height(slider, SLIDER_TRACK_HEIGHT);
 	lv_slider_set_range(slider, 0, steps > 1 ? steps - 1 : 1);
 

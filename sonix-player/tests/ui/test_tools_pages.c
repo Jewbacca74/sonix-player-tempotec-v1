@@ -21,7 +21,9 @@
 #include "src/gui/board_profile.h"
 #include "src/gui/calculator/calculator.h"
 #include "src/gui/fonts/fonts.h"
+#include "src/gui/library/pictureview.h"
 #include "src/gui/library/textview.h"
+#include "src/gui/nowplaying/cover.h"
 #include "src/gui/notes/noteeditor.h"
 #include "src/gui/notes/notes.h"
 #include "src/gui/shell/gridpage.h"
@@ -117,6 +119,39 @@ void player_sheet_attach_drag(lv_obj_t *obj, bool opening) { (void)obj; (void)op
 bool player_sheet_drag_active(void) { return false; }
 void coverflow_attach_edge(lv_obj_t *obj, gui_config_t *cfg) { (void)obj; (void)cfg; }
 bool coverflow_drag_active(void) { return false; }
+
+bool cover_load_image_file(const char *path, int box_w, int box_h, cover_fit_t fit, cover_image_t *out) {
+	(void)fit;
+	if (!path || !out || box_w <= 0 || box_h <= 0) {
+		return false;
+	}
+	struct stat st;
+	if (stat(path, &st) != 0 || st.st_size <= 0) {
+		return false;
+	}
+	int w = box_w > 64 ? 64 : box_w;
+	int h = box_h > 48 ? 48 : box_h;
+	uint8_t *pixels = calloc((size_t)(w * h * 2), 1);
+	assert(pixels);
+	memset(out, 0, sizeof(*out));
+	out->pixels = pixels;
+	out->dsc.header.magic = LV_IMAGE_HEADER_MAGIC;
+	out->dsc.header.cf = LV_COLOR_FORMAT_RGB565;
+	out->dsc.header.w = w;
+	out->dsc.header.h = h;
+	out->dsc.header.stride = w * 2;
+	out->dsc.data_size = (uint32_t)(w * h * 2);
+	out->dsc.data = pixels;
+	return true;
+}
+
+void cover_free(cover_image_t *img) {
+	if (!img) {
+		return;
+	}
+	free(img->pixels);
+	memset(img, 0, sizeof(*img));
+}
 
 /* ---- small helpers ------------------------------------------------------- */
 
@@ -270,7 +305,8 @@ static void check_strings(const char *language_dir) {
 	static const char *const KEYS[] = {
 		"calculator", "calculator_error", "notes", "notes_new", "notes_empty",
 		"notes_more", "notes_placeholder", "notes_saved", "notes_cannot_save",
-		"notes_cannot_open", "notes_too_long",
+		"notes_cannot_open", "notes_too_long", "music_years", "music_most_played",
+		"musicsettings_rearrange_main_page",
 	};
 	DIR *dir = opendir(language_dir);
 	assert(dir);
@@ -849,6 +885,7 @@ int main(int argc, char **argv) {
 	dacpage_screen = lv_obj_create(NULL);
 	gearboypage_screen = lv_obj_create(NULL);
 	textview_screen = lv_obj_create(NULL);
+	pictureview_screen = lv_obj_create(NULL);
 	morepage_screen = lv_obj_create(NULL);
 	calculator_screen = lv_obj_create(NULL);
 	notes_screen = lv_obj_create(NULL);
@@ -872,6 +909,12 @@ int main(int argc, char **argv) {
 	assert(other);
 	assert(fputs("not a note", other) >= 0);
 	assert(fclose(other) == 0);
+	char png_path[1400];
+	snprintf(png_path, sizeof(png_path), "%s/photo.png", dir);
+	FILE *png_file = fopen(png_path, "wb");
+	assert(png_file);
+	assert(fputs("png image", png_file) >= 0);
+	assert(fclose(png_file) == 0);
 
 	/* Built in the order gui_init() builds them: the editor before the shelf
 	 * that opens it, both before the menu that points at them. */
@@ -880,6 +923,19 @@ int main(int argc, char **argv) {
 	notes_init(&cfg);
 	morepage_init(&cfg);
 	textview_init(&cfg); // the notes shelf shows a long note through it
+	pictureview_init(&cfg);
+
+	assert(pictureview_open(path));
+	assert(lv_screen_active() == pictureview_screen);
+	lv_obj_update_layout(pictureview_screen);
+	check_within_panel(pictureview_screen, &cfg, "Picture viewer (JPEG)");
+	assert(find_label(pictureview_screen, "cover.jpg"));
+
+	assert(pictureview_open(png_path));
+	assert(lv_screen_active() == pictureview_screen);
+	lv_obj_update_layout(pictureview_screen);
+	check_within_panel(pictureview_screen, &cfg, "Picture viewer (PNG)");
+	assert(find_label(pictureview_screen, "photo.png"));
 
 	/* Both shapes of the More page, each under the themes that use it. Dark
 	 * and Light draw the tiles on every board; the V1's function-glyph themes

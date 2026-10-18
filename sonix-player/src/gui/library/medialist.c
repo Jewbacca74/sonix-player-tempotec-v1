@@ -188,6 +188,7 @@ typedef struct {
 	library_index_t *ix;
 	library_order_t list_order; // what the handle was opened with, to open it again
 	bool list_desc;
+	unsigned play_counts_rev;
 	bool index_wanted; // whether this KIND of list has a strip at all
 	winrow_t *window; // WINDOW_ROWS of them, allocated once with the panel
 	int window_first; // index of window[0]; -1 when nothing is cached
@@ -496,7 +497,9 @@ static bool window_fill_cb(const char *name, const char *path, const char *artis
 // acts on it -- the same list, asked for again. Without it the page keeps a
 // handle that hands out nothing and never recovers.
 static void panel_refresh_stale(panel_t *p) {
-	if (p->from_paths || !p->ix || !library_index_stale(p->ix)) {
+	bool play_counts_changed =
+		p->kind == LIBRARY_LIST_MOST_PLAYED && p->play_counts_rev != library_play_counts_revision();
+	if (p->from_paths || !p->ix || (!library_index_stale(p->ix) && !play_counts_changed)) {
 		return;
 	}
 
@@ -504,6 +507,7 @@ static void panel_refresh_stale(panel_t *p) {
 		library_index_open(p->kind, p->filter, p->filter_value, p->list_order, p->list_desc);
 	library_index_close(p->ix);
 	p->ix = fresh;
+	p->play_counts_rev = library_play_counts_revision();
 	p->count = library_index_count(fresh);
 	p->window_first = -1;
 	p->window_count = 0;
@@ -666,6 +670,8 @@ static const lv_image_dsc_t *glyph_for(const panel_t *p) {
 		return &icon_artist_album;
 	case LIBRARY_LIST_GENRES:
 		return &icon_genre;
+	case LIBRARY_LIST_YEARS:
+		return &icon_year;
 	case LIBRARY_LIST_ALBUMS:
 		return &icon_album;
 	default:
@@ -679,10 +685,10 @@ static void row_show_glyph(panel_t *p, row_t *row) {
 	lv_obj_set_style_image_recolor_opa(row->icon, LV_OPA_COVER, 0);
 }
 
-// The plain name lists -- Artists, Album artists, Genres -- carry no icon: the
-// same glyph on every row distinguishes nothing, and without it the name gets
-// the full width. Albums keeps its icon, since there it becomes the cover art,
-// and so do tracks.
+// The plain name lists -- Artists, Album artists, Genres, Years -- carry no
+// icon: the same glyph on every row distinguishes nothing, and without it the
+// name gets the full width. Albums keeps its icon, since there it becomes the
+// cover art, and so do tracks.
 static bool panel_shows_icons(const panel_t *p) {
 	if (p->is_tracks) {
 		return true;
@@ -691,6 +697,7 @@ static bool panel_shows_icons(const panel_t *p) {
 	case LIBRARY_LIST_ARTISTS:
 	case LIBRARY_LIST_ALBUM_ARTISTS:
 	case LIBRARY_LIST_GENRES:
+	case LIBRARY_LIST_YEARS:
 		return false;
 	default:
 		return true;
@@ -738,6 +745,7 @@ static char np_album_value[300];
 static char np_artist[256];
 static char np_album_artist[256];
 static char np_genre[128];
+static char np_year[16];
 
 static void np_cache_refresh(void) {
 	device_state_t state;
@@ -748,6 +756,11 @@ static void np_cache_refresh(void) {
 	snprintf(np_artist, sizeof(np_artist), "%s", state.metadata.artist);
 	snprintf(np_album_artist, sizeof(np_album_artist), "%s", state.metadata.album_artist);
 	snprintf(np_genre, sizeof(np_genre), "%s", state.metadata.genre);
+	if (state.metadata.year > 0) {
+		snprintf(np_year, sizeof(np_year), "%d", state.metadata.year);
+	} else {
+		np_year[0] = '\0';
+	}
 	if (!np_path[0] || !library_track_album_value(np_path, np_album_value, sizeof(np_album_value))) {
 		np_album_value[0] = '\0';
 	}
@@ -794,6 +807,8 @@ static bool entry_is_now_playing(panel_t *p, int index) {
 		return np_album_artist[0] && strcmp(name, np_album_artist) == 0;
 	case LIBRARY_LIST_GENRES:
 		return np_genre[0] && strcmp(name, np_genre) == 0;
+	case LIBRARY_LIST_YEARS:
+		return np_year[0] && strcmp(name, np_year) == 0;
 	default:
 		return false;
 	}
@@ -816,6 +831,8 @@ static void panel_refresh_playmarks(panel_t *p) {
 	}
 }
 
+static void window_update(panel_t *p);
+
 void medialist_notify_now_playing(void) {
 	// Before the pages exist (the boot-time restore refreshes the player
 	// before the GUI is finished) there is nothing to mark.
@@ -823,8 +840,13 @@ void medialist_notify_now_playing(void) {
 		return;
 	}
 	np_cache_refresh();
+	if (panel_tracks.kind == LIBRARY_LIST_MOST_PLAYED && panel_tracks.ix &&
+		panel_tracks.play_counts_rev != library_play_counts_revision()) {
+		window_update(&panel_tracks);
+	}
 	panel_refresh_playmarks(&panel_names);
 	panel_refresh_playmarks(&panel_tracks);
+	panel_refresh_playmarks(&panel_artist_albums);
 }
 
 // The badge a track wears, or nothing at all when the setting is off, the row
@@ -883,8 +905,14 @@ static bool panel_shows_artist(const panel_t *p) {
 	if ((p->kind == LIBRARY_LIST_TRACKS || p->kind == LIBRARY_LIST_ALBUMS) && p->filter == LIBRARY_FILTER_GENRE) {
 		return (artist_lists & MEDIALIST_ARTIST_GENRES) != 0;
 	}
+	if ((p->kind == LIBRARY_LIST_TRACKS || p->kind == LIBRARY_LIST_ALBUMS) && p->filter == LIBRARY_FILTER_YEAR) {
+		return (artist_lists & MEDIALIST_ARTIST_YEARS) != 0;
+	}
 	if (p->kind == LIBRARY_LIST_FAVOURITES) {
 		return (artist_lists & MEDIALIST_ARTIST_FAVOURITES) != 0;
+	}
+	if (p->kind == LIBRARY_LIST_MOST_PLAYED) {
+		return (artist_lists & MEDIALIST_ARTIST_MOST_PLAYED) != 0;
 	}
 	if (p->kind == LIBRARY_LIST_PLAYLIST) {
 		return (artist_lists & MEDIALIST_ARTIST_PLAYLISTS) != 0;
@@ -926,15 +954,16 @@ static void play_menu_hide(void);
 static library_filter_t filter_for(library_list_t kind);
 
 // The lists rows can be chosen on: tracks, albums, artists, album artists, a
-// playlist and the favourites, read from the index. Not genres, and not a list
-// handed in as paths.
+// playlist, the favourites, the most played tracks, and years, read from the
+// index. Not genres, and not a list handed in as paths.
 static bool panel_selectable(const panel_t *p) {
 	if (p->from_paths) {
 		return false;
 	}
 	return p->kind == LIBRARY_LIST_TRACKS || p->kind == LIBRARY_LIST_ALBUMS || p->kind == LIBRARY_LIST_ARTISTS ||
 		   p->kind == LIBRARY_LIST_ALBUM_ARTISTS || p->kind == LIBRARY_LIST_PLAYLIST ||
-		   p->kind == LIBRARY_LIST_FAVOURITES;
+		   p->kind == LIBRARY_LIST_FAVOURITES || p->kind == LIBRARY_LIST_MOST_PLAYED ||
+		   p->kind == LIBRARY_LIST_YEARS;
 }
 
 // What a row stands for in the selection: its position on a playlist, which
@@ -2142,7 +2171,7 @@ static void sort_icon_paint(panel_t *p) {
 		return;
 	}
 	bool desc = sort_is_desc(p->kind);
-	if (sort_by_year(p)) {
+	if (sort_by_year(p) || p->kind == LIBRARY_LIST_YEARS) {
 		lv_image_set_src(p->sort_icon, desc ? &icon_sort_year_desc : &icon_sort_year_asc);
 	} else if (sort_by_date(p)) {
 		lv_image_set_src(p->sort_icon, desc ? &icon_sort_date_new : &icon_sort_date_old);
@@ -2259,6 +2288,8 @@ static library_filter_t filter_for(library_list_t kind) {
 		return LIBRARY_FILTER_ALBUM_ARTIST;
 	case LIBRARY_LIST_GENRES:
 		return LIBRARY_FILTER_GENRE;
+	case LIBRARY_LIST_YEARS:
+		return LIBRARY_FILTER_YEAR;
 	default:
 		return LIBRARY_FILTER_NONE;
 	}
@@ -2363,10 +2394,10 @@ static void row_clicked_cb(lv_event_t *e) {
 		return;
 	}
 
-	// An artist or a genre: its records, or its tracks when the album view is
-	// off. An album: the tracks.
+	// An artist, a genre, or a year: its records, or its tracks when the album
+	// view is off. An album: the tracks.
 	bool grouped = p->kind == LIBRARY_LIST_ARTISTS || p->kind == LIBRARY_LIST_ALBUM_ARTISTS ||
-				   p->kind == LIBRARY_LIST_GENRES;
+				   p->kind == LIBRARY_LIST_GENRES || p->kind == LIBRARY_LIST_YEARS;
 	bool artist_row = p->kind == LIBRARY_LIST_ARTISTS || p->kind == LIBRARY_LIST_ALBUM_ARTISTS;
 	if (grouped && (medialist_album_view() || (artist_row && artist_records))) {
 		medialist_open(name, LIBRARY_LIST_ALBUMS, filter_for(p->kind), name);
@@ -2787,6 +2818,14 @@ void medialist_open_artist(const char *name) {
 	medialist_open(name, artist_records ? LIBRARY_LIST_ALBUMS : LIBRARY_LIST_TRACKS, LIBRARY_FILTER_ARTIST, name);
 }
 
+void medialist_open_years(void) {
+	medialist_open(tr("music_years"), LIBRARY_LIST_YEARS, LIBRARY_FILTER_NONE, NULL);
+}
+
+void medialist_open_most_played(void) {
+	medialist_open(tr("music_most_played"), LIBRARY_LIST_MOST_PLAYED, LIBRARY_FILTER_NONE, NULL);
+}
+
 // Copies the path of the one row a window was asked for.
 static bool take_one_path_cb(const char *name, const char *path, const char *artist, void *user) {
 	(void)name;
@@ -2853,7 +2892,8 @@ static library_index_t *menu_tracks_open(panel_t *p) {
 	window_update(p);
 
 	library_index_t *ix = NULL;
-	if (p->kind == LIBRARY_LIST_TRACKS || p->kind == LIBRARY_LIST_FAVOURITES || p->kind == LIBRARY_LIST_PLAYLIST) {
+	if (p->kind == LIBRARY_LIST_TRACKS || p->kind == LIBRARY_LIST_FAVOURITES || p->kind == LIBRARY_LIST_MOST_PLAYED ||
+		p->kind == LIBRARY_LIST_PLAYLIST) {
 		ix = library_index_clone(p->ix);
 	} else if (p->kind == LIBRARY_LIST_ALBUMS) {
 		ix = library_index_open(LIBRARY_LIST_TRACKS, p->filter, p->filter_value[0] ? p->filter_value : NULL,
@@ -3611,6 +3651,8 @@ static int current_row(panel_t *p) {
 		return library_index_find_name(p->ix, np_album_artist);
 	case LIBRARY_LIST_GENRES:
 		return library_index_find_name(p->ix, np_genre);
+	case LIBRARY_LIST_YEARS:
+		return library_index_find_name(p->ix, np_year);
 	default:
 		return -1;
 	}
@@ -3627,12 +3669,13 @@ void medialist_open(const char *title, library_list_t kind, library_filter_t fil
 	}
 
 	// Which of the three screens this list belongs on. Tracks are always the
-	// last level; an album list narrowed to one artist or genre is the middle
-	// one; everything else is where a walk starts.
-	bool tracks_like =
-		(kind == LIBRARY_LIST_TRACKS || kind == LIBRARY_LIST_FAVOURITES || kind == LIBRARY_LIST_PLAYLIST);
-	bool artist_albums = kind == LIBRARY_LIST_ALBUMS && (filter == LIBRARY_FILTER_ARTIST ||
-														 filter == LIBRARY_FILTER_ALBUM_ARTIST || filter == LIBRARY_FILTER_GENRE);
+	// last level; an album list narrowed to one artist, genre, or year is the
+	// middle one; everything else is where a walk starts.
+	bool tracks_like = (kind == LIBRARY_LIST_TRACKS || kind == LIBRARY_LIST_FAVOURITES ||
+						kind == LIBRARY_LIST_MOST_PLAYED || kind == LIBRARY_LIST_PLAYLIST);
+	bool artist_albums = kind == LIBRARY_LIST_ALBUMS &&
+						 (filter == LIBRARY_FILTER_ARTIST || filter == LIBRARY_FILTER_ALBUM_ARTIST ||
+						  filter == LIBRARY_FILTER_GENRE || filter == LIBRARY_FILTER_YEAR);
 	panel_t *p = tracks_like ? &panel_tracks : (artist_albums ? &panel_artist_albums : &panel_names);
 	p->kind = kind;
 	// A playlist is a query like any other, and the query's value is its
@@ -3667,26 +3710,28 @@ void medialist_open(const char *title, library_list_t kind, library_filter_t fil
 	// Which of the corner buttons this list has a use for.
 	//
 	// An artist's own tracks and records get the disc button that swaps one for
-	// the other; the four flat alphabetical lists get the direction switch;
-	// Favourites gets shuffle.
+	// the other; the flat alphabetical and year lists get the direction switch;
+	// Favourites gets reverse.
 	bool artist_tracks =
 		kind == LIBRARY_LIST_TRACKS && (filter == LIBRARY_FILTER_ARTIST || filter == LIBRARY_FILTER_ALBUM_ARTIST);
 	bool artist_records_page =
 		artist_albums && (filter == LIBRARY_FILTER_ARTIST || filter == LIBRARY_FILTER_ALBUM_ARTIST);
 	bool sortable = (kind == LIBRARY_LIST_TRACKS && filter == LIBRARY_FILTER_NONE) ||
 					(kind == LIBRARY_LIST_ALBUMS && !artist_albums) || kind == LIBRARY_LIST_ARTISTS ||
-					kind == LIBRARY_LIST_ALBUM_ARTISTS;
+					kind == LIBRARY_LIST_ALBUM_ARTISTS || kind == LIBRARY_LIST_YEARS;
 
 	bool want_album = artist_tracks || artist_records_page;
 	// The circle-play menu, wherever "play all of this" is a question worth
 	// asking: an artist's records, an artist's tracks, all the records, all the
-	// tracks, the favourites, a playlist, inside one album. Not on the name lists,
-	// where a row is not a set of tracks.
+	// tracks, the favourites, most played, a playlist, inside one album, genre,
+	// or year. Not on the name lists, where a row is not a set of tracks.
 	bool want_play = artist_albums || (kind == LIBRARY_LIST_ALBUMS && filter == LIBRARY_FILTER_NONE) ||
-					 kind == LIBRARY_LIST_FAVOURITES || kind == LIBRARY_LIST_PLAYLIST ||
+					 kind == LIBRARY_LIST_FAVOURITES || kind == LIBRARY_LIST_MOST_PLAYED ||
+					 kind == LIBRARY_LIST_PLAYLIST ||
 					 (kind == LIBRARY_LIST_TRACKS &&
 					  (filter == LIBRARY_FILTER_NONE || filter == LIBRARY_FILTER_ARTIST ||
-					   filter == LIBRARY_FILTER_ALBUM_ARTIST || filter == LIBRARY_FILTER_ALBUM));
+					   filter == LIBRARY_FILTER_ALBUM_ARTIST || filter == LIBRARY_FILTER_ALBUM ||
+					   filter == LIBRARY_FILTER_GENRE || filter == LIBRARY_FILTER_YEAR));
 
 	bool want_sort = sortable;
 	bool want_reverse = kind == LIBRARY_LIST_FAVOURITES;
@@ -3754,6 +3799,7 @@ void medialist_open(const char *title, library_list_t kind, library_filter_t fil
 	p->from_paths = false;
 	p->list_order = order;
 	p->list_desc = desc;
+	p->play_counts_rev = library_play_counts_revision();
 	p->ix = library_index_open(kind, filter, filter_value, order, desc);
 	p->count = library_index_count(p->ix);
 
@@ -3935,7 +3981,7 @@ void medialist_init(gui_config_t *cfg) {
 void medialist_list_order(library_list_t kind, library_filter_t filter, library_order_t *order, bool *desc) {
 	bool sortable = (kind == LIBRARY_LIST_TRACKS && filter == LIBRARY_FILTER_NONE) ||
 					(kind == LIBRARY_LIST_ALBUMS && filter == LIBRARY_FILTER_NONE) || kind == LIBRARY_LIST_ARTISTS ||
-					kind == LIBRARY_LIST_ALBUM_ARTISTS;
+					kind == LIBRARY_LIST_ALBUM_ARTISTS || kind == LIBRARY_LIST_YEARS;
 	library_order_t sort_order = LIBRARY_ORDER_DEFAULT;
 	bool sort_desc = false;
 	sort_order_for(kind, filter, &sort_order, &sort_desc);

@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 // The music index.
 //
@@ -226,6 +227,8 @@ typedef enum {
 	LIBRARY_LIST_GENRES,
 	LIBRARY_LIST_FAVOURITES, // in order of addition, oldest first
 	LIBRARY_LIST_PLAYLIST,	 // one playlist's own table, in the order it was built
+	LIBRARY_LIST_YEARS,		 // distinct release years in the library, ascending
+	LIBRARY_LIST_MOST_PLAYED, // tracks ordered by play count, highest first
 } library_list_t;
 
 // Fills `out` with up to `max` names, in the collation's order (see above).
@@ -233,7 +236,7 @@ typedef enum {
 int library_list(library_list_t kind, char out[][256], int max);
 
 // Optional filter for LIBRARY_LIST_TRACKS: only the tracks of one album,
-// artist, album artist or genre.
+// artist, album artist, genre or year.
 typedef enum {
 	LIBRARY_FILTER_NONE = 0,
 	LIBRARY_FILTER_ALBUM,
@@ -243,6 +246,7 @@ typedef enum {
 	// The tracks, albums or artists whose name contains the value, matched the
 	// way library_search() matches. For the handles below only.
 	LIBRARY_FILTER_SEARCH,
+	LIBRARY_FILTER_YEAR,
 } library_filter_t;
 
 // Streams the whole result set, sorted by the collation, one row per call:
@@ -518,6 +522,23 @@ typedef enum {
 } library_search_type_t;
 typedef void (*library_search_cb_t)(library_search_type_t type, const char *name, const char *path, void *user);
 int library_search(const char *query, int per_category, library_search_cb_t cb, void *user);
+
+// ---------------------------------------------------------------------------
+// Play counts
+//
+// Stored in PLAY_COUNTS, beside FAVOURITES, so a library rescan does not wipe
+// how many times each track has been listened to.
+// ---------------------------------------------------------------------------
+
+// Records one play of `path`, updating the cached title and artist when given.
+void library_record_play(const char *path, const char *name, const char *artist);
+
+// How many times `path` has been listened to (0 when never played).
+int library_play_count(const char *path);
+
+// Bumped whenever a play count is recorded or cleared, so an open Most played
+// view knows to reload its ordering without invalidating active queue row ids.
+uint32_t library_play_counts_revision(void);
 
 // ---------------------------------------------------------------------------
 // Playlists

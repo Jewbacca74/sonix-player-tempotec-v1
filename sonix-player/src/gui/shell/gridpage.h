@@ -65,6 +65,8 @@ void gridpage_set_layout(lv_obj_t *grid, gui_config_t *cfg, int top, int bottom,
 
 lv_obj_t *gridpage_build(lv_obj_t *screen, gui_config_t *cfg, const grid_entry_t *entries, int count, int columns, int rows,
 					bool clear_corner_buttons);
+void gridpage_replace_entries(lv_obj_t *grid, gui_config_t *cfg, const grid_entry_t *entries, int count, int columns,
+							  int rows);
 
 // What a section page shows instead of its tiles while its index is empty: a
 // picture, a line saying a scan is needed and a Scan button calling `scan_cb`.

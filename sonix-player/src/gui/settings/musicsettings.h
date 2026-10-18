@@ -1,6 +1,7 @@
 #ifndef MUSICSETTINGS_H
 #define MUSICSETTINGS_H
 
+#include "src/gui/library/music.h"
 #include "src/gui/shell/gui.h"
 
 #include "lvgl/lvgl.h"
@@ -10,6 +11,16 @@
 extern lv_obj_t *musicsettings_screen;
 
 void musicsettings_init(gui_config_t *cfg);
+
+lv_obj_t *musicsettings_library_screen(void);
+lv_obj_t *musicsettings_rearrange_screen(void);
+
+// Ordered tiles shown on the Music page and those hidden in "Not in use".
+int musicsettings_main_tiles(music_tile_id_t *out, int max);
+int musicsettings_hidden_tiles(music_tile_id_t *out, int max);
+void musicsettings_set_main_tiles(const music_tile_id_t *active, int active_count, const music_tile_id_t *hidden,
+								  int hidden_count);
+const char *musicsettings_tile_label(music_tile_id_t id);
 
 // The EQ and MSEB pages, so the control centre's quick buttons can open them
 // on a long press. They are settings pages like any other -- switch_screen()

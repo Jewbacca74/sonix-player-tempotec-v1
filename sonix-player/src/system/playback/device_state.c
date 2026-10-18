@@ -142,6 +142,19 @@ static bool remember_worth_saving(const device_state_t *state) {
 		   !tidalcache_owns(state->current_file) && !subsonicstream_owns(state->current_file);
 }
 
+// True when the current track was restored paused at boot and has not yet
+// been started in this session.
+static bool restored_uncounted;
+
+static void record_current_track_play(void) {
+	if (!current_metadata_file[0] || audiobook_is_playing() || podcastcache_is_episode(current_metadata_file) ||
+		qobuzcache_owns(current_metadata_file) || tidalcache_owns(current_metadata_file) ||
+		subsonicstream_owns(current_metadata_file)) {
+		return;
+	}
+	library_record_play(current_metadata_file, current_metadata.title, current_metadata.artist);
+}
+
 void device_state_remember_restored(const char *path, double position) {
 	snprintf(remember.file, sizeof(remember.file), "%s", path ? path : "");
 	remember.status = AUDIO_STATUS_PAUSED;
@@ -150,6 +163,7 @@ void device_state_remember_restored(const char *path, double position) {
 	remember.have = true;
 	remember.restore_pos = position;
 	remember.restore_ms = remember.saved_ms;
+	restored_uncounted = path && path[0];
 }
 
 void device_state_remember_note(void) {
@@ -527,7 +541,9 @@ static void load_and_play_at(const char *filepath, double position) {
 		audio_play_at(current_metadata_file, position);
 	} else {
 		audio_play(current_metadata_file);
+		record_current_track_play();
 	}
+	restored_uncounted = false;
 
 	// Any track load supersedes the note: it belongs to the one press that
 	// follows the storage coming back.
@@ -1256,6 +1272,10 @@ audio_status_t device_state_toggle_play_pause(void) {
 			audio_seek(back > 0 ? back : 0);
 		}
 		audio_resume();
+		if (restored_uncounted) {
+			restored_uncounted = false;
+			record_current_track_play();
+		}
 		return AUDIO_STATUS_PLAYING;
 	case AUDIO_STATUS_STOPPED:
 	default:
