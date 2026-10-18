@@ -1279,10 +1279,17 @@ void lineout_set(bool on) {
 			return;
 		}
 
-		// And an empty socket is nothing to drive either. Refusing here is what
-		// lets the rule below be simple: the mode belongs to one jack, and any
-		// change of jack ends it. Plug the cable, then switch it on.
+		// Some V1 firmware does not change /sys/class/switch/headset/state
+		// when the 3.5 mm plug is inserted (observed as 1 both in and out).
+		// Treat an undetected V1 jack as the analogue 3.5 mm route so explicit
+		// user confirmation can still enable Line Out. In this case hot-unplug
+		// cannot be detected; the UI confirmation warns that the level is 100.
 		int jack = headphone_jack_state();
+		const sysinfo_model_t *model = sysinfo_model();
+		if (jack == JACK_NONE && model && model->headset_switch_idle_one) {
+			jack = JACK_HEADSET;
+			fprintf(stderr, "alsa: jack detection unavailable; using 3.5 mm line-out route\n");
+		}
 		if (jack == JACK_NONE) {
 			fprintf(stderr, "alsa: line out refused, nothing is plugged in\n");
 			return;
@@ -1320,7 +1327,15 @@ void lineout_check_jack(void) {
 	if (!lineout_on) {
 		return;
 	}
-	if (headphone_jack_state() == lineout_jack) {
+	int jack = headphone_jack_state();
+	if (jack == lineout_jack) {
+		return;
+	}
+	// If this board's single switch gives no usable presence indication, do
+	// not immediately undo the explicit Line Out selection. The user must turn
+	// Line Out off manually because hot-unplug cannot be detected in this state.
+	const sysinfo_model_t *model = sysinfo_model();
+	if (jack == JACK_NONE && model && model->headset_switch_idle_one) {
 		return;
 	}
 	fprintf(stderr, "alsa: the jack changed, line out off\n");

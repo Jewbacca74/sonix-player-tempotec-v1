@@ -1555,9 +1555,12 @@ static void lineout_clicked_cb(lv_event_t *e) {
 		return;
 	}
 
-	// Nothing to drive: an empty socket, or sound going out over the air, where
-	// the fixed level would reach the headphones as an absolute volume.
-	if (bluetooth_audio_active() || headphone_jack_state() == JACK_NONE) {
+	// Bluetooth has no analogue jack to drive. Do not block on jack detection:
+	// some V1 firmware reports the same switch state with the 3.5 mm plug in
+	// and out. The confirmation below warns that Line Out forces the level to
+	// 100; the audio layer uses the V1's analogue 3.5 mm route when detection is
+	// unavailable.
+	if (bluetooth_audio_active()) {
 		gui_notify_popup("quickpanel_line_out_needs_the_jack");
 		return;
 	}
