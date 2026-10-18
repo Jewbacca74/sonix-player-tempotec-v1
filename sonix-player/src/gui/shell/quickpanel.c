@@ -2118,7 +2118,7 @@ void quickpanel_init(gui_config_t *cfg) {
 	// it falls past the end of the track; the row clips its children, which would
 	// slice the knob down the middle. Keeping the track 13 px short of the row's
 	// right edge gives it room.
-	lv_obj_set_style_pad_right(bright_row, qp_compact ? 8 : 13, 0);
+	lv_obj_set_style_pad_right(bright_row, qp_compact ? 12 : 15, 0);
 	lv_obj_set_style_pad_gap(bright_row, qp_compact ? 6 : 18, 0);
 	lv_obj_set_scrollable(bright_row, false);
 	lv_obj_set_event_bubble(bright_row, true);

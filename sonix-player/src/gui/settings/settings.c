@@ -288,10 +288,12 @@ static void build_screen_page(gui_config_t *cfg) {
 	lv_label_set_text(brightness_value, "");
 
 	// The Adwaita slider: thin round trough, accent fill, white knob.
+	// Inset the track slightly so the round knob and its border/shadow never
+	// overhang the card's horizontal padding at 1% or 100%.
 	brightness_slider = lv_slider_create(card);
-	lv_obj_set_width(brightness_slider, lv_pct(100));
+	lv_obj_set_width(brightness_slider, bp_pick(lv_pct(92), lv_pct(96)));
 	lv_obj_set_height(brightness_slider, 10);
-	lv_obj_align(brightness_slider, LV_ALIGN_BOTTOM_MID, 0, bp_pick(-8, -14));
+	lv_obj_align(brightness_slider, LV_ALIGN_BOTTOM_MID, 0, bp_pick(-9, -14));
 	lv_slider_set_range(brightness_slider, 1, 100);
 
 	lv_obj_set_style_radius(brightness_slider, LV_RADIUS_CIRCLE, LV_PART_MAIN);

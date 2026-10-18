@@ -885,9 +885,9 @@ static void build_mseb_page(gui_config_t *cfg) {
 		lv_obj_align(mseb_values[i], LV_ALIGN_TOP_RIGHT, 0, 0);
 
 		lv_obj_t *slider = lv_slider_create(card);
-		lv_obj_set_width(slider, lv_pct(100));
+		lv_obj_set_width(slider, bp_pick(lv_pct(92), lv_pct(96)));
 		lv_obj_set_height(slider, 10);
-		lv_obj_align(slider, LV_ALIGN_BOTTOM_MID, 0, bp_pick(-4, -10));
+		lv_obj_align(slider, LV_ALIGN_BOTTOM_MID, 0, bp_pick(-6, -10));
 		lv_slider_set_range(slider, -mseb_get_range(), mseb_get_range());
 		// MSEB sliders are bipolar: zero sits in the middle and the coloured
 		// bar grows from there, forwards for positives and backwards for

@@ -671,7 +671,7 @@ static const lv_image_dsc_t *glyph_for(const panel_t *p) {
 	case LIBRARY_LIST_GENRES:
 		return &icon_genre;
 	case LIBRARY_LIST_YEARS:
-		return &icon_menu_year;
+		return &icon_year;
 	case LIBRARY_LIST_ALBUMS:
 		return &icon_album;
 	default:

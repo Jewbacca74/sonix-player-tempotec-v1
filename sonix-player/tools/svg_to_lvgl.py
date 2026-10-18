@@ -379,6 +379,8 @@ ICONS = [
     ("calculator.svg", "calculator", 32),
     ("notes.svg", "notes", 32),
     ("enter.svg", "enter", 34),
+    ("year.svg", "year", 32),
+    ("most-played.svg", "most_played", 32),
 ]
 
 # Main menu and section tiles, which keep their own colours and are therefore

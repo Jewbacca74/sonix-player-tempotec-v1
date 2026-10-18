@@ -20,6 +20,7 @@
 #include "src/gui/shell/main_menu.h"
 #include "src/gui/shell/main_menu_icons.h"
 #include "src/gui/shell/morepage.h"
+#include "src/gui/shell/settingsrow.h"
 #include "src/gui/shell/switcher.h"
 #include "src/gui/shell/theme.h"
 #include "src/gui/shell/toast.h"
@@ -372,11 +373,31 @@ int main(int argc, char **argv) {
 	assert(!main_menu_browse());
 	assert(find_label(lv_obj_get_child(grid, 0), tr("music")));
 
+	assert(icon_year.header.w == 32 && icon_year.header.h == 32 && icon_year.header.stride == 128);
+	assert(icon_most_played.header.w == 32 && icon_most_played.header.h == 32 && icon_most_played.header.stride == 128);
+	assert(icon_menu_year.header.w == 112 && icon_menu_year.header.h == 112 && icon_menu_year.header.stride == 448);
+	assert(icon_menu_most_played.header.w == 112 && icon_menu_most_played.header.h == 112 && icon_menu_most_played.header.stride == 448);
+
+	lv_obj_t *val_label = NULL;
+	lv_obj_t *test_slider = NULL;
+	lv_obj_t *slider_card = settingsrow_slider(settings_screen, "settings_screen_off", 5, &val_label, &test_slider, NULL);
+	lv_obj_set_width(slider_card, cfg.screen_width - cfg.padding * 2);
+	lv_obj_update_layout(settings_screen);
+	lv_area_t card_area, slider_area;
+	lv_obj_get_coords(slider_card, &card_area);
+	lv_obj_get_coords(test_slider, &slider_area);
+	int32_t knob_overhang = lv_obj_get_height(test_slider) / 2 + lv_obj_get_style_pad_right(test_slider, LV_PART_KNOB) + 2;
+	assert(slider_area.x1 - knob_overhang >= card_area.x1 + 1);
+	assert(slider_area.x2 + knob_overhang <= card_area.x2 - 1);
+
 	const grid_entry_t entries[] = {
 		{"music_all_tracks", &icon_menu_music, &music_screen, NULL},
 		{"albums", &icon_album, &music_screen, NULL},
+		{"music_years", &icon_menu_year, &music_screen, NULL},
+		{"music_most_played", &icon_menu_most_played, &music_screen, NULL},
+		{"playlists", &icon_menu_playlist, &music_screen, NULL},
 	};
-	lv_obj_t *section_grid = gridpage_build(music_screen, &cfg, entries, 2, 2, 3, true);
+	lv_obj_t *section_grid = gridpage_build(music_screen, &cfg, entries, 5, 2, 3, true);
 	gridpage_set_tile_label_hidden(NULL, 0, true);
 	gridpage_set_tile_label_hidden(section_grid, -1, true);
 	gridpage_set_tile_label_hidden(section_grid, 99, true);
@@ -384,6 +405,18 @@ int main(int argc, char **argv) {
 	for (int kind = 0; kind < THEME_KIND_COUNT; kind++) {
 		set_icons_only(false);
 		theme_set_kind((theme_kind_t)kind);
+		tile_metrics_t year_tile = tile_metrics(lv_obj_get_child(section_grid, 2));
+		tile_metrics_t most_tile = tile_metrics(lv_obj_get_child(section_grid, 3));
+		tile_metrics_t play_tile = tile_metrics(lv_obj_get_child(section_grid, 4));
+		if (theme_uses_function_glyphs()) {
+			assert(year_tile.source == &icon_year);
+			assert(most_tile.source == &icon_most_played);
+			assert(play_tile.source == &icon_list_music);
+		} else {
+			assert(year_tile.source == &icon_menu_year);
+			assert(most_tile.source == &icon_menu_most_played);
+			assert(play_tile.source == &icon_menu_playlist);
+		}
 		tile_metrics_t baseline[6];
 		for (int i = 0; i < 6; i++) {
 			baseline[i] = tile_metrics(lv_obj_get_child(grid, i));

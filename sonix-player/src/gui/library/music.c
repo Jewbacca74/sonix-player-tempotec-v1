@@ -33,6 +33,7 @@ lv_obj_t *music_screen;
 
 #define TOKYO_RECENT_COUNT 2
 #define TOKYO_BROWSE_COUNT 4
+#define TOKYO_SHORTCUT_COUNT 7
 
 typedef struct {
 	lv_obj_t *button;
@@ -54,6 +55,7 @@ typedef struct {
 
 static recent_row_t recent_rows[TOKYO_RECENT_COUNT];
 static browse_tile_t browse_tiles[TOKYO_BROWSE_COUNT];
+static browse_tile_t shortcut_rows[TOKYO_SHORTCUT_COUNT];
 static lv_obj_t *tokyo_music_panel;
 static lv_obj_t *tokyo_recent_card;
 static lv_obj_t *tokyo_recent_empty;
@@ -319,9 +321,9 @@ static lv_obj_t *music_shortcut_card(lv_obj_t *parent) {
 		{"music_all_tracks", &icon_music2, THEME_SEMANTIC_CYAN, false, shortcut_all_tracks_cb},
 		{"music_album_artist", &icon_artist_album, THEME_SEMANTIC_BLUE, true, browse_album_artists_cb},
 		{"music_genres", &icon_genre, THEME_SEMANTIC_AMBER, false, shortcut_genres_cb},
-		{"music_years", &icon_menu_year, THEME_SEMANTIC_AMBER, false, shortcut_years_cb},
+		{"music_years", &icon_year, THEME_SEMANTIC_AMBER, false, shortcut_years_cb},
 		{"playlists", &icon_list_music, THEME_SEMANTIC_GREEN, false, shortcut_playlists_cb},
-		{"music_most_played", &icon_menu_most_played, THEME_SEMANTIC_PURPLE, false, shortcut_most_played_cb},
+		{"music_most_played", &icon_most_played, THEME_SEMANTIC_PURPLE, false, shortcut_most_played_cb},
 		{"favourites", &icon_star, THEME_SEMANTIC_RED, false, favourites_cb},
 	};
 	lv_obj_t *card = lv_obj_create(parent);
@@ -362,6 +364,9 @@ static lv_obj_t *music_shortcut_card(lv_obj_t *parent) {
 		lv_image_set_inner_align(icon, LV_IMAGE_ALIGN_CENTER);
 		lv_obj_set_style_image_recolor(icon, theme_semantic_color(rows[i].tone), 0);
 		lv_obj_set_style_image_recolor_opa(icon, LV_OPA_COVER, 0);
+		if (i < TOKYO_SHORTCUT_COUNT) {
+			shortcut_rows[i] = (browse_tile_t){.button = button, .icon = icon, .tone = rows[i].tone};
+		}
 
 		lv_obj_t *label = lv_label_create(button);
 		label_set_wrapped_translation(label, rows[i].label, rows[i].wrap);
@@ -675,6 +680,12 @@ static void music_refresh_theme(void) {
 		if (browse_tiles[i].icon) {
 			lv_obj_set_style_image_recolor(browse_tiles[i].icon, theme_semantic_color(browse_tiles[i].tone), 0);
 			lv_obj_set_style_image_recolor_opa(browse_tiles[i].icon, LV_OPA_COVER, 0);
+		}
+	}
+	for (int i = 0; i < TOKYO_SHORTCUT_COUNT; i++) {
+		if (shortcut_rows[i].icon) {
+			lv_obj_set_style_image_recolor(shortcut_rows[i].icon, theme_semantic_color(shortcut_rows[i].tone), 0);
+			lv_obj_set_style_image_recolor_opa(shortcut_rows[i].icon, LV_OPA_COVER, 0);
 		}
 	}
 	for (int i = 0; i < TOKYO_RECENT_COUNT; i++) {
