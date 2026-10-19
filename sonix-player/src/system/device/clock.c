@@ -97,6 +97,8 @@ static atomic_bool automatic_enabled = ATOMIC_VAR_INIT(true);
 
 #define DST_MINUTES 60
 
+static void clock_network_sync_force(void);
+
 // Installs the offset into the C library. The POSIX string has the sign
 // reversed from the usual notation: "UTC-2" means two hours east, what everyone
 // calls UTC+2. Getting it wrong moves the clock by four hours instead of zero,
@@ -170,7 +172,10 @@ void clock_set_automatic(bool on) {
 	}
 	config_save();
 	if (on) {
-		clock_network_sync();
+		// Re-enabling Automatic is an explicit request to restore network time
+		// and the network-derived zone. Do not let the ordinary refresh
+		// cooldown leave a manually selected zone in effect for up to 30 minutes.
+		clock_network_sync_force();
 	}
 }
 
@@ -499,6 +504,16 @@ void clock_network_sync(void) {
 		return;
 	}
 	pthread_detach(t);
+}
+
+static void clock_network_sync_force(void) {
+	pthread_mutex_lock(&ntp_lock);
+	if (!ntp_running) {
+		ntp_attempted = false;
+		atomic_store(&network_sync_succeeded, false);
+	}
+	pthread_mutex_unlock(&ntp_lock);
+	clock_network_sync();
 }
 
 bool clock_network_sync_busy(void) {
