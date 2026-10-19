@@ -53,6 +53,43 @@ static void init_fonts(void) {
 	for (size_t i = 0; i < sizeof(fonts) / sizeof(fonts[0]); i++) {
 		*fonts[i] = lv_font_montserrat_14;
 	}
+	// The faces the strip is drawn with, near the sizes the board draws them
+	// at (fonts.c): 19, 16 and 36 px on the V1, 28, 22 and 72 on the regular
+	// panels -- 48 for the clock there, which is the largest LVGL ships and
+	// close enough for the glyph heights this test measures. The line boxes,
+	// which are what the strip is laid out with, are the device's anyway (see
+	// use_device_metrics).
+	if (bp_is_tempotec_v1()) {
+		font_ui_22 = lv_font_montserrat_16;
+		font_ui_28 = lv_font_montserrat_20;
+		font_ui_72 = lv_font_montserrat_36;
+	} else {
+		font_ui_22 = lv_font_montserrat_22;
+		font_ui_28 = lv_font_montserrat_28;
+		font_ui_72 = lv_font_montserrat_48;
+	}
+}
+
+// The device draws its text through FreeType from MiSans, whose line boxes are
+// taller than LVGL's built-in faces: at the clock's 36 px on the V1 it is 48 px
+// with 11 below the baseline, where Montserrat 36 gives 40 and 7. The strip
+// stacks three such lines -- title, artist, clock -- and the swipe-up sign
+// hangs over the last, so it is the metrics, not the shapes, that decide
+// whether the clock collides with it. The faces the strip uses are therefore
+// given MiSans's line box at the size the board draws them at: FreeType's
+// numbers for MiSans at 19, 16 and 36 px (the V1, after fonts.c's compact
+// sizes), and at 28, 22 and 72 px on the regular panels.
+static void set_line_box(lv_font_t *font, int line_height, int base_line) {
+	font->line_height = line_height;
+	font->base_line = base_line;
+	font->cap_height = 0;
+	font->x_height = 0;
+}
+
+static void use_device_metrics(void) {
+	set_line_box(&font_ui_28, bp_pick(25, 37), bp_pick(6, 8));  // 19 px on the V1
+	set_line_box(&font_ui_22, bp_pick(21, 29), bp_pick(5, 7));  // 16 px on the V1
+	set_line_box(&font_ui_72, bp_pick(48, 95), bp_pick(11, 21)); // 36 px on the V1
 }
 
 void fonts_register_change(void (*cb)(void)) { (void)cb; }
@@ -255,6 +292,10 @@ static lv_obj_t *placeholder(void) { return lv_obj_get_child(cover_box(), 0); }
 static lv_obj_t *frame(void) { return lv_obj_get_child(cover_box(), 1); }
 static lv_obj_t *picture(void) { return lv_obj_get_child(frame(), 0); }
 static lv_obj_t *info_strip(void) { return lv_obj_get_child(saver_obj(), 1); }
+// The swipe-up sign at the foot of the screen: the saver's last child, hung
+// over the strip's lower edge.
+static lv_obj_t *chevron_btn(void) { return lv_obj_get_child(saver_obj(), 2); }
+static lv_obj_t *chevron_icon(void) { return lv_obj_get_child(chevron_btn(), 0); }
 
 // The picture on screen, as the screensaver holds it: the descriptor LVGL was
 // given is the first member of the cover_image_t that owns the pixels.
@@ -419,6 +460,71 @@ static void check_fill(const cover_image_t *sleeve) {
 	if (field) {
 		assert(lv_obj_get_height(cover_box()) == screen_h); // under the palettes' field
 	}
+}
+
+// The first row of the icon that carries any ink. The chevron's square is
+// mostly empty -- only the two strokes of the sign are drawn -- so where the
+// object starts is not where the sign starts.
+static int icon_first_ink_row(const lv_image_dsc_t *icon) {
+	assert(icon && icon->header.cf == LV_COLOR_FORMAT_ARGB8888);
+	for (uint32_t y = 0; y < icon->header.h; y++) {
+		const uint8_t *row = icon->data + (size_t)y * icon->header.stride;
+		for (uint32_t x = 0; x < icon->header.w; x++) {
+			if (row[x * 4 + 3]) { // ARGB8888: the alpha is the fourth byte
+				return (int)y;
+			}
+		}
+	}
+	assert(false);
+	return 0;
+}
+
+// Whether a pixel of a rendered frame carries any ink. Over the flat black the
+// strip falls back to, everything with a little light in it is text or the
+// sign.
+static bool pixel_lit(const lv_draw_buf_t *shot, int x, int y) {
+	uint16_t p;
+	memcpy(&p, shot->data + (size_t)y * shot->header.stride + (size_t)x * 2, sizeof(p));
+	int r = (p >> 11) & 0x1F, g = (p >> 5) & 0x3F, b = p & 0x1F;
+	return (r * 255 / 31 + g * 255 / 63 + b * 255 / 31) / 3 > 40;
+}
+
+// The clock against the swipe-up sign. The clock is the strip's last line, the
+// sign hangs over the strip's foot, and the room between the two is whatever
+// descent the face leaves under the digits -- so they come closest on the
+// device's own line boxes (see use_device_metrics), which is the pair the test
+// checks. Measured on the rendered pixels, above the sign's own first inked
+// row, which is where a collision would show.
+#define CLOCK_CLEARANCE_PX 6
+
+static void check_clock_clearance(void) {
+	lv_obj_update_layout(saver_obj());
+	const lv_image_dsc_t *icon = lv_image_get_src(chevron_icon());
+	assert(icon);
+	lv_area_t icon_area;
+	lv_obj_get_coords(chevron_icon(), &icon_area);
+	int sign_top = (int)icon_area.y1 + icon_first_ink_row(icon);
+
+	// Nothing but the words on the strip: what the scan below finds is the
+	// clock's own ink and no picture's.
+	assert(lv_obj_get_style_bg_image_src(info_strip(), 0) == NULL);
+
+	lv_draw_buf_t *shot = lv_snapshot_take(saver_obj(), LV_COLOR_FORMAT_RGB565);
+	assert(shot && (int)shot->header.w == screen_w && (int)shot->header.h == screen_h);
+	int clock_bottom = 0;
+	for (int y = 0; y < sign_top; y++) {
+		for (int x = 0; x < screen_w; x++) {
+			if (pixel_lit(shot, x, y)) {
+				clock_bottom = y;
+				break;
+			}
+		}
+	}
+	lv_draw_buf_destroy(shot);
+
+	assert(clock_bottom > 0);
+	int gap = sign_top - clock_bottom - 1; // rows of air between the two
+	assert(gap >= CLOCK_CLEARANCE_PX);
 }
 
 static void check_nothing_held(void) {
@@ -590,6 +696,7 @@ int main(int argc, char **argv) {
 	config_set("ui", "language", "English");
 	lang_init(argv[1]);
 	init_fonts();
+	use_device_metrics();
 	lv_init();
 
 	screen_w = bp_screen_w();
@@ -628,6 +735,21 @@ int main(int argc, char **argv) {
 	assert(screensaver_style() == (saved_framed ? SCREENSAVER_STYLE_FRAMED : SCREENSAVER_STYLE_FILL));
 	assert(lv_obj_check_type(placeholder(), &lv_image_class));
 	assert(lv_obj_check_type(picture(), &lv_image_class));
+
+	/* The clock against the swipe-up sign, before there is any artwork: with
+	 * nothing behind them the strip is flat black, so the lowest inked row
+	 * above the sign is the clock's own. The faces carry MiSans's line boxes
+	 * here, which is what the strip is laid out with on the device. */
+	cover_free(&player_cover);
+	cover_free(&player_backdrop);
+	go_dark();
+	wake();
+	assert(lv_image_get_src(picture()) == NULL);
+	check_clock_clearance();
+	dump_snapshot("clock-clearance");
+	hide_now();
+	check_nothing_held();
+	player_lands_art(sleeve, sleeve, 1); // the sleeve the rest of the run uses
 
 	/* Fill, unchanged: the default, and what an existing setup keeps. */
 	screensaver_set_style(SCREENSAVER_STYLE_FILL);
