@@ -55,7 +55,6 @@ static const char *const FONT_BOLD_FILES[] = FACE_FILES("bold");
 static const char *const FONT_NEON_FILES[] = FACE_FILES("Neon");
 static const char *const FONT_ROBOTO_FILES[] = FACE_FILES("Roboto");
 static const char *const FONT_ROBOTO_CONDENSED_FILES[] = FACE_FILES("RobotoCondensed");
-static const char *const FONT_INTER_FILES[] = FACE_FILES("Inter");
 static const char *const FONT_BARLOW_FILES[] = FACE_FILES("BarlowSemiCondensed");
 
 // ---------------------------------------------------------------------------
@@ -85,7 +84,6 @@ static const ui_face_t faces[] = {
 	{"neon", "Neon 80s", FONT_NEON_FILES, NULL},
 	{"roboto", "Roboto", FONT_ROBOTO_FILES, NULL},
 	{"roboto_condensed", "Roboto Condensed", FONT_ROBOTO_CONDENSED_FILES, NULL},
-	{"inter", "Inter", FONT_INTER_FILES, NULL},
 	{"barlow_semi_condensed", "Barlow Semi Condensed", FONT_BARLOW_FILES, NULL},
 };
 
