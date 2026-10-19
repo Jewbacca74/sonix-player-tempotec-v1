@@ -1916,3 +1916,11 @@ void audiobooks_init(gui_config_t *cfg) {
 	section_refresh_theme();
 	theme_register_refresh(section_refresh_theme);
 }
+
+void audiobooks_open(void) {
+	if (!gui_card_available()) {
+		gui_notify_no_card();
+		return;
+	}
+	switch_screen(audiobooks_screen);
+}

@@ -10,11 +10,13 @@
 #include "src/gui/ebook/ebookpage.h"
 #include "src/gui/flappybird/flappybird.h"
 #include "src/gui/gearboy/gearboypage.h"
+#include "src/gui/library/audiobooks.h"
 #include "src/gui/library/filespage.h"
 #include "src/gui/notes/notes.h"
 #include "src/gui/nowplaying/player.h"
 #include "src/gui/shell/gridpage.h"
 #include "src/gui/shell/icons.h"
+#include "src/gui/shell/main_menu.h"
 #include "src/gui/shell/settingsrow.h"
 #include "src/gui/shell/switcher.h"
 #include "src/gui/shell/theme.h"
@@ -23,6 +25,11 @@ lv_obj_t *morepage_screen;
 
 static lv_obj_t *more_grid;
 static lv_obj_t *more_list;
+static gui_config_t *more_cfg;
+
+// Whether the Audiobooks row is part of More right now, so entering the page
+// only rebuilds it when the home-screen choice has changed since it was built.
+static bool more_audiobooks_shown;
 
 static void more_action_cb(lv_event_t *e) {
 	void (*action)(void) = (void (*)(void))lv_event_get_user_data(e);
@@ -43,6 +50,9 @@ static bool more_tokyo_icon(const char *label, const lv_image_dsc_t **icon, them
 		*tone = THEME_SEMANTIC_GREEN;
 	} else if (strcmp(label, "books") == 0) {
 		*icon = &icon_files_book;
+		*tone = THEME_SEMANTIC_AMBER;
+	} else if (strcmp(label, "audiobooks") == 0) {
+		*icon = &icon_files_audiobook;
 		*tone = THEME_SEMANTIC_AMBER;
 	} else if (strcmp(label, "file_explorer") == 0) {
 		*icon = &icon_folder;
@@ -73,13 +83,12 @@ static void more_list_add_entry(const grid_entry_t *entry) {
 	}
 }
 
-static void more_list_build(gui_config_t *cfg, const grid_entry_t *entries, int count) {
+// The rows in the order the page shows them: File Manager near the top on the
+// short V1 screen, where the bottom of a long list otherwise falls below the
+// initial viewport, then everything else in declaration order.
+static void more_list_add_entries(const grid_entry_t *entries, int count) {
 	static const char *const priority_labels[] = {"dac", "file_explorer"};
-	more_list = settingsrow_page(morepage_screen, cfg, "more");
-	player_sheet_attach_drag(more_list, true);
 
-	// Keep the File Manager near the top on the short V1 screen, where the
-	// bottom rows otherwise fall below the initial viewport.
 	for (size_t p = 0; p < sizeof(priority_labels) / sizeof(priority_labels[0]); p++) {
 		for (int i = 0; i < count; i++) {
 			if (strcmp(entries[i].label, priority_labels[p]) == 0) {
@@ -114,6 +123,91 @@ static void more_list_build(gui_config_t *cfg, const grid_entry_t *entries, int 
 
 static int more_grid_columns(int count) { return count > 2 * MORE_GRID_ROWS ? 3 : 2; }
 
+// Everything More can hold, without the optional Audiobooks entry. The array
+// stays constant; more_entries_build() copies it and inserts what the current
+// settings add.
+static const grid_entry_t MORE_ENTRIES[] = {
+	{"dac", &icon_menu_dac, &dacpage_screen, NULL},
+#if GB_CORE
+	// The Game Boy emulator. Present only when the binary was built with
+	// GB=1 (see the Makefile).
+	{"gearboy", &icon_menu_gearboy, &gearboypage_screen, NULL},
+#endif
+	// An action rather than a screen: the shelf reads the Ebook folder again
+	// every time it is opened, so a book copied onto the card turns up
+	// without a restart.
+	{"books", &icon_menu_books, NULL, ebookpage_open},
+	// An action for the same reason the shelf is one: the listing is read
+	// when the page is entered, so a card that changed under the player
+	// shows what is on it now.
+	{"file_explorer", &icon_menu_file_explorer, NULL, filespage_open},
+	// An action: the artwork is read from the resource tree on the way in.
+	{"flappy_bird", &icon_menu_flappy_bird, NULL, flappybird_open},
+	// Both of these are actions rather than screens for the file
+	// manager's reason: the calculator repaints its display from the sum
+	// it was left holding, and the notes shelf reads the card.
+	{"calculator", &icon_menu_calculator, NULL, calculator_open},
+	{"notes", &icon_menu_notes, NULL, notes_open},
+};
+
+#define MORE_ENTRIES_MAX 12
+
+// The page's destinations for the settings in force now.
+//
+// The home screen has one slot for the two libraries: Audiobooks normally, and
+// Books when Settings -> Appearance hands it over. Books has always been here;
+// while it holds the home slot Audiobooks joins it, right beside it, so the
+// library that left the home screen does not leave the player with nothing to
+// open. With the option off this page is exactly what it was before.
+static int more_entries_build(grid_entry_t *out, int max) {
+	int count = 0;
+	bool audiobooks = main_menu_books();
+	int base_count = (int)(sizeof(MORE_ENTRIES) / sizeof(MORE_ENTRIES[0]));
+
+	for (int i = 0; i < base_count && count < max; i++) {
+		out[count++] = MORE_ENTRIES[i];
+		if (audiobooks && strcmp(MORE_ENTRIES[i].label, "books") == 0 && count < max) {
+			out[count].label = "audiobooks";
+			out[count].icon = &icon_menu_audiobooks;
+			out[count].target = NULL;
+			out[count].action = audiobooks_open;
+			count++;
+		}
+	}
+	return count;
+}
+
+// Rebuilds both shapes of the page from the current settings. Used once at
+// startup and again whenever the Books-on-home choice has changed under a page
+// that is already built.
+static void more_entries_refresh(void) {
+	if (!more_cfg) {
+		return;
+	}
+
+	grid_entry_t entries[MORE_ENTRIES_MAX];
+	int count = more_entries_build(entries, MORE_ENTRIES_MAX);
+	more_audiobooks_shown = main_menu_books();
+
+	if (more_grid) {
+		gridpage_replace_entries(more_grid, more_cfg, entries, count, more_grid_columns(count), MORE_GRID_ROWS);
+	}
+	if (more_list) {
+		lv_obj_clean(more_list);
+		more_list_add_entries(entries, count);
+	}
+}
+
+// More is built once, at startup, while the home-screen choice lives on the
+// Appearance page and can change later. Entering the page is the moment to
+// catch up, and only when the answer has actually changed.
+static void more_screen_loaded_cb(lv_event_t *e) {
+	(void)e;
+	if (more_audiobooks_shown != main_menu_books()) {
+		more_entries_refresh();
+	}
+}
+
 static void more_refresh_theme(void) {
 	bool tokyo_v1 = bp_is_tempotec_v1() && theme_uses_function_glyphs();
 	if (more_grid) {
@@ -125,39 +219,23 @@ static void more_refresh_theme(void) {
 }
 
 void morepage_init(gui_config_t *cfg) {
-	const grid_entry_t entries[] = {
-		{"dac", &icon_menu_dac, &dacpage_screen, NULL},
-#if GB_CORE
-		// The Game Boy emulator. Present only when the binary was built with
-		// GB=1 (see the Makefile).
-		{"gearboy", &icon_menu_gearboy, &gearboypage_screen, NULL},
-#endif
-		// An action rather than a screen: the shelf reads the Ebook folder again
-		// every time it is opened, so a book copied onto the card turns up
-		// without a restart.
-		{"books", &icon_menu_books, NULL, ebookpage_open},
-		// An action for the same reason the shelf is one: the listing is read
-		// when the page is entered, so a card that changed under the player
-		// shows what is on it now.
-		{"file_explorer", &icon_menu_file_explorer, NULL, filespage_open},
-		// An action: the artwork is read from the resource tree on the way in.
-		{"flappy_bird", &icon_menu_flappy_bird, NULL, flappybird_open},
-		// Both of these are actions rather than screens for the file
-		// manager's reason: the calculator repaints its display from the sum
-		// it was left holding, and the notes shelf reads the card.
-		{"calculator", &icon_menu_calculator, NULL, calculator_open},
-		{"notes", &icon_menu_notes, NULL, notes_open},
-	};
+	more_cfg = cfg;
+
+	grid_entry_t entries[MORE_ENTRIES_MAX];
+	int count = more_entries_build(entries, MORE_ENTRIES_MAX);
+	more_audiobooks_shown = main_menu_books();
 
 	// Dark and Light retain the established two-column grid. Tokyo Night uses a
 	// compact, single-column list whose rows share the Settings list styling.
-	int count = (int)(sizeof(entries) / sizeof(entries[0]));
 	more_grid = gridpage_build(morepage_screen, cfg, entries, count, more_grid_columns(count), MORE_GRID_ROWS, true);
 	if (bp_is_tempotec_v1()) {
-		more_list_build(cfg, entries, count);
+		more_list = settingsrow_page(morepage_screen, cfg, "more");
+		player_sheet_attach_drag(more_list, true);
+		more_list_add_entries(entries, count);
 	} else {
 		settingsrow_title(morepage_screen, cfg, "more");
 	}
 	more_refresh_theme();
 	theme_register_refresh(more_refresh_theme);
+	lv_obj_add_event_cb(morepage_screen, more_screen_loaded_cb, LV_EVENT_SCREEN_LOADED, NULL);
 }
