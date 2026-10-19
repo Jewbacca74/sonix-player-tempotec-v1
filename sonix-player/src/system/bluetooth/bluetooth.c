@@ -165,6 +165,23 @@ static char g_op_name[BT_NAME_MAX];
 
 static char g_local_name[BT_NAME_MAX] = "HiBy Music";
 
+// Names the user gives paired devices are local display aliases, keyed by MAC:
+// changing one never asks the remote device to rename itself. The small cache
+// keeps config-file lookups out of the receiver's polling path; it holds every
+// device the two UI lists can show at once.
+#define BT_ALIAS_CACHE_LEN (BT_MAX_DEVICES * 2)
+#define BT_ALIAS_KEY_SIZE 32
+
+typedef struct {
+	bool used;
+	char key[BT_ALIAS_KEY_SIZE];
+	char name[BT_NAME_MAX];
+} bt_device_alias_cache_t;
+
+static pthread_mutex_t alias_lock = PTHREAD_MUTEX_INITIALIZER;
+static bt_device_alias_cache_t alias_cache[BT_ALIAS_CACHE_LEN];
+static unsigned alias_cache_replace;
+
 // A2DP. There is deliberately no on/off switch here, as in the stock player:
 // connected headphones are the output, and a switch that could send the music
 // back to the jack while they are still worn causes confusion, not choice.
@@ -238,6 +255,105 @@ static void copy_field(char *dst, size_t dst_size, const char *src, size_t src_s
 	}
 	memcpy(dst, src, length);
 	dst[length] = '\0';
+}
+
+// The address becomes part of an INI key, so accept only the shape BlueZ
+// supplies and normalize case and separators before using it.
+static bool device_alias_key(const char *mac, char *out, size_t size) {
+	static const char prefix[] = "bt_alias_";
+	if (!mac || !out || size < sizeof(prefix) + 17u || strnlen(mac, BT_MAC_MAX) != 17u) {
+		return false;
+	}
+
+	char normalized[18];
+	for (int i = 0; i < 17; i++) {
+		unsigned char c = (unsigned char)mac[i];
+		if (i % 3 == 2) {
+			if (c != ':' && c != '-') {
+				return false;
+			}
+			normalized[i] = '_';
+		} else {
+			if (!isxdigit(c)) {
+				return false;
+			}
+			normalized[i] = (char)toupper(c);
+		}
+	}
+	normalized[17] = '\0';
+	snprintf(out, size, "%s%s", prefix, normalized);
+	return true;
+}
+
+static bt_device_alias_cache_t *device_alias_cached_locked(const char *key) {
+	for (int i = 0; i < BT_ALIAS_CACHE_LEN; i++) {
+		if (alias_cache[i].used && strcmp(alias_cache[i].key, key) == 0) {
+			return &alias_cache[i];
+		}
+	}
+	return NULL;
+}
+
+static bt_device_alias_cache_t *device_alias_slot_locked(void) {
+	for (int i = 0; i < BT_ALIAS_CACHE_LEN; i++) {
+		if (!alias_cache[i].used) {
+			return &alias_cache[i];
+		}
+	}
+	unsigned index = alias_cache_replace++ % BT_ALIAS_CACHE_LEN;
+	return &alias_cache[index];
+}
+
+static void device_alias_cache_put_locked(const char *key, const char *name) {
+	bt_device_alias_cache_t *entry = device_alias_cached_locked(key);
+	if (!entry) {
+		entry = device_alias_slot_locked();
+	}
+	entry->used = true;
+	snprintf(entry->key, sizeof(entry->key), "%s", key);
+	snprintf(entry->name, sizeof(entry->name), "%s", name ? name : "");
+}
+
+// Called with alias_lock held. Empty names are cached too, so an unrenamed
+// device does not cause a config scan on every Bluetooth-list refresh.
+static bt_device_alias_cache_t *device_alias_load_locked(const char *key) {
+	bt_device_alias_cache_t *entry = device_alias_cached_locked(key);
+	if (entry) {
+		return entry;
+	}
+	const char *saved = config_get("wireless", key, "");
+	device_alias_cache_put_locked(key, saved);
+	return device_alias_cached_locked(key);
+}
+
+static bool device_alias_copy(const char *mac, char *out, size_t size) {
+	if (!out || size == 0) {
+		return false;
+	}
+	out[0] = '\0';
+	char key[BT_ALIAS_KEY_SIZE];
+	if (!device_alias_key(mac, key, sizeof(key))) {
+		return false;
+	}
+
+	pthread_mutex_lock(&alias_lock);
+	bt_device_alias_cache_t *entry = device_alias_load_locked(key);
+	bool found = entry && entry->name[0];
+	if (found) {
+		snprintf(out, size, "%s", entry->name);
+	}
+	pthread_mutex_unlock(&alias_lock);
+	return found;
+}
+
+static void device_alias_apply(bt_device_t *device) {
+	if (!device || !device->mac[0]) {
+		return;
+	}
+	char alias[BT_NAME_MAX];
+	if (device_alias_copy(device->mac, alias, sizeof(alias))) {
+		snprintf(device->name, sizeof(device->name), "%s", alias);
+	}
 }
 
 static void sleep_ms(int ms) {
@@ -2632,6 +2748,10 @@ bool bluetooth_receiver_device(char *mac_out, int mac_size, char *name_out, int 
 		if (!name_out[0]) {
 			snprintf(name_out, (size_t)name_size, "%s", mac);
 		}
+		char alias[BT_NAME_MAX];
+		if (device_alias_copy(mac, alias, sizeof(alias))) {
+			snprintf(name_out, (size_t)name_size, "%s", alias);
+		}
 	}
 	return true;
 }
@@ -3383,6 +3503,77 @@ bt_state_t bluetooth_get_state(void) {
 
 const char *bluetooth_local_name(void) { return g_local_name; }
 
+bool bluetooth_get_device_alias(const char *mac, char *out, int size) {
+	return size > 0 && device_alias_copy(mac, out, (size_t)size);
+}
+
+bool bluetooth_set_device_alias(const char *mac, const char *name) {
+	char key[BT_ALIAS_KEY_SIZE];
+	if (!name || !device_alias_key(mac, key, sizeof(key))) {
+		return false;
+	}
+
+	char wanted[BT_NAME_MAX];
+	snprintf(wanted, sizeof(wanted), "%s", name);
+	size_t length = strlen(wanted);
+	while (length > 0 && (wanted[length - 1] == ' ' || wanted[length - 1] == '\t')) {
+		wanted[--length] = '\0';
+	}
+	char *start = wanted;
+	while (*start == ' ' || *start == '\t') {
+		start++;
+	}
+	if (!*start) {
+		return false;
+	}
+
+	pthread_mutex_lock(&alias_lock);
+	config_set("wireless", key, start);
+	const char *stored = config_get("wireless", key, "");
+	if (!stored || strcmp(stored, start) != 0) {
+		pthread_mutex_unlock(&alias_lock);
+		return false; // the fixed-size config table had no room for this key
+	}
+	device_alias_cache_put_locked(key, start);
+	bool saved = config_save();
+	pthread_mutex_unlock(&alias_lock);
+
+	pthread_mutex_lock(&lock);
+	g_serial++;
+	pthread_mutex_unlock(&lock);
+	return saved;
+}
+
+bool bluetooth_clear_device_alias(const char *mac) {
+	char key[BT_ALIAS_KEY_SIZE];
+	if (!device_alias_key(mac, key, sizeof(key))) {
+		return false;
+	}
+
+	pthread_mutex_lock(&alias_lock);
+	bt_device_alias_cache_t *entry = device_alias_load_locked(key);
+	bool changed = entry && entry->name[0];
+	bool saved = true;
+	if (changed) {
+		config_set("wireless", key, "");
+		const char *stored = config_get("wireless", key, "");
+		if (!stored || stored[0]) {
+			pthread_mutex_unlock(&alias_lock);
+			return false;
+		}
+		entry->name[0] = '\0';
+		saved = config_save();
+	}
+	pthread_mutex_unlock(&alias_lock);
+
+	if (changed) {
+		pthread_mutex_lock(&lock);
+		g_serial++;
+		pthread_mutex_unlock(&lock);
+	}
+	return saved;
+}
+
 bool bluetooth_set_local_name(const char *name) {
 	if (!name) {
 		return false;
@@ -3434,6 +3625,9 @@ int bluetooth_get_paired(bt_device_t *out, int max) {
 	int count = g_paired_count < max ? g_paired_count : max;
 	memcpy(out, g_paired, sizeof(bt_device_t) * (size_t)count);
 	pthread_mutex_unlock(&lock);
+	for (int i = 0; i < count; i++) {
+		device_alias_apply(&out[i]);
+	}
 	return count;
 }
 
@@ -3445,6 +3639,9 @@ int bluetooth_get_found(bt_device_t *out, int max) {
 	int count = g_found_count < max ? g_found_count : max;
 	memcpy(out, g_found, sizeof(bt_device_t) * (size_t)count);
 	pthread_mutex_unlock(&lock);
+	for (int i = 0; i < count; i++) {
+		device_alias_apply(&out[i]);
+	}
 	return count;
 }
 
@@ -3519,6 +3716,9 @@ bool bluetooth_connected_device(bt_device_t *out) {
 		}
 	}
 	pthread_mutex_unlock(&lock);
+	if (found && out) {
+		device_alias_apply(out);
+	}
 	return found;
 }
 
@@ -3551,6 +3751,9 @@ bool bluetooth_audio_device(bt_device_t *out) {
 	}
 
 	pthread_mutex_unlock(&lock);
+	if (out) {
+		device_alias_apply(out);
+	}
 	return true;
 }
 

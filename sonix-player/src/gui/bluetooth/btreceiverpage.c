@@ -45,13 +45,18 @@ static void format_rate(unsigned rate, char *out, size_t size) {
 static void refresh(void) {
 	btreceiver_state_t st;
 	btreceiver_get_state(&st);
+	char current_name[BT_NAME_MAX] = "";
+	bool has_current_name = bluetooth_receiver_device(NULL, 0, current_name, sizeof(current_name));
+	if (!has_current_name) {
+		snprintf(current_name, sizeof(current_name), "%s", st.device);
+	}
 
 	lv_obj_set_style_text_color(status_label, status_normal_color, 0);
 
 	lv_obj_set_hidden(title_label, true);
 
 	if (st.error[0]) {
-		lv_label_set_text(device_label, st.device);
+		lv_label_set_text(device_label, current_name);
 		lv_label_set_text(format_label, "");
 		lv_label_set_text(status_label, st.error);
 		lv_obj_set_style_text_color(status_label, lv_color_make(224, 27, 36), 0);
@@ -62,16 +67,14 @@ static void refresh(void) {
 		// Asked now, not remembered. The name the mode last ran with belongs to
 		// the mode: with nothing streaming here it is the name of a phone that
 		// has gone, and showing it would read as one that is arriving.
-		char name[BT_NAME_MAX];
-		bool source = bluetooth_receiver_device(NULL, 0, name, sizeof(name));
-		lv_label_set_text(device_label, source ? name : "");
+		lv_label_set_text(device_label, has_current_name ? current_name : "");
 		lv_label_set_text(format_label, "");
 		lv_label_set_text(status_label,
-						  source ? tr("btreceiver_connecting") : tr("btreceiver_no_source_note"));
+						  has_current_name ? tr("btreceiver_connecting") : tr("btreceiver_no_source_note"));
 		return;
 	}
 
-	lv_label_set_text(device_label, st.device);
+	lv_label_set_text(device_label, current_name);
 
 	// The codec and the rate, which is the whole of what this page is for: the
 	// sender chose both and this is the only place the choice is visible.

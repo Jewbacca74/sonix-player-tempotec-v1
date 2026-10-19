@@ -91,6 +91,8 @@ a self-signed certificate), and HLS.
 - **Bluetooth out** - the whole stack is brought up by the player rather than by
   the firmware's scripts. Pair, connect, forget; the codec list comes from what
   the connected device announces and the best is chosen at each connection.
+  Paired devices can be renamed locally or restored to their original name; the
+  remote device itself is not changed.
 - **AirPods** - battery per earbud and for the case, model detection, and noise
   control: off, cancellation, transparency, adaptive.
 - **Bluetooth in** - a phone or laptop connects and the player becomes its
@@ -132,7 +134,8 @@ a self-signed certificate), and HLS.
 - Headings, emphasis, lists, quotes, rules, images, alignment and the table of
   contents.
 - Text size from 14 to 50, line spacing, word spacing, margins, three reading themes (Paper,
-  Sepia, Night) and three page-turn animations.
+  Sepia, Night) and three page-turn animations. Display backlight brightness can
+  be adjusted from the reader menu without leaving the book.
 - **Bookmarks** - double-tap the top of a page; up to 64 per book.
 - A **reading bar** along the bottom with chapter, page, progress, battery and
   clock, each one optional.
