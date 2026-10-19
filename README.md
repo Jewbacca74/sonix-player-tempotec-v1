@@ -264,6 +264,8 @@ api_secret =
 
 If sign-in shows **“No reply from Last.fm”** and the player log says the certificate is not signed by a known authority, this is a TLS trust-store problem, not a Last.fm password or API-key problem. The player loads its CA bundle at startup.
 
+Every image this packer builds carries Mozilla's CA bundle at `/etc/ssl/cert.pem`, so a current firmware needs nothing added for https streaming to work. The steps below refresh that bundle without reflashing, or repair an older image built before the bundle was included.
+
 On a Windows PC with ADB installed, connect the player by USB, enable **Developer options → ADB**, then run these commands in PowerShell. They download the current CA bundle from curl's official CA-bundle site and copy it to the microSD card:
 
 ```powershell
