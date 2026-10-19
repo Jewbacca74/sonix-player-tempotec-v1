@@ -8,7 +8,9 @@
 #include "src/gui/shell/switcher.h"
 #include "src/gui/shell/theme.h"
 #include "src/gui/settings/timeset.h"
+#include "src/gui/wireless/wifisettings.h"
 #include "src/system/core/config.h"
+#include "src/system/device/clock.h"
 #include "src/system/core/lang.h"
 #include "src/system/device/power.h"
 
@@ -158,9 +160,12 @@ static void confirm_cb(lv_event_t *e) {
 	power_hold_screen_on(false);
 	power_notify_activity();
 
-	// And on to the clock, which is the other thing a player that has never
-	// run cannot work out for itself.
-	if (timeset_needed()) {
+	// First connect to Wi-Fi so the player can set the clock and time zone
+	// automatically. Keep the manual clock as an explicit fallback from that
+	// setup page.
+	if (clock_automatic_enabled()) {
+		wifisettings_start_first_boot();
+	} else if (timeset_needed()) {
 		timeset_show();
 	}
 }

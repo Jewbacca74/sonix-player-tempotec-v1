@@ -1312,7 +1312,6 @@ static void poll_status(void) {
 	}
 	// The switch has the last word: the poll must never report a link on a radio
 	// that has just been turned off.
-	bool was_online = g_status.state == WIFI_STATE_CONNECTED && g_status.ip[0] != '\0';
 	if (!g_enabled) {
 		memset(&g_status, 0, sizeof(g_status));
 		g_status.state = WIFI_STATE_OFF;
@@ -1322,12 +1321,11 @@ static void poll_status(void) {
 	bool now_online = g_status.state == WIFI_STATE_CONNECTED && g_status.ip[0] != '\0';
 	pthread_mutex_unlock(&lock);
 
-	// A fresh association is the moment to ask the network for the time. The
-	// stock player does the same, running ntpdate against 0.pool.ntp.org and
-	// time.windows.com as soon as wpa_supplicant reports COMPLETED, and it is
-	// the only clock correction the firmware makes anywhere, on a device whose
-	// RTC cannot be trusted.
-	if (now_online && !was_online) {
+	// Ask for network time whenever the link is online. The clock module
+	// coalesces these polls, refreshing a successful sync every half hour and
+	// retrying a failed one after a short cooldown. This also recovers when the
+	// first request races DHCP, DNS or the access point's internet route.
+	if (now_online) {
 		clock_network_sync();
 	}
 }

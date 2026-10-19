@@ -21,4 +21,9 @@ extern lv_obj_t *wifisettings_screen;
 
 void wifisettings_init(gui_config_t *cfg);
 
+// Opens the first-run Wi-Fi step, starts scanning and offers manual clock setup
+// as a fallback. The pending step is saved across a reboot; a successful network
+// time sync completes setup and returns to Home.
+void wifisettings_start_first_boot(void);
+
 #endif /* WIFISETTINGS_H */

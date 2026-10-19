@@ -7,11 +7,9 @@
 // Wall clock handling.
 //
 // The player cannot assume the system time means anything. The device may have
-// come up with the clock at the epoch, and unlike a phone there is nothing on
-// board that will quietly correct it -- no network time, and the RTC only holds
-// what was last written to it. So the time is something the user sets once, the
-// player records that they did, and it puts the value back into the RTC so the
-// next boot starts from the right place.
+// come up with the clock at the epoch, so it can be set manually or corrected
+// automatically over Wi-Fi. The player records a trustworthy time and writes
+// it through to the RTC so the next boot starts from the right place.
 
 // True once a time has been set (now or in an earlier session). Until then the
 // status bar shows no clock rather than a wrong one.
@@ -36,14 +34,10 @@ void clock_remember(void);
 // ---------------------------------------------------------------------------
 // The time zone
 //
-// Chosen by the user, in Settings > Date and time > Time zone. Fixed offsets,
-// with no daylight saving: switching zone moves the offset by an hour, exactly
-// as the original firmware treats it.
-//
-// Until one is chosen the player behaves as it always did -- the system clock
-// holds local time and the C library shifts nothing -- so not knowing the zone
-// breaks nothing: it is only why the time went back two hours after a
-// power-off.
+// Chosen manually in Settings > Date and time > Time zone, or inferred
+// automatically over Wi-Fi from the internet connection. The manual list uses
+// fixed offsets with a separate daylight-saving choice; automatic mode uses
+// the IANA zone rules when available.
 // ---------------------------------------------------------------------------
 
 bool clock_utc_offset_known(void);
@@ -66,16 +60,19 @@ void clock_set_dst(bool on);
 //   utc_offset_minutes = 120
 void clock_set_utc_offset_minutes(int minutes);
 
-// Asks the network what time it is, the way the stock firmware does: it shells
-// out to `ntpdate 0.pool.ntp.org time.windows.com` whenever wpa_supplicant
-// reports COMPLETED. That is the firmware's only correction for an RTC that
-// runs fast or slow, and it is a far better one than anything a player can
-// work out on its own.
-//
-// Returns immediately; the work happens on a detached thread, and a successful
-// answer is written straight through to the RTC. Called on every Wi-Fi
-// association, and rate-limited internally to one attempt per half hour.
+// Whether automatic date, time and time-zone updates are enabled. Enabled by
+// default; turning it off leaves the manual controls available on Date and time.
+bool clock_automatic_enabled(void);
+void clock_set_automatic(bool on);
+
+// Asks the network for the current time and, when automatic mode is enabled,
+// the time zone inferred from the public IP address. Runs off the UI thread;
+// Wi-Fi polls it while connected, and the worker rate-limits successful syncs
+// to half an hour while retrying failures sooner. A successful time answer is
+// written through to the RTC.
 void clock_network_sync(void);
+bool clock_network_sync_busy(void);
+bool clock_network_sync_succeeded(void);
 
 // Puts the system clock back where it belongs; returns true if it had to move
 // it.

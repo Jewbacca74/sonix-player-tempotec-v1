@@ -6,6 +6,7 @@
 
 #include "lvgl/lvgl.h"
 
+#include "src/gui/board_profile.h"
 #include "src/gui/fonts/fonts.h"
 #include "src/gui/shell/icons.h"
 #include "src/gui/shell/keyboard.h"
@@ -16,7 +17,12 @@
 #include "src/gui/shell/theme.h"
 #include "src/gui/shell/toast.h"
 #include "src/gui/shell/topbar.h"
+#include "src/gui/shell/main_menu.h"
+#include "src/gui/settings/timeset.h"
 #include "src/system/core/lang.h"
+#include "src/system/core/config.h"
+#include "src/system/device/clock.h"
+#include "src/system/device/power.h"
 #include "src/system/net/wifi.h"
 
 lv_obj_t *wifisettings_screen;
@@ -29,6 +35,9 @@ lv_obj_t *wifisettings_screen;
 
 static lv_obj_t *wifi_switch;
 static lv_obj_t *status_label;
+static lv_obj_t *first_setup_note;
+static lv_obj_t *first_setup_manual_btn;
+static bool first_boot_setup;
 static lv_obj_t *current_label;
 static lv_obj_t *current_list;
 static lv_obj_t *section_label;
@@ -597,10 +606,47 @@ static void scan_clicked_cb(lv_event_t *e) {
 	rebuild_list();
 }
 
+static void first_setup_manual_cb(lv_event_t *e) {
+	(void)e;
+	first_boot_setup = false;
+	config_set_bool("setup", "wifi_pending", false);
+	config_save();
+	if (first_setup_note) {
+		lv_obj_set_hidden(first_setup_note, true);
+	}
+	if (first_setup_manual_btn) {
+		lv_obj_set_hidden(first_setup_manual_btn, true);
+	}
+	// The user explicitly chose to proceed without Wi-Fi: leave the radio off,
+	// turn off automatic mode and open the manual date/time controls over Home.
+	wifi_set_enabled(false);
+	clock_set_automatic(false);
+	switch_screen(main_menu_screen);
+	timeset_show();
+}
+
 // Everything the page shows is polled: the worker has no way to call into
 // LVGL, and at two redraws a second nobody can tell the difference.
 static void poll_cb(lv_timer_t *timer) {
 	(void)timer;
+
+	// On the first-run Wi-Fi step, the network worker owns NTP. Once it has
+	// made the clock trustworthy, finish setup on Home; no LVGL is touched from
+	// that worker thread.
+	wifi_status_t setup_status;
+	wifi_get_status(&setup_status);
+	bool setup_online = setup_status.state == WIFI_STATE_CONNECTED && setup_status.ip[0] != '\0';
+	if (first_boot_setup && setup_online && clock_is_set() && clock_network_sync_succeeded() &&
+		!clock_network_sync_busy()) {
+		first_boot_setup = false;
+		config_set_bool("setup", "wifi_pending", false);
+		config_save();
+		lv_obj_set_hidden(first_setup_note, true);
+		lv_obj_set_hidden(first_setup_manual_btn, true);
+		power_hold_screen_on(false);
+		switch_screen(main_menu_screen);
+		return;
+	}
 
 	bool on = wifi_get_enabled();
 	if (lv_obj_has_state(wifi_switch, LV_STATE_CHECKED) != on) {
@@ -1015,6 +1061,33 @@ void wifisettings_init(gui_config_t *cfg) {
 	lv_obj_set_style_pad_hor(status_label, 4, 0);
 	lv_label_set_long_mode(status_label, LV_LABEL_LONG_WRAP);
 
+	// Only shown during first-run setup: make it clear why Wi-Fi is being
+	// requested, and leave an explicit route to manual time entry.
+	first_setup_note = lv_label_create(container);
+	lv_obj_set_width(first_setup_note, lv_pct(100));
+	lv_label_set_long_mode(first_setup_note, LV_LABEL_LONG_WRAP);
+	lv_label_set_text(first_setup_note, tr("wifi_first_setup_note"));
+	lv_obj_add_style(first_setup_note, &theme_style_text_dim, 0);
+	lv_obj_set_style_text_font(first_setup_note, &font_ui_20, 0);
+	lv_obj_set_hidden(first_setup_note, true);
+
+	first_setup_manual_btn = lv_btn_create(container);
+	lv_obj_set_size(first_setup_manual_btn, lv_pct(100), bp_is_tempotec_v1() ? 48 : 52);
+	lv_obj_add_style(first_setup_manual_btn, &theme_style_card, 0);
+	lv_obj_add_style(first_setup_manual_btn, &theme_style_card_pressed, LV_STATE_PRESSED);
+	lv_obj_set_style_radius(first_setup_manual_btn, LV_RADIUS_CIRCLE, 0);
+	lv_obj_set_style_shadow_width(first_setup_manual_btn, 0, 0);
+	lv_obj_set_style_border_width(first_setup_manual_btn, 0, 0);
+	lv_obj_add_event_cb(first_setup_manual_btn, first_setup_manual_cb, LV_EVENT_CLICKED, NULL);
+	lv_obj_t *manual_label = lv_label_create(first_setup_manual_btn);
+	lv_label_set_text(manual_label, tr("wifi_first_setup_manual"));
+	lv_obj_set_width(manual_label, lv_pct(100));
+	lv_label_set_long_mode(manual_label, LV_LABEL_LONG_WRAP);
+	lv_obj_set_style_text_font(manual_label, &font_ui_18, 0);
+	lv_obj_set_style_text_align(manual_label, LV_TEXT_ALIGN_CENTER, 0);
+	lv_obj_center(manual_label);
+	lv_obj_set_hidden(first_setup_manual_btn, true);
+
 	// Two sections, each a heading over a box of rows: the network being used,
 	// and everything else. Both boxes exist from the start and are hidden when
 	// they have nothing in them, so a refresh is one lv_obj_clean() and not a
@@ -1048,4 +1121,21 @@ void wifisettings_init(gui_config_t *cfg) {
 
 	refresh_status_label();
 	rebuild_list();
+}
+
+void wifisettings_start_first_boot(void) {
+	if (!wifisettings_screen || !first_setup_note || !first_setup_manual_btn) {
+		return;
+	}
+	first_boot_setup = true;
+	config_set_bool("setup", "wifi_pending", true);
+	config_save();
+	lv_obj_set_hidden(first_setup_note, false);
+	lv_obj_set_hidden(first_setup_manual_btn, false);
+	// Bring the radio up and start scanning so setup lands on a useful list,
+	// rather than asking the user to enable Wi-Fi before any networks appear.
+	wifi_set_enabled(true);
+	topbar_refresh_radios();
+	power_hold_screen_on(true);
+	switch_screen(wifisettings_screen);
 }

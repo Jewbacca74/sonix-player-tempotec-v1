@@ -87,6 +87,8 @@
 #include "src/system/device/system.h"
 #include "src/system/device/usb.h"
 #include "src/system/device/power.h"
+#include "src/system/device/clock.h"
+#include "src/system/core/config.h"
 
 #include "lvgl/lvgl.h"
 #include "lvgl/src/display/lv_display_private.h"
@@ -868,28 +870,35 @@ void gui_init(gui_config_t *cfg) {
 	volume_overlay_init(cfg);
 	powermenu_init(cfg);
 
-	// On a first boot the clock panel comes straight up over everything else:
-	// with no network and an RTC that has never been written, the player has no
-	// way to know the time, and nothing it timestamps can be trusted until it
-	// does.
+	// Build the date/time panel before Wi-Fi onboarding: after a network sync it
+	// is also used for manual fallback, and its LVGL polling timer is ready if
+	// the user chooses that route.
 	timeset_init(cfg);
 
-	// A player that has never run asks two questions, in this order: which
-	// language, then what time it is. That way the clock panel is already in
-	// the language just chosen -- and being asked to dial in a date in a
-	// language you cannot read is a poor way to meet a device. Confirming the
-	// language brings the clock up itself, so the two only chain here on the
-	// path where the language has already been answered before.
+	// First boot asks in sequence: language, Wi-Fi (for automatic date, time
+	// and time-zone setup), then the manual clock only when automatic setup is
+	// disabled or Wi-Fi is skipped.
 	welcome_init(cfg);
 
 	// Ahead of everything else, and only on a device that has never been booted:
-	// the greeting. Its button opens the language picker itself, which in turn
-	// opens the clock, so only the first door is entered from here.
+	// the greeting. Its button opens the language picker; confirming that starts
+	// Wi-Fi time setup, with manual clock entry available as a fallback.
+	bool start_first_wifi_setup = false;
 	if (language_needed()) {
 		welcome_show_first_boot();
+	} else if ((config_get_bool("setup", "wifi_pending", false) || timeset_needed()) &&
+			   clock_automatic_enabled()) {
+		start_first_wifi_setup = true;
 	} else if (timeset_needed()) {
 		timeset_show();
+	} else if (config_get_bool("setup", "wifi_pending", false)) {
+		// Automatic mode was disabled while a first-run Wi-Fi step was pending.
+		config_set_bool("setup", "wifi_pending", false);
+		config_save();
 	}
 
 	switch_screen(main_menu_screen);
+	if (start_first_wifi_setup) {
+		wifisettings_start_first_boot();
+	}
 }

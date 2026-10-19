@@ -4,6 +4,7 @@
 #include <limits.h>
 #include <linux/rtc.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,6 +13,8 @@
 #include <unistd.h>
 
 #include "src/system/core/config.h"
+#include "src/system/core/json.h"
+#include "src/system/net/http.h"
 
 // A system clock reading earlier than this cannot be right: it means nothing
 // ever set it. Anything after it is taken at face value.
@@ -55,9 +58,11 @@ static const char *const RTC_DEVICES[] = {"/dev/rtc0", "/dev/rtc", "/dev/misc/rt
 #define NTPDATE_BIN "/usr/bin/ntpdate"
 #define NTP_SERVERS "0.pool.ntp.org time.windows.com"
 
-// Once every half hour is plenty: the point is to correct an RTC that has
-// wandered, not to discipline the clock continuously.
+// A successful sync only needs a half-hour refresh. Failed attempts are
+// retried sooner while Wi-Fi remains connected, so one transient DNS/route
+// startup failure does not leave the clock stale for the whole session.
 #define NTP_MIN_INTERVAL_SECONDS 1800
+#define NTP_RETRY_INTERVAL_SECONDS 120
 
 // ---------------------------------------------------------------------------
 // the timezone
@@ -72,11 +77,11 @@ static const char *const RTC_DEVICES[] = {"/dev/rtc0", "/dev/rtc", "/dev/misc/rt
 // same device: whoever wrote the RTC last decides what survives a power-off,
 // and the clock comes back hours out with the minutes right.
 //
-// So the device is given a real timezone: the system holds UTC as it should and
-// mktime/localtime convert everywhere, with no call site changed. The offset
-// comes from the user, in Settings > Date and time > Timezone -- guessing it
-// from the gap between a hand-set time and what the network returns needs the
-// hand-set time to be right to the minute in the first place.
+// So the device is given a real timezone: the system holds UTC as it should
+// and mktime/localtime convert everywhere, with no call site changed. The zone
+// comes either from the manual picker or the automatic network lookup; guessing
+// it from the gap between a hand-set time and network time would require the
+// hand-set clock to be right to the minute.
 
 #define TZ_OFFSET_UNKNOWN INT_MIN
 
@@ -88,8 +93,11 @@ static int tz_offset_minutes = TZ_OFFSET_UNKNOWN;
 // Daylight saving, kept apart from the offset. See clock.h: the list says
 // where, this says when, and the system gets the sum.
 static bool tz_dst;
+static atomic_bool automatic_enabled = ATOMIC_VAR_INIT(true);
 
 #define DST_MINUTES 60
+
+static void clock_network_sync_force(void);
 
 // Installs the offset into the C library. The POSIX string has the sign
 // reversed from the usual notation: "UTC-2" means two hours east, what everyone
@@ -141,6 +149,34 @@ void clock_set_utc_offset_minutes(int minutes) {
 	tz_apply(tz_effective());
 	config_set_int("clock", "utc_offset_minutes", minutes);
 	config_save();
+}
+
+bool clock_automatic_enabled(void) { return atomic_load(&automatic_enabled); }
+
+void clock_set_automatic(bool on) {
+	if (atomic_load(&automatic_enabled) == on) {
+		if (on) {
+			clock_network_sync();
+		}
+		return;
+	}
+
+	atomic_store(&automatic_enabled, on);
+	config_set_bool("clock", "automatic", on);
+	if (!on) {
+		// Go back to the user's saved manual zone as soon as automatic mode is
+		// disabled; the network-derived zone is only an overlay.
+		config_set("clock", "auto_timezone", "");
+		config_set_int("clock", "auto_utc_offset_minutes", TZ_OFFSET_UNKNOWN);
+		tz_apply(clock_utc_offset_known() ? tz_effective() : 0);
+	}
+	config_save();
+	if (on) {
+		// Re-enabling Automatic is an explicit request to restore network time
+		// and the network-derived zone. Do not let the ordinary refresh
+		// cooldown leave a manually selected zone in effect for up to 30 minutes.
+		clock_network_sync_force();
+	}
 }
 
 static bool clock_set_flag;
@@ -263,7 +299,101 @@ static time_t read_rtc(void) {
 
 static pthread_mutex_t ntp_lock = PTHREAD_MUTEX_INITIALIZER;
 static bool ntp_running;
-static time_t ntp_last_attempt;
+static bool ntp_attempted;
+static struct timespec ntp_last_attempt_mono;
+static atomic_bool network_sync_succeeded = ATOMIC_VAR_INIT(false);
+
+// The timezone endpoint returns an IANA name (for example Europe/Paris) and
+// the current UTC offset. Use the device's zoneinfo database when present so
+// seasonal clock changes happen locally; the offset is a safe fallback for
+// firmware images without zoneinfo. The request contains no account or device
+// identifier, but the service can see the network's public IP address.
+static bool parse_utc_offset(const char *text, int *minutes) {
+	if (!text || (text[0] != '+' && text[0] != '-')) {
+		return false;
+	}
+	size_t len = strlen(text);
+	int minute_at;
+	if (len == 5) {
+		minute_at = 3; // +HHMM
+	} else if (len == 6 && text[3] == ':') {
+		minute_at = 4; // +HH:MM
+	} else {
+		return false;
+	}
+	if (!(text[1] >= '0' && text[1] <= '9' && text[2] >= '0' && text[2] <= '9' &&
+		  text[minute_at] >= '0' && text[minute_at] <= '9' &&
+		  text[minute_at + 1] >= '0' && text[minute_at + 1] <= '9')) {
+		return false;
+	}
+	int hours = (text[1] - '0') * 10 + text[2] - '0';
+	int mins = (text[minute_at] - '0') * 10 + text[minute_at + 1] - '0';
+	if (hours > 14 || mins > 59 || (hours == 14 && mins != 0)) {
+		return false;
+	}
+	*minutes = (text[0] == '-' ? -1 : 1) * (hours * 60 + mins);
+	return true;
+}
+
+static bool valid_iana_timezone(const char *zone) {
+	if (!zone || !zone[0] || zone[0] == '/' || strstr(zone, "..")) {
+		return false;
+	}
+	for (const unsigned char *p = (const unsigned char *)zone; *p; p++) {
+		if (!( (*p >= 'A' && *p <= 'Z') || (*p >= 'a' && *p <= 'z') ||
+			   (*p >= '0' && *p <= '9') || *p == '_' || *p == '-' || *p == '+' || *p == '/' )) {
+			return false;
+		}
+	}
+	char path[160];
+	int n = snprintf(path, sizeof(path), "/usr/share/zoneinfo/%s", zone);
+	return n > 0 && (size_t)n < sizeof(path) && access(path, R_OK) == 0;
+}
+
+static bool network_timezone_sync(void) {
+	if (!clock_automatic_enabled()) {
+		return false;
+	}
+
+	char *body = NULL;
+	if (!http_get("https://ipapi.co/json/", &body, NULL, 4096, 8)) {
+		printf("clock: automatic time-zone lookup failed; keeping the last zone\n");
+		return false;
+	}
+
+	json_doc_t doc;
+	if (!json_parse_limited(body, &doc, 64)) {
+		free(body);
+		return false;
+	}
+	int root = json_root(&doc);
+	char zone[96] = {0};
+	char utc_offset[16] = {0};
+	int offset_minutes = 0;
+	bool ok = json_obj_str(&doc, root, "timezone", zone, sizeof(zone)) &&
+			  json_obj_str(&doc, root, "utc_offset", utc_offset, sizeof(utc_offset)) &&
+			  parse_utc_offset(utc_offset, &offset_minutes) && zone[0] != '\0';
+	if (ok) {
+		if (valid_iana_timezone(zone)) {
+			setenv("TZ", zone, 1);
+			tzset();
+			config_set("clock", "auto_timezone", zone);
+			config_set_int("clock", "auto_utc_offset_minutes", offset_minutes);
+			printf("clock: automatic time zone %s\n", zone);
+		} else {
+			config_set("clock", "auto_timezone", "");
+			config_set_int("clock", "auto_utc_offset_minutes", offset_minutes);
+			tz_apply(offset_minutes);
+			printf("clock: automatic time zone uses network offset %+d minutes\n", offset_minutes);
+		}
+		config_save();
+	} else {
+		printf("clock: automatic time-zone response was invalid\n");
+	}
+	json_free(&doc);
+	free(body);
+	return ok;
+}
 
 static void *ntp_worker(void *unused) {
 	(void)unused;
@@ -324,6 +454,11 @@ static void *ntp_worker(void *unused) {
 		printf("clock: ntpdate did not answer (%d)\n", rc);
 	}
 
+	// NTP supplies UTC; a separate public-IP lookup supplies the local IANA
+	// time zone, including daylight-saving rules where zoneinfo is installed.
+	bool timezone_ok = network_timezone_sync();
+	atomic_store(&network_sync_succeeded, rc == 0 && after >= CLOCK_PLAUSIBLE_FROM && timezone_ok);
+
 	pthread_mutex_lock(&ntp_lock);
 	ntp_running = false;
 	pthread_mutex_unlock(&ntp_lock);
@@ -331,17 +466,28 @@ static void *ntp_worker(void *unused) {
 }
 
 void clock_network_sync(void) {
-	if (access(NTPDATE_BIN, X_OK) != 0) {
-		return; // not this firmware
+	if (!clock_automatic_enabled() || access(NTPDATE_BIN, X_OK) != 0) {
+		return;
 	}
 
-	time_t now = time(NULL);
+	struct timespec now;
+	if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
+		return;
+	}
 
 	pthread_mutex_lock(&ntp_lock);
-	bool skip = ntp_running || (ntp_last_attempt != 0 && now - ntp_last_attempt < NTP_MIN_INTERVAL_SECONDS);
+	int interval = atomic_load(&network_sync_succeeded) ? NTP_MIN_INTERVAL_SECONDS : NTP_RETRY_INTERVAL_SECONDS;
+	time_t elapsed = now.tv_sec - ntp_last_attempt_mono.tv_sec;
+	if (now.tv_nsec < ntp_last_attempt_mono.tv_nsec) {
+		elapsed--;
+	}
+	bool cooldown = ntp_attempted && elapsed >= 0 && elapsed < interval;
+	bool skip = ntp_running || cooldown;
 	if (!skip) {
 		ntp_running = true;
-		ntp_last_attempt = now;
+		ntp_attempted = true;
+		ntp_last_attempt_mono = now;
+		atomic_store(&network_sync_succeeded, false);
 	}
 	pthread_mutex_unlock(&ntp_lock);
 
@@ -353,11 +499,31 @@ void clock_network_sync(void) {
 	if (pthread_create(&t, NULL, ntp_worker, NULL) != 0) {
 		pthread_mutex_lock(&ntp_lock);
 		ntp_running = false;
+		ntp_attempted = false;
 		pthread_mutex_unlock(&ntp_lock);
 		return;
 	}
 	pthread_detach(t);
 }
+
+static void clock_network_sync_force(void) {
+	pthread_mutex_lock(&ntp_lock);
+	if (!ntp_running) {
+		ntp_attempted = false;
+		atomic_store(&network_sync_succeeded, false);
+	}
+	pthread_mutex_unlock(&ntp_lock);
+	clock_network_sync();
+}
+
+bool clock_network_sync_busy(void) {
+	pthread_mutex_lock(&ntp_lock);
+	bool busy = ntp_running;
+	pthread_mutex_unlock(&ntp_lock);
+	return busy;
+}
+
+bool clock_network_sync_succeeded(void) { return atomic_load(&network_sync_succeeded); }
 
 bool clock_resync(void) {
 	if (!clock_set_flag) {
@@ -409,10 +575,29 @@ void clock_init(void) {
 	// timezone, and the rest of this file, and of the player, works in UTC
 	// without knowing it.
 	long saved_offset = config_get_int("clock", "utc_offset_minutes", TZ_OFFSET_UNKNOWN);
-	if (saved_offset != TZ_OFFSET_UNKNOWN && saved_offset >= -TZ_MAX_OFFSET_SECONDS / 60 &&
-		saved_offset <= TZ_MAX_OFFSET_SECONDS / 60) {
+	// New installs default to automatic time. An existing manual time zone is
+	// an explicit prior choice, so preserve it when migrating older configs.
+	atomic_store(&automatic_enabled,
+			 config_get_bool("clock", "automatic", saved_offset == TZ_OFFSET_UNKNOWN));
+	tz_dst = config_get_bool("clock", "dst", false);
+	char saved_auto_zone[96] = {0};
+	const char *auto_zone = config_get("clock", "auto_timezone", "");
+	if (auto_zone && strlen(auto_zone) < sizeof(saved_auto_zone)) {
+		snprintf(saved_auto_zone, sizeof(saved_auto_zone), "%s", auto_zone);
+	}
+	long saved_auto_offset = config_get_int("clock", "auto_utc_offset_minutes", TZ_OFFSET_UNKNOWN);
+
+	if (clock_automatic_enabled() && valid_iana_timezone(saved_auto_zone)) {
+		setenv("TZ", saved_auto_zone, 1);
+		tzset();
+		printf("clock: restored automatic time zone %s\n", saved_auto_zone);
+	} else if (clock_automatic_enabled() && saved_auto_offset != TZ_OFFSET_UNKNOWN &&
+			   saved_auto_offset >= -TZ_MAX_OFFSET_SECONDS / 60 &&
+			   saved_auto_offset <= TZ_MAX_OFFSET_SECONDS / 60) {
+		tz_apply((int)saved_auto_offset);
+	} else if (saved_offset != TZ_OFFSET_UNKNOWN && saved_offset >= -TZ_MAX_OFFSET_SECONDS / 60 &&
+			   saved_offset <= TZ_MAX_OFFSET_SECONDS / 60) {
 		tz_offset_minutes = (int)saved_offset;
-		tz_dst = config_get_bool("clock", "dst", false);
 		tz_apply(tz_effective());
 	} else {
 		printf("clock: time zone not chosen yet (Settings > Date and time > Time zone)\n");

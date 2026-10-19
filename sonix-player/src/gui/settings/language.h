@@ -11,9 +11,8 @@
 // use. See src/system/lang.h for how the translations themselves work.
 //
 // Two ways in, the same way the clock has two: the settings page, and a panel
-// that comes up by itself the first time the player runs. The language goes
-// first there, before the date and time -- a clock cannot be set in a language
-// the user cannot read.
+// that comes up by itself the first time the player runs. Language is chosen
+// before Wi-Fi and time setup so the connection instructions are readable.
 extern lv_obj_t *language_screen;
 
 void language_init(gui_config_t *cfg);
@@ -26,8 +25,7 @@ void language_bind_menu_row(lv_obj_t *row);
 // True when nobody has ever chosen: the panel should come up on its own.
 bool language_needed(void);
 
-// Brings that panel up. Confirming it hands over to the clock, if the clock
-// needs setting too.
+// Brings that panel up. Confirming it begins the first-run Wi-Fi/time setup.
 void language_show_first_boot(void);
 
 #endif /* LANGUAGE_H */

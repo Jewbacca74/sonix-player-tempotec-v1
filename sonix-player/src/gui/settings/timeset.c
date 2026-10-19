@@ -44,7 +44,15 @@ static lv_obj_t *roller_hour;
 static lv_obj_t *roller_minute;
 static lv_obj_t *roller_ampm; // only in the 12-hour format
 static lv_obj_t *confirm_btn;
+static lv_obj_t *date_card;
+static lv_obj_t *time_card;
+static lv_obj_t *tz_card;
+static lv_obj_t *dst_card;
+static lv_obj_t *automatic_switch;
+static lv_obj_t *automatic_note;
 static lv_obj_t *h24_switch;
+static bool waiting_for_auto_sync;
+static bool first_run_mode;
 static lv_obj_t *tz_value;	// the label at the right of the "Time zone" row
 static lv_obj_t *dst_pills[2]; // 0 = standard time, 1 = daylight saving
 
@@ -66,6 +74,30 @@ static void dst_paint(void) {
 }
 
 static void seed_rollers_from_clock(void);
+static void tz_paint(void);
+
+static void timeset_manual_controls(bool visible) {
+	lv_obj_t *controls[] = {date_card, time_card, tz_card, dst_card, confirm_btn};
+	for (size_t i = 0; i < sizeof(controls) / sizeof(controls[0]); i++) {
+		if (controls[i]) {
+			lv_obj_set_hidden(controls[i], !visible);
+		}
+	}
+}
+
+static void automatic_toggle_cb(lv_event_t *e) {
+	(void)e;
+	bool on = lv_obj_has_state(automatic_switch, LV_STATE_CHECKED);
+	clock_set_automatic(on);
+	waiting_for_auto_sync = on && first_run_mode;
+	timeset_manual_controls(!on);
+	if (automatic_note) {
+		lv_obj_set_hidden(automatic_note, !on);
+	}
+	tz_paint();
+	seed_rollers_from_clock();
+	topbar_refresh_clock();
+}
 
 static void dst_pick_cb(lv_event_t *e) {
 	bool want = (int)(intptr_t)lv_event_get_user_data(e) == 1;
@@ -332,7 +364,9 @@ static void tz_paint(void) {
 	}
 
 	if (tz_value) {
-		if (selected < 0) {
+		if (clock_automatic_enabled()) {
+			lv_label_set_text(tz_value, tr("timeset_automatic"));
+		} else if (selected < 0) {
 			lv_label_set_text(tz_value, tr("timeset_not_set"));
 		} else {
 			char text[16];
@@ -369,6 +403,15 @@ static void tz_pick_cb(lv_event_t *e) {
 		return;
 	}
 
+	clock_set_automatic(false);
+	waiting_for_auto_sync = false;
+	if (automatic_switch) {
+		lv_obj_remove_state(automatic_switch, LV_STATE_CHECKED);
+	}
+	if (automatic_note) {
+		lv_obj_set_hidden(automatic_note, true);
+	}
+	timeset_manual_controls(true);
 	clock_set_utc_offset_minutes(TIMEZONES[index].minutes);
 	tz_paint();
 
@@ -446,6 +489,8 @@ static void confirm_cb(lv_event_t *e) {
 	int minute = (int)lv_roller_get_selected(roller_minute);
 
 	clock_set(year, month, day, hour, minute);
+	waiting_for_auto_sync = false;
+	first_run_mode = false;
 	topbar_refresh_clock();
 
 	power_hold_screen_on(false);
@@ -476,6 +521,26 @@ static void cancel_cb(lv_event_t *e) {
 }
 
 bool timeset_needed(void) { return !clock_is_set(); }
+
+// The initial date/time panel can stay open while Wi-Fi comes up. When the
+// network worker has obtained a real clock, dismiss that first-run panel from
+// the LVGL thread rather than touching UI objects in the worker.
+static void timeset_auto_sync_poll_cb(lv_timer_t *timer) {
+	(void)timer;
+	if (!waiting_for_auto_sync || timeset_needed()) {
+		return;
+	}
+	waiting_for_auto_sync = false;
+	first_run_mode = false;
+	lv_obj_set_hidden(panel, true);
+	if (tz_panel) {
+		lv_obj_set_hidden(tz_panel, true);
+	}
+	power_hold_screen_on(false);
+	topbar_set_hidden(false);
+	topbar_refresh_clock();
+	topbar_bring_to_front();
+}
 
 // Puts the five rollers back on what the clock now says. Needed when the page
 // opens -- correcting the time by ten minutes must not mean dialling in the
@@ -512,8 +577,21 @@ void timeset_show(void) {
 		return;
 	}
 
+	first_run_mode = timeset_needed();
+	waiting_for_auto_sync = first_run_mode && clock_automatic_enabled();
 	seed_rollers_from_clock();
 	tz_paint();
+	if (automatic_switch) {
+		if (clock_automatic_enabled()) {
+			lv_obj_add_state(automatic_switch, LV_STATE_CHECKED);
+		} else {
+			lv_obj_remove_state(automatic_switch, LV_STATE_CHECKED);
+		}
+	}
+	timeset_manual_controls(!clock_automatic_enabled());
+	if (automatic_note) {
+		lv_obj_set_hidden(automatic_note, !clock_automatic_enabled());
+	}
 
 	// The switch and the hour rollers are set afresh every time: the setting can
 	// be changed from here, but the page also reopens long afterwards.
@@ -811,15 +889,49 @@ void timeset_init(gui_config_t *cfg) {
 	lv_obj_set_style_pad_bottom(content, 12, 0);
 	lv_obj_set_flex_align(content, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
+	// Automatic time and time-zone updates over Wi-Fi. Manual controls remain
+	// available below as a fallback whenever the user switches this off.
+	lv_obj_t *automatic_card = lv_obj_create(content);
+	lv_obj_set_size(automatic_card, lv_pct(100), LV_SIZE_CONTENT);
+	lv_obj_add_style(automatic_card, &theme_style_card, 0);
+	lv_obj_set_style_radius(automatic_card, compact() ? bp_tile_radius() : 12, 0);
+	lv_obj_set_style_border_width(automatic_card, 0, 0);
+	lv_obj_set_style_shadow_width(automatic_card, 0, 0);
+	lv_obj_set_style_pad_hor(automatic_card, compact() ? 8 : 20, 0);
+	lv_obj_set_style_pad_ver(automatic_card, compact() ? 8 : 16, 0);
+	lv_obj_set_scrollable(automatic_card, false);
+	lv_obj_set_flex_flow(automatic_card, LV_FLEX_FLOW_ROW);
+	lv_obj_set_flex_align(automatic_card, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+	lv_obj_t *automatic_label = lv_label_create(automatic_card);
+	lv_label_set_text(automatic_label, tr("timeset_automatic"));
+	lv_obj_add_style(automatic_label, &theme_style_text, 0);
+	lv_obj_set_style_text_font(automatic_label, &font_ui_24, 0);
+
+	automatic_switch = lv_switch_create(automatic_card);
+	lv_obj_set_size(automatic_switch, compact() ? 48 : 68, compact() ? 28 : 36);
+	theme_apply_switch(automatic_switch);
+	if (clock_automatic_enabled()) {
+		lv_obj_add_state(automatic_switch, LV_STATE_CHECKED);
+	}
+	lv_obj_add_event_cb(automatic_switch, automatic_toggle_cb, LV_EVENT_VALUE_CHANGED, NULL);
+
+	automatic_note = lv_label_create(content);
+	lv_label_set_text(automatic_note, tr("timeset_automatic_note"));
+	lv_obj_set_width(automatic_note, lv_pct(100));
+	lv_obj_add_style(automatic_note, &theme_style_text_dim, 0);
+	lv_obj_set_style_text_font(automatic_note, &font_ui_20, 0);
+	lv_obj_set_hidden(automatic_note, !clock_automatic_enabled());
+
 	// Date in one card, time in the next: five rollers side by side would be
 	// too narrow to hit on a 480 px panel, and the two boxed groups read as
 	// "the date" and "the time" at a glance.
-	lv_obj_t *date_card = make_card(content);
+	date_card = make_card(content);
 	roller_day = make_roller(date_card, days_options, 86, 42);
 	roller_month = make_roller(date_card, MONTHS, 184, 92);
 	roller_year = make_roller(date_card, years_options, 110, 58);
 
-	lv_obj_t *time_card = make_card(content);
+	time_card = make_card(content);
 	roller_hour = make_roller(time_card, hours_options, 118, 58);
 
 	// The colon between the two, like every clock dialog.
@@ -839,7 +951,7 @@ void timeset_init(gui_config_t *cfg) {
 	// Time zone, above "24 hour", because it decides what time the rollers above
 	// it say. A single row with the value on the right, like any settings row;
 	// tapping it opens the list.
-	lv_obj_t *tz_card = lv_obj_create(content);
+	tz_card = lv_obj_create(content);
 	lv_obj_set_size(tz_card, lv_pct(100), LV_SIZE_CONTENT);
 	lv_obj_add_style(tz_card, &theme_style_card, 0);
 	lv_obj_add_style(tz_card, &theme_style_card_pressed, LV_STATE_PRESSED);
@@ -870,7 +982,7 @@ void timeset_init(gui_config_t *cfg) {
 	// March and October a pill is tapped instead of hunting for one's own city
 	// on a different row, and that the list stays one list instead of two nearly
 	// identical ones.
-	lv_obj_t *dst_card = lv_obj_create(content);
+	dst_card = lv_obj_create(content);
 	lv_obj_set_size(dst_card, lv_pct(100), LV_SIZE_CONTENT);
 	lv_obj_add_style(dst_card, &theme_style_card, 0);
 	lv_obj_set_style_radius(dst_card, compact() ? bp_tile_radius() : 12, 0);
@@ -955,6 +1067,8 @@ void timeset_init(gui_config_t *cfg) {
 
 	build_timezone_panel(cfg);
 	tz_paint();
+	timeset_manual_controls(!clock_automatic_enabled());
 
 	theme_register_refresh(timeset_refresh_theme);
+	lv_timer_create(timeset_auto_sync_poll_cb, 1000, NULL);
 }
