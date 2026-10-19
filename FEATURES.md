@@ -241,8 +241,10 @@ a self-signed certificate), and HLS.
   power-on, cross-fades between colours, breathes red while charging, turns
   green when the charge is done and fades out on the way down. Brightness (1-5)
   and transition speed (20 ms to 2 s) are set under Power.
-- **Date and time** - set by hand and written to the RTC, 24-hour clock, and a
-  time zone with its own standard and daylight choice.
+- **Date and time** - first-run setup guides you to connect to Wi-Fi, then sets
+  the clock automatically (including the time zone, estimated from the internet
+  connection, and daylight-saving rules) or lets you set it by hand; the clock
+  is written through to the RTC, with a 24-hour clock option.
 - **Language** - English, Italiano, Deutsch, Español, Français, Russian, Chinese,
   Japanese. Titles and tags in Korean, Thai and Arabic are shown too, Arabic
   right to left.

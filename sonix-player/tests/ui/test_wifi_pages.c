@@ -26,8 +26,11 @@
 #include "src/gui/fonts/fonts.h"
 #include "src/gui/shell/icons.h"
 #include "src/gui/shell/theme.h"
+#include "src/gui/shell/main_menu.h"
+#include "src/gui/settings/timeset.h"
 #include "src/gui/wireless/wifisettings.h"
 #include "src/system/core/config.h"
+#include "src/system/device/clock.h"
 #include "src/system/core/lang.h"
 #include "src/system/net/wifi.h"
 
@@ -95,9 +98,18 @@ void toast_glyph(const lv_image_dsc_t *glyph, const char *text) {
 	(void)text;
 }
 void topbar_refresh_radios(void) {}
+void power_hold_screen_on(bool on) { (void)on; }
 
 void switch_screen(lv_obj_t *screen) { lv_screen_load(screen); }
 void switch_screen_cb(lv_event_t *e) { switch_screen(lv_event_get_user_data(e)); }
+
+lv_obj_t *main_menu_screen;
+bool clock_is_set(void) { return false; }
+bool clock_network_sync_busy(void) { return false; }
+bool clock_network_sync_succeeded(void) { return false; }
+bool clock_automatic_enabled(void) { return true; }
+void clock_set_automatic(bool on) { (void)on; }
+void timeset_show(void) {}
 void switcher_attach_back_gesture(lv_obj_t *obj) { (void)obj; }
 bool switcher_back_drag_active(void) { return false; }
 void player_sheet_attach_drag(lv_obj_t *obj, bool opening) {
@@ -273,7 +285,7 @@ static bool is_ini(const char *name) {
 static void check_strings(const char *language_dir) {
 	static const char *const KEYS[] = {
 		"wifi_add_hidden_network", "wifi_hidden_network", "wifi_network_name", "wifi_hidden_network_note",
-		"wifi_enter_network_name",
+		"wifi_enter_network_name", "wifi_first_setup_note", "wifi_first_setup_manual",
 	};
 	DIR *dir = opendir(language_dir);
 	assert(dir);
@@ -394,6 +406,15 @@ int main(int argc, char **argv) {
 	assert(lv_screen_active() == manual);
 	assert(strcmp(lv_textarea_get_text(ssid_field), "") == 0);
 	assert(strcmp(lv_textarea_get_text(psk_field), "") == 0);
+
+	/* First-run onboarding opens Wi-Fi, displays its automatic-time prompt and
+	 * keeps a manual-time fallback visible. */
+	wifisettings_start_first_boot();
+	assert(lv_screen_active() == wifisettings_screen);
+	lv_timer_handler();
+	lv_obj_update_layout(wifisettings_screen);
+	assert(find_label(wifisettings_screen, tr("wifi_first_setup_note")));
+	assert(!lv_obj_is_hidden(button_of_label(wifisettings_screen, tr("wifi_first_setup_manual"))));
 
 	lv_deinit();
 	printf("PASS wifi pages (%s)\n", bp_is_tempotec_v1() ? "240x320" : "480x720");

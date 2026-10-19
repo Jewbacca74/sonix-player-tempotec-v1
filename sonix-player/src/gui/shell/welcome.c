@@ -173,8 +173,8 @@ static void start_cb(lv_event_t *e) {
 	stop_cycle();
 	lv_obj_set_hidden(panel, true);
 
-	// The next screen holds the display on itself, so nothing is released here:
-	// the panel must not blank between the two pages.
+	// The language page holds the display on itself, so nothing is released
+	// here; it then hands setup on to Wi-Fi and the automatic clock.
 	language_show_first_boot();
 }
 
