@@ -24,6 +24,11 @@ int bp_padding(void);
 int bp_status_bar_h(void);
 int bp_tile_radius(void);
 
+// Black quarter-circle masks on the system layer, matching the glass. 16 px
+// on the V1 (about 2 mm of the 2" 240×320 IPS); 28 px on the 480-wide HiBy
+// panels, which is the original arc.
+int bp_screen_corner_radius(void);
+
 // Common compact-shell geometry.  Callers which already have gui_config_t can
 // still key off screen_width < 320; these helpers are for code built before the
 // display exists (notably fonts_init()).

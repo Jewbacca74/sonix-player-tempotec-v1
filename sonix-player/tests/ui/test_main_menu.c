@@ -20,6 +20,7 @@
 #include "src/gui/settings/appearance.h"
 #include "src/gui/settings/musicsettings.h"
 #include "src/gui/settings/settings.h"
+#include "src/gui/shell/corners.h"
 #include "src/gui/shell/gridpage.h"
 #include "src/gui/shell/icons.h"
 #include "src/gui/shell/main_menu.h"
@@ -423,6 +424,21 @@ int main(int argc, char **argv) {
 	lv_obj_send_event(browse_toggle, LV_EVENT_VALUE_CHANGED, NULL);
 	assert(!main_menu_browse());
 	assert(find_label(lv_obj_get_child(grid, 0), tr("music")));
+
+	assert(bp_screen_corner_radius() == (bp_is_tempotec_v1() ? 16 : 28));
+	assert(!corners_enabled());
+	lv_obj_t *corners_label = find_label(appearance_screen, tr("appearance_rounded_corners"));
+	assert(corners_label);
+	lv_obj_t *corners_toggle = child_of_type(lv_obj_get_parent(corners_label), &lv_switch_class);
+	assert(!lv_obj_has_state(corners_toggle, LV_STATE_CHECKED));
+	lv_obj_set_state(corners_toggle, LV_STATE_CHECKED, true);
+	lv_obj_send_event(corners_toggle, LV_EVENT_VALUE_CHANGED, NULL);
+	assert(corners_enabled());
+	assert(config_get_int("ui", "rounded_corners", 0) == 1);
+	lv_obj_set_state(corners_toggle, LV_STATE_CHECKED, false);
+	lv_obj_send_event(corners_toggle, LV_EVENT_VALUE_CHANGED, NULL);
+	assert(!corners_enabled());
+	assert(config_get_int("ui", "rounded_corners", 0) == 0);
 
 	assert(icon_year.header.w == 32 && icon_year.header.h == 32 && icon_year.header.stride == 128);
 	assert(icon_most_played.header.w == 32 && icon_most_played.header.h == 32 && icon_most_played.header.stride == 128);

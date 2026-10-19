@@ -53,6 +53,7 @@ int bp_screen_h(void) { return bp_is_tempotec_v1() ? 320 : 720; }
 int bp_padding(void) { return bp_is_tempotec_v1() ? 6 : 15; }
 int bp_status_bar_h(void) { return bp_is_tempotec_v1() ? 24 : 44; }
 int bp_tile_radius(void) { return bp_is_tempotec_v1() ? 10 : 12; }
+int bp_screen_corner_radius(void) { return bp_is_tempotec_v1() ? 16 : 28; }
 int bp_header_button_size(void) { return bp_is_tempotec_v1() ? 36 : 56; }
 int bp_header_button_gap(void) { return bp_is_tempotec_v1() ? 4 : 6; }
 int bp_pick(int compact, int regular) { return bp_is_tempotec_v1() ? compact : regular; }

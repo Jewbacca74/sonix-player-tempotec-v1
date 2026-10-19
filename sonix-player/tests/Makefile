@@ -57,6 +57,17 @@ $(BUILD)/test_swvolume: $(SWVOL_SRC) $(ROOT)/src/system/audio/swvolume.h \
 	@mkdir -p $(BUILD)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(SWVOL_SRC) $(LDFLAGS) $(LDLIBS)
 
+# The graphic EQ, PEQ and MSEB on stereo PCM -- the same eq_process() radio
+# stations go through. Plain C, no ALSA and no LVGL.
+EQ_SRC = test_eq.c $(ROOT)/src/system/audio/eq.c $(ROOT)/src/system/core/config.c
+.PHONY: eq
+eq: $(BUILD)/test_eq
+	$(BUILD)/test_eq
+
+$(BUILD)/test_eq: $(EQ_SRC) $(ROOT)/src/system/audio/eq.h $(ROOT)/src/system/core/config.h
+	@mkdir -p $(BUILD)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(EQ_SRC) $(LDFLAGS) $(LDLIBS)
+
 # The Wi-Fi worker's hidden-network join: the real wifi.c against a fake
 # wpa_cli on PATH (see test_wifi.c). Plain C, no LVGL and no radio.
 WIFI_SRC = test_wifi.c $(ROOT)/src/system/net/wifi.c
@@ -119,7 +130,8 @@ clean:
 UI_SRC = $(ROOT)/tests/ui/test_main_menu.c $(ROOT)/src/gui/shell/main_menu.c \
          $(ROOT)/src/gui/library/music.c $(ROOT)/src/gui/shell/popover.c \
          $(ROOT)/src/gui/shell/gridpage.c $(ROOT)/src/gui/settings/appearance.c \
-         $(ROOT)/src/gui/shell/settingsrow.c $(ROOT)/src/gui/shell/theme.c \
+         $(ROOT)/src/gui/shell/corners.c $(ROOT)/src/gui/shell/settingsrow.c \
+         $(ROOT)/src/gui/shell/theme.c \
          $(ROOT)/src/gui/shell/icons.c $(ROOT)/src/gui/shell/main_menu_icons.c \
          $(ROOT)/src/gui/board_profile.c \
          $(ROOT)/src/system/core/config.c $(ROOT)/src/system/core/lang.c
