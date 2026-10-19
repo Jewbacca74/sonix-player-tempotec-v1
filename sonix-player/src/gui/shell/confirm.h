@@ -18,6 +18,13 @@ void confirm_init(gui_config_t *cfg);
 void confirm_show(const char *title, const char *message, const char *ok_label, void (*on_ok)(void *user),
 				  void *user);
 
+// Extended variant: both buttons have a callback. `cancel_label` may be NULL to
+// keep the default \"Cancel\" text; `on_cancel` is called when the grey button
+// is pressed. Either callback may be NULL. The card is hidden before either runs.
+void confirm_show_with_cancel(const char *title, const char *message, const char *ok_label,
+							  void (*on_ok)(void *user), void *user, const char *cancel_label,
+							  void (*on_cancel)(void *user), void *cancel_user);
+
 // The same card with one button: something the user has to be told, not asked.
 // Dismissing it does nothing beyond closing it.
 void confirm_notice(const char *title, const char *message);

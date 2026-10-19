@@ -85,6 +85,9 @@ typedef struct {
 	char **paths;
 	int count;
 	int added;
+	int skipped;
+	int failed;
+	bool allow_duplicates;
 } batch_t;
 
 static pthread_mutex_t batch_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -92,10 +95,25 @@ static pthread_mutex_t batch_lock = PTHREAD_MUTEX_INITIALIZER;
 static void batch_done_cb(void *arg) {
 	batch_t *b = arg;
 	toast_busy_end();
-	if (b->added == b->count) {
+	if (b->skipped > 0 && b->added == 0 && b->failed == 0) {
+		// All were duplicates and were skipped: not an error, just a note.
+		if (b->count == 1) {
+			gui_notify_popup("playlist_already_in_playlist");
+		} else {
+			char msg[96];
+			snprintf(msg, sizeof(msg), tr("playlist_skipped_duplicates"), b->skipped);
+			gui_notify_popup(msg);
+		}
+	} else if (b->added == b->count) {
 		toast_success("playlist_tracks_added");
 	} else if (b->added > 0) {
-		toast_error("playlist_some_tracks_not_added");
+		if (b->skipped > 0) {
+			char msg[128];
+			snprintf(msg, sizeof(msg), tr("playlist_added_with_skipped"), b->added, b->skipped);
+			toast_error(msg);
+		} else {
+			toast_error("playlist_some_tracks_not_added");
+		}
 	} else {
 		gui_notify_popup("playlist_cannot_add_the_tracks");
 	}
@@ -110,11 +128,8 @@ static void *batch_worker(void *arg) {
 	batch_t *b = arg;
 	thread_be_low_priority("playlistadd");
 	pthread_mutex_lock(&batch_lock);
-	for (int i = 0; i < b->count; i++) {
-		if (playlists_add_track(b->name, b->paths[i])) {
-			b->added++;
-		}
-	}
+	b->added = playlists_add_tracks(b->name, (const char *const *)b->paths, b->count, b->allow_duplicates,
+									&b->skipped, &b->failed);
 	pthread_mutex_unlock(&batch_lock);
 	gui_post(batch_done_cb, b);
 	return NULL;
@@ -144,6 +159,8 @@ bool playlistpage_add_tracks_to(const char *name, const char *const *paths, int 
 		}
 		b->count++;
 	}
+	// Respect current duplicate mode but do not prompt (programmatic caller)
+	b->allow_duplicates = playlists_duplicate_mode() == PLAYLISTS_DUPLICATE_ALLOW;
 	toast_busy("playlist_adding_tracks");
 	pthread_t thread;
 	if (pthread_create(&thread, NULL, batch_worker, b) != 0) {
@@ -156,7 +173,113 @@ bool playlistpage_add_tracks_to(const char *name, const char *const *paths, int 
 
 // Hands the pending set to a worker that adds it to `name`. False when nothing
 // could be started; the set is gone either way.
-static bool batch_start(const char *name) {
+
+// ---------------------------------------------------------------------------
+// Duplicate protection
+// ---------------------------------------------------------------------------
+
+static bool batch_start_with_mode(const char *name, bool allow_duplicates);
+
+static int count_duplicates_in_pending(const char *playlist_name) {
+	if (!playlist_name || !playlist_name[0]) return 0;
+	int dup = 0;
+	if (pending_many_count > 0 && pending_many) {
+		for (int i = 0; i < pending_many_count; i++) {
+			if (playlists_has_track(playlist_name, pending_many[i])) dup++;
+		}
+		// Also count duplicates inside the batch itself (same path twice in selection)
+		for (int i = 0; i < pending_many_count; i++) {
+			for (int j = i + 1; j < pending_many_count; j++) {
+				if (pending_many[i] && pending_many[j] && strcmp(pending_many[i], pending_many[j]) == 0) {
+					// Only count if not already counted as playlist duplicate
+					if (!playlists_has_track(playlist_name, pending_many[i])) dup++;
+					break;
+				}
+			}
+		}
+	} else if (pending_track[0]) {
+		if (playlists_has_track(playlist_name, pending_track)) dup = 1;
+	}
+	return dup;
+}
+
+typedef struct {
+	char name[NAME_MAX + 1];
+} dup_ctx_t;
+
+static void batch_duplicate_skip_cb(void *user) {
+	dup_ctx_t *ctx = user;
+	batch_start_with_mode(ctx->name, false);
+	back_btn_cb(NULL);
+	free(ctx);
+}
+
+static void batch_duplicate_add_anyway_cb(void *user) {
+	dup_ctx_t *ctx = user;
+	batch_start_with_mode(ctx->name, true);
+	back_btn_cb(NULL);
+	free(ctx);
+}
+
+static void single_duplicate_add_anyway_cb(void *user) {
+	dup_ctx_t *ctx = user;
+	playlists_add_result_t r = playlists_add_track_checked(ctx->name, pending_track, true, true);
+	if (r == PLAYLISTS_ADD_OK) {
+		toast_success("playlist_track_added");
+		back_btn_cb(NULL);
+	} else {
+		gui_notify_popup("playlist_cannot_add_the_track");
+	}
+	free(ctx);
+}
+
+static void single_duplicate_skip_cb(void *user) {
+	dup_ctx_t *ctx = user;
+	(void)ctx;
+	gui_notify_popup("playlist_already_in_playlist");
+	free(ctx);
+}
+
+static bool handle_duplicate_prompt(const char *playlist_name) {
+	playlists_duplicate_mode_t mode = playlists_duplicate_mode();
+	if (mode == PLAYLISTS_DUPLICATE_ALLOW) return false; // no prompt, just add
+
+	int dup = count_duplicates_in_pending(playlist_name);
+	if (dup == 0) return false;
+
+	if (mode == PLAYLISTS_DUPLICATE_SKIP) {
+		// Silently skip: toast will say it after the worker, but for single we can toast now
+		if (pending_many_count == 0 && pending_track[0]) {
+			gui_notify_popup("playlist_already_in_playlist");
+			return true; // handled, do not add
+		}
+		// For batch, let it proceed with skipping (worker will skip)
+		return false;
+	}
+
+	// ASK: prompt
+	dup_ctx_t *ctx = malloc(sizeof(*ctx));
+	if (!ctx) return false;
+	snprintf(ctx->name, sizeof(ctx->name), "%s", playlist_name);
+
+	bool is_batch = pending_many_count > 0;
+	if (is_batch) {
+		char msg[256];
+		if (pending_many_count == dup) {
+			snprintf(msg, sizeof(msg), tr("playlist_all_already_in_playlist_fmt"), dup, playlist_name);
+		} else {
+			snprintf(msg, sizeof(msg), tr("playlist_some_already_in_playlist_fmt"), dup, pending_many_count, playlist_name);
+		}
+		confirm_show_with_cancel("playlist_duplicate_title", msg, "playlist_skip_duplicates", batch_duplicate_skip_cb, ctx, "playlist_add_anyway", batch_duplicate_add_anyway_cb, ctx);
+	} else {
+		char msg[256];
+		snprintf(msg, sizeof(msg), tr("playlist_track_already_in_playlist_fmt"), playlist_name);
+		confirm_show_with_cancel("playlist_duplicate_title", msg, "playlist_add_anyway", single_duplicate_add_anyway_cb, ctx, "playlist_skip_duplicate", single_duplicate_skip_cb, ctx);
+	}
+	return true; // prompt shown, caller should not proceed
+}
+
+static bool batch_start_with_mode(const char *name, bool allow_duplicates) {
 	batch_t *b = calloc(1, sizeof(*b));
 	if (!b) {
 		pending_many_free();
@@ -165,6 +288,7 @@ static bool batch_start(const char *name) {
 	snprintf(b->name, sizeof(b->name), "%s", name);
 	b->paths = pending_many;
 	b->count = pending_many_count;
+	b->allow_duplicates = allow_duplicates;
 	pending_many = NULL;
 	pending_many_count = 0;
 
@@ -177,6 +301,22 @@ static bool batch_start(const char *name) {
 	pthread_detach(thread);
 	return true;
 }
+
+static bool batch_start(const char *name) {
+	// First handle duplicate prompting; if a prompt was shown we stop here.
+	if (handle_duplicate_prompt(name)) {
+		return true; // prompt shown, callbacks will handle the rest
+	}
+	// No prompt: proceed respecting mode
+	bool allow = playlists_duplicate_mode() == PLAYLISTS_DUPLICATE_ALLOW;
+	if (playlists_duplicate_mode() == PLAYLISTS_DUPLICATE_SKIP) allow = false;
+	if (playlists_duplicate_mode() == PLAYLISTS_DUPLICATE_ASK) {
+		allow = false; // ASK with no dup, or SKIP case already handled
+	}
+	batch_start_with_mode(name, allow);
+	return false; // no prompt, batch started (or failed)
+}
+
 
 // ---------------------------------------------------------------------------
 // Starring a set of tracks
@@ -317,14 +457,36 @@ static void row_clicked_cb(lv_event_t *e) {
 	}
 
 	if (pending_many_count > 0) {
-		batch_start(name);
-		back_btn_cb(NULL);
+		bool prompted = batch_start(name);
+		if (!prompted) {
+			back_btn_cb(NULL);
+		}
 		return;
 	}
 
-	if (playlists_add_track(name, pending_track)) {
+	// Single track: check duplicate according to mode
+	playlists_duplicate_mode_t mode = playlists_duplicate_mode();
+	bool is_dup = playlists_has_track(name, pending_track);
+	if (is_dup && mode == PLAYLISTS_DUPLICATE_SKIP) {
+		gui_notify_popup("playlist_already_in_playlist");
+		return;
+	}
+	if (is_dup && mode == PLAYLISTS_DUPLICATE_ASK) {
+		dup_ctx_t *ctx = malloc(sizeof(*ctx));
+		if (!ctx) return;
+		snprintf(ctx->name, sizeof(ctx->name), "%s", name);
+		char msg[256];
+		snprintf(msg, sizeof(msg), tr("playlist_track_already_in_playlist_fmt"), name);
+		confirm_show_with_cancel("playlist_duplicate_title", msg, "playlist_add_anyway", single_duplicate_add_anyway_cb, ctx, "playlist_skip_duplicate", single_duplicate_skip_cb, ctx);
+		return;
+	}
+	// Either not a duplicate, or mode allows it
+	playlists_add_result_t r = playlists_add_track_checked(name, pending_track, true, mode == PLAYLISTS_DUPLICATE_ALLOW);
+	if (r == PLAYLISTS_ADD_OK) {
 		toast_success("playlist_track_added");
-		back_btn_cb(NULL); // straight back to where the track was tapped
+		back_btn_cb(NULL);
+	} else if (r == PLAYLISTS_ADD_DUPLICATE) {
+		gui_notify_popup("playlist_already_in_playlist");
 	} else {
 		gui_notify_popup("playlist_cannot_add_the_track");
 	}
