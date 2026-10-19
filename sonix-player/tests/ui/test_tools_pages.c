@@ -110,6 +110,10 @@ void switch_screen(lv_obj_t *screen) { lv_screen_load(screen); }
 void switch_screen_cb(lv_event_t *e) { switch_screen(lv_event_get_user_data(e)); }
 void ebookpage_open(void) { switch_screen(ebookpage_screen); }
 void filespage_open(void) { switch_screen(browser_screen); }
+void audiobooks_open(void) { switch_screen(audiobooks_screen); }
+/* The real answer (main_menu.c is not linked into this suite): More asks the
+ * home menu whether Books took its Audiobooks slot. */
+bool main_menu_books(void) { return config_get_bool("ui", "home_books", false); }
 void flappybird_open(void) { /* not reached from this test */ }
 void switcher_attach_back_gesture(lv_obj_t *obj) { (void)obj; }
 bool switcher_back_drag_active(void) { return false; }
@@ -209,6 +213,28 @@ static bool has_entry(lv_obj_t *container, const char *label) {
 		}
 	}
 	return false;
+}
+
+/* The entry whose caption is `label`, allowing for the ellipsis a narrow tile
+ * puts on the end of it: has_entry()'s question, answered with the entry. */
+static lv_obj_t *entry_with_label(lv_obj_t *container, const char *label) {
+	size_t full = strlen(label);
+	for (uint32_t i = 0; i < lv_obj_get_child_count(container); i++) {
+		lv_obj_t *child = lv_obj_get_child(container, i);
+		lv_obj_t *caption = find_class(child, &lv_label_class);
+		if (!caption) {
+			continue;
+		}
+		const char *text = lv_label_get_text(caption);
+		size_t cut = strlen(text);
+		while (cut > 0 && text[cut - 1] == '.') {
+			cut--;
+		}
+		if (cut > 0 && cut <= full && strncmp(text, label, cut) == 0 && (cut == full || cut >= 5)) {
+			return child;
+		}
+	}
+	return NULL;
 }
 
 /* Presses what a finger would press to reach `text`: the button carrying it. */
@@ -444,6 +470,56 @@ static void check_more_page(gui_config_t *cfg, const char *tag) {
 		}
 	}
 	assert(entries >= 5);
+}
+
+/* The two libraries share one slot on the home screen. When Books takes it,
+ * Audiobooks takes over More's library entry, so the two are never offered
+ * twice and neither is ever unreachable: the choice made on the Appearance page
+ * has to reach a page that was built at startup. */
+static lv_obj_t *morepage_shape(bool *tiles) {
+	// Leave and come back: the page catches the choice up on the way in, and
+	// loading the screen that is already active would not enter it again.
+	lv_screen_load(music_screen);
+	lv_screen_load(morepage_screen);
+	lv_obj_update_layout(morepage_screen);
+	return visible_shape(morepage_screen, tiles);
+}
+
+static void check_more_audiobooks_option(gui_config_t *cfg) {
+	// Both shapes: the tiles every board uses and the V1's function-glyph
+	// list, each rebuilt from the same entries.
+	const theme_kind_t shape_themes[] = {THEME_KIND_DARK, THEME_KIND_TOKYO_NIGHT};
+	int shapes = bp_is_tempotec_v1() ? 2 : 1;
+
+	for (int shape = 0; shape < shapes; shape++) {
+		theme_set_kind(shape_themes[shape]);
+		bool tiles = false;
+
+		// Off: More is exactly what it always was.
+		lv_obj_t *shown = morepage_shape(&tiles);
+		assert(has_entry(shown, tr("books")));
+		assert(!has_entry(shown, tr("audiobooks")));
+
+		// On: Books has moved to the home screen, so More offers the other
+		// library in its place rather than repeating Books.
+		config_set_bool("ui", "home_books", true);
+		shown = morepage_shape(&tiles);
+		assert(has_entry(shown, tr("audiobooks")));
+		assert(!has_entry(shown, tr("books")));
+		check_within_panel(morepage_screen, cfg, "More with Audiobooks");
+
+		// And the row opens the section it names.
+		lv_obj_t *entry = entry_with_label(shown, tr("audiobooks"));
+		assert(entry);
+		lv_obj_send_event(entry, LV_EVENT_CLICKED, NULL);
+		assert(lv_screen_active() == audiobooks_screen);
+
+		// Off again: the row goes away rather than staying as a duplicate.
+		config_set_bool("ui", "home_books", false);
+		shown = morepage_shape(&tiles);
+		assert(!has_entry(shown, tr("audiobooks")));
+	}
+	theme_set_kind(THEME_KIND_DARK);
 }
 
 /* ---- the Calculator page ------------------------------------------------- */
@@ -948,6 +1024,7 @@ int main(int argc, char **argv) {
 		check_more_page(&cfg, tag);
 	}
 	theme_set_kind(THEME_KIND_DARK);
+	check_more_audiobooks_option(&cfg);
 
 	check_calculator_page(&cfg, bp_is_tempotec_v1() ? "v1-calculator" : "hiby-calculator");
 	check_notes_page(&cfg, dir, bp_is_tempotec_v1() ? "v1-notes" : "hiby-notes",

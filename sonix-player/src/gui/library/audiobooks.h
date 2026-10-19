@@ -17,6 +17,12 @@ extern lv_obj_t *audiobookscan_screen;
 
 void audiobooks_init(gui_config_t *cfg);
 
+// Opens the section. The library is read straight off the card, so with no card
+// in the player this says so instead of opening onto an empty page. Shared by
+// the home menu -- where Books can take this slot -- and by More, which offers
+// the section whenever the home screen has handed its slot to Books.
+void audiobooks_open(void);
+
 // Starts `book` (a file, or a folder book's folder) in `file` at `seconds`,
 // and writes that as where the book stands. The player is left as it is: the
 // caller decides whether it comes up.

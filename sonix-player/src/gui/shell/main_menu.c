@@ -98,17 +98,6 @@ static const theme_semantic_t TOKYO_MENU_TONES[6] = {
 	THEME_SEMANTIC_MUTED,
 };
 
-// Audiobooks reads its library straight off the card, so it is the one tile
-// that opens onto nothing when the card is out or at a computer. Music has the
-// same rule a level deeper, where a list is asked for.
-static void open_audiobooks(void) {
-	if (!gui_card_available()) {
-		gui_notify_no_card();
-		return;
-	}
-	switch_screen(audiobooks_screen);
-}
-
 static void fit_menu_icon(lv_obj_t *image, const lv_image_dsc_t *source, int size) {
 	if (!image || !source) {
 		return;
@@ -187,7 +176,7 @@ static void open_home_library(void) {
 		}
 		ebookpage_open();
 	} else {
-		open_audiobooks();
+		audiobooks_open();
 	}
 }
 

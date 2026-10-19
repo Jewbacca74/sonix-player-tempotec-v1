@@ -89,6 +89,7 @@ void bootlogo_set(int choice, bool dark) { (void)choice; (void)dark; }
 void device_state_get(device_state_t *out) { memset(out, 0, sizeof(*out)); }
 bool gui_card_available(void) { return true; }
 void gui_notify_no_card(void) { assert(!"unexpected missing card"); }
+void audiobooks_open(void) { switch_screen(audiobooks_screen); }
 void gui_notify_popup(const char *text) { (void)text; assert(!"unexpected popup"); }
 void toast_error(const char *text) { (void)text; assert(!"unexpected error"); }
 void topbar_set_battery_percent(bool shown) { (void)shown; }
