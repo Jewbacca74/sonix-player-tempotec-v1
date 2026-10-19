@@ -205,12 +205,6 @@ static void screen_off_changed_cb(lv_event_t *e) {
 	lv_label_set_text(screen_off_value, tr(SCREEN_OFF[index].label));
 }
 
-// 1% of the panel's range, or 1 if the driver's scale is under 100.
-static long brightness_floor(long max) {
-	long floor = max / 100;
-	return floor > 0 ? floor : 1;
-}
-
 static void brightness_show_value(long value, long max) {
 	lv_label_set_text_fmt(brightness_value, "%d%%", (int)((value * 100 + max / 2) / max));
 }
@@ -239,10 +233,11 @@ static void screensettings_loaded_cb(lv_event_t *e) {
 	if (max <= 0) {
 		max = 100;
 	}
-	lv_slider_set_range(brightness_slider, (int32_t)brightness_floor(max), (int32_t)max);
+	long floor = power_get_min_brightness();
+	lv_slider_set_range(brightness_slider, (int32_t)floor, (int32_t)max);
 
 	long value = power_get_brightness();
-	if (value < brightness_floor(max)) {
+	if (value < floor) {
 		value = max;
 	}
 	lv_slider_set_value(brightness_slider, (int32_t)value, LV_ANIM_OFF);

@@ -101,7 +101,7 @@ static uint32_t since(uint32_t mark, uint32_t now) {
 // Zero and not BRIGHTNESS_MIN, although the floor exists so that no *user*
 // chooses a level too dim to see. The floor is a level the panel is *looked at
 // through*; this one is a level it is never seen at, and a white reset frame
-// at the floor's one percent is still a white frame -- which is the flash. Nor
+// at the floor's five percent is still a white frame -- which is the flash. Nor
 // is a zero the risk a stopped PWM pin is sometimes said to be: the blank the
 // driver already performs on this board puts the PWM at zero with the panel
 // unpowered behind it, and the screen stays dark for as long as the screen is
@@ -239,6 +239,18 @@ static void write_long_to_file(const char *path, long value) {
 }
 
 static long brightness_max(void) { return g_max_brightness > 0 ? g_max_brightness : BRIGHTNESS_MAX_DEFAULT; }
+
+// The dimmest level the UI offers: 5% of the panel's range, or 1 if the
+// driver's scale is under 20. Below it the screen is too dim to read
+// comfortably, so the sliders stop there. The backlight itself still accepts
+// BRIGHTNESS_MIN: the wake and fade code drives levels below this floor on
+// purpose (see WAKE_HOLD_LEVEL_DEFAULT).
+#define BRIGHTNESS_UI_MIN_PCT 5
+
+long power_get_min_brightness(void) {
+	long floor = brightness_max() * BRIGHTNESS_UI_MIN_PCT / 100;
+	return floor > 0 ? floor : 1;
+}
 
 // Write a backlight level to sysfs, clamped to [BRIGHTNESS_MIN, max]. No-op on
 // the host build (no brightness path), but still tracks the value.
@@ -1994,6 +2006,11 @@ void power_init(const power_config_t *cfg, lv_display_t *disp) {
 	if (g_cfg.brightness < BRIGHTNESS_MIN) {
 		long cur = g_cfg.brightness_path ? read_long_from_file(g_cfg.brightness_path) : -1;
 		g_cfg.brightness = cur >= BRIGHTNESS_ON_FLOOR ? cur : brightness_max();
+	}
+	// A level saved under an older, lower floor is raised to today's, so no
+	// device starts up dimmer than the sliders can be set to.
+	if (g_cfg.brightness < power_get_min_brightness()) {
+		g_cfg.brightness = power_get_min_brightness();
 	}
 	screen_power(true); // make sure the panel is unblanked (in case a prior run left it off)
 	backlight_write(g_cfg.brightness);

@@ -309,7 +309,7 @@ however long the hold is.
 
 1. **The backlight goes to a true zero, not to the floor, before the unblank
    and stays there** until the picture is on the glass. `BRIGHTNESS_MIN` is a
-   level the panel is *looked at through*; a white reset frame at one percent
+   level the panel is *looked at through*; a white reset frame at five percent
    is still a white frame. Zero is safe here as well as darker: the blank the
    driver already performs puts the PWM at zero with the panel unpowered
    behind it, and the screen stays dark for as long as the screen is off. The
