@@ -513,8 +513,36 @@ static void test_playlist(void) {
 	playlist_set_mode(PLAYBACK_MODE_REPEAT_ALL);
 	playlist_load_paths_ordered(paths, 3, 2);
 	assert(!playlist_peek_auto(peek, sizeof(peek)));
+
+	// Editing the queue: a move or a removal keeps the playing track under the
+	// position and the entries consistent, which is what the queue page does
+	// when a row is dragged or taken out.
+	const char *four[] = {"a.mp3", "b.mp3", "c.mp3", "d.mp3"};
+	char at[64];
+	playlist_set_mode(PLAYBACK_MODE_NORMAL);
+	playlist_load_paths(four, 4, 1); // playing b
+	assert(playlist_count() == 4 && playlist_current_index() == 1);
+	assert(playlist_move(1, 3)); // b to the end
+	assert(playlist_current_index() == 3 && playlist_current_path(at, sizeof(at)) && strcmp(at, "b.mp3") == 0);
+	assert(playlist_path_at(0, at, sizeof(at)) && strcmp(at, "a.mp3") == 0);
+	assert(playlist_move(3, 0)); // and back to the front
+	assert(playlist_current_index() == 0 && playlist_current_path(at, sizeof(at)) && strcmp(at, "b.mp3") == 0);
+	assert(playlist_move(2, 2)); // a move to where it already is changes nothing
+	assert(playlist_remove_at(0)); // remove the track playing
+	assert(playlist_count() == 3 && playlist_current_index() == 0);
+	assert(playlist_path_at(0, at, sizeof(at)) && strcmp(at, "a.mp3") == 0);
+	assert(playlist_remove_at(2));
+	assert(playlist_count() == 2);
+	assert(!playlist_remove_at(5));
+	playlist_load_paths(four, 4, 2); // playing c
+	assert(playlist_remove_at(0) && playlist_count() == 3 && playlist_current_index() == 1);
+	assert(playlist_current_path(at, sizeof(at)) && strcmp(at, "c.mp3") == 0);
+	assert(playlist_remove_at(2));
+	assert(playlist_current_index() == 1 && playlist_current_path(at, sizeof(at)) && strcmp(at, "c.mp3") == 0);
+
 	playlist_clear();
 	puts("PASS nonmutating next-track look-ahead in normal/repeat/shuffle/ordered queues");
+	puts("PASS queue edits: a move and a removal follow the playing track");
 }
 
 static void test_leases(void) {

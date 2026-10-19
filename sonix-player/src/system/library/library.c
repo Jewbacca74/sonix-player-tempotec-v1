@@ -5425,6 +5425,72 @@ static int file_tracks(const char *file) {
 	return tracks;
 }
 
+// The rows kept beside the index for one file: its star, how often it was
+// played, and where playback had got to. Exact paths and not a prefix -- the
+// files the user deleted are named one by one, and a prefix would take a
+// neighbouring name that merely begins the same way.
+//
+// Returns how many rows went. With db_lock taken here.
+static int forget_side_rows(const char *path) {
+	int removed = 0;
+	bool stars = false;
+	bool plays = false;
+
+	pthread_mutex_lock(&db_lock);
+	static const char *const SQL[] = {
+		"DELETE FROM FAVOURITES WHERE path = ?1",
+		"DELETE FROM PLAYBACK_STATE WHERE path = ?1",
+		"DELETE FROM PLAY_COUNTS WHERE path = ?1",
+	};
+	for (size_t i = 0; db && i < sizeof(SQL) / sizeof(SQL[0]); i++) {
+		sqlite3_stmt *stmt = NULL;
+		if (sqlite3_prepare_v2(db, SQL[i], -1, &stmt, NULL) != SQLITE_OK) {
+			continue;
+		}
+		sqlite3_bind_text(stmt, 1, path, -1, SQLITE_TRANSIENT);
+		if (sqlite3_step(stmt) == SQLITE_DONE && sqlite3_changes(db) > 0) {
+			removed += sqlite3_changes(db);
+			stars |= i == 0;
+			plays |= i == 2;
+		}
+		sqlite3_finalize(stmt);
+	}
+	if (stars) {
+		bump_generation(GEN_FAVOURITES);
+	}
+	if (plays) {
+		bump_generation(GEN_PLAY_COUNTS);
+		play_counts_rev++;
+	}
+	pthread_mutex_unlock(&db_lock);
+	return removed;
+}
+
+int library_remove_tracks(const char *const *paths, int count) {
+	if (!paths || count <= 0) {
+		return 0;
+	}
+
+	int removed = 0;
+	for (int i = 0; i < count; i++) {
+		if (!paths[i] || !paths[i][0]) {
+			continue;
+		}
+		removed += forget_file(paths[i]);
+		forget_side_rows(paths[i]);
+	}
+
+	if (removed > 0) {
+		pthread_mutex_lock(&db_lock);
+		prune_links();
+		prune_names();
+		bump_generation(GEN_MEDIA);
+		pthread_mutex_unlock(&db_lock);
+		printf("library: %d track(s) deleted from the card taken out\n", removed);
+	}
+	return removed;
+}
+
 // A sheet read again changes what its folder holds without changing a name in
 // it: the audio it claimed may now be a file of its own, or another file
 // claimed instead. The folder's FOLDER_TABLE row goes, so the next walk

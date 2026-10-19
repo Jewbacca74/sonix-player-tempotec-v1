@@ -874,6 +874,25 @@ bool device_state_album_chaining(void) { return config_get_int("player", "album_
 
 void device_state_set_album_chaining(bool on) {
 	config_set_int("player", "album_chaining", on ? 1 : 0);
+	if (!on) {
+		config_set_int("player", "album_chaining_random", 0);
+	}
+	config_save();
+}
+
+// Whether the record that follows is picked at random instead of being the
+// next one in the album list. Only ever read with album chaining on: on its own
+// it describes no behaviour at all.
+//
+// Chosen from the circle play menu of an album list -- "Play albums in random
+// order" -- and kept, so the random walk survives a reboot in the middle of a
+// record just as the chaining itself does. Turning "Play albums back to back"
+// off clears it: an order for records that no longer follow one another is
+// state without a meaning.
+bool device_state_album_chaining_random(void) { return config_get_int("player", "album_chaining_random", 0) != 0; }
+
+void device_state_set_album_chaining_random(bool on) {
+	config_set_int("player", "album_chaining_random", on ? 1 : 0);
 	config_save();
 }
 
@@ -957,17 +976,51 @@ static bool album_track_cb(const char *name, const char *path, const char *artis
 	return true;
 }
 
+// One record picked at random from the library, never the one that just
+// ended. Reservoir sampling, so the walk stays a single pass over the album
+// names: the list is not copied anywhere first.
+typedef struct {
+	const char *current;
+	int seen;
+	char name[256];
+} album_random_t;
+
+static bool album_random_cb(const char *name, const char *path, const char *artist, void *user) {
+	(void)path;
+	(void)artist;
+	album_random_t *r = user;
+	if (!name || !name[0] || library_album_same(name, r->current)) {
+		return true;
+	}
+	r->seen++;
+	if (r->seen == 1 || rand() % r->seen == 0) {
+		snprintf(r->name, sizeof(r->name), "%s", name);
+	}
+	return true;
+}
+
 // Starts the record either side of `album`. Going forward it opens on the first
 // track, going back on the last: "previous" from the top of a record means the
 // end of the one before it, the same way it means the end of the track before
 // inside one. False when there is no library, no record that side, or the one
 // found is empty.
+//
+// Forward, when "Play albums in random order" is on, the record is picked out
+// of the whole album list instead. Backwards stays the alphabetical step: there
+// is no "previous" record in an order that was drawn at random.
 static bool play_album_beside(const char *album, bool forward) {
 	album_walk_t walk = {album, "", "", "", "", false, false, false};
 	library_for_each(LIBRARY_LIST_ALBUMS, LIBRARY_FILTER_NONE, NULL, album_walk_cb, &walk);
 
+	album_random_t drawn = {album, 0, ""};
+	if (forward && device_state_album_chaining_random()) {
+		library_for_each(LIBRARY_LIST_ALBUMS, LIBRARY_FILTER_NONE, NULL, album_random_cb, &drawn);
+	}
+
 	const char *wanted = NULL;
-	if (forward) {
+	if (forward && drawn.seen > 0 && drawn.name[0]) {
+		wanted = drawn.name;
+	} else if (forward) {
 		if (walk.found_next) {
 			wanted = walk.next;
 		} else if (walk.first[0] && !library_album_same(walk.first, album)) {

@@ -4,10 +4,12 @@
 
 #include "src/system/library/playlists.h"
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <unistd.h>
 
 #include "src/gui/board_profile.h"
 #include "src/gui/nowplaying/coverloader.h"
@@ -89,7 +91,7 @@ lv_obj_t *medialist_albums_screen;
 // album grouping beside circle-play on an artist's tracks, shuffle beside the
 // reverse on Favourites. The strip is sized for the most whatever a particular
 // list shows -- see build_panel() for what happens when it is not.
-#define CORNER_MAX_BUTTONS 4
+#define CORNER_MAX_BUTTONS 5
 
 // How often finished artwork is collected while any is pending.
 #define THUMB_POLL_MS 150
@@ -172,6 +174,7 @@ typedef struct {
 	lv_obj_t *reverse_btn; // Favourites: the list reversed (newest first)
 	lv_obj_t *play_btn;	   // the circle-play corner button
 	lv_obj_t *play_menu;   // and the card it opens, one per screen
+	lv_obj_t *play_menu_albums_random; // "Play albums in random order", on an album list
 	lv_obj_t *sort_btn;	   // A-Z / Z-A
 	lv_obj_t *sort_icon;
 	lv_obj_t *album_btn;   // tracks screen only: group an artist's tracks by album
@@ -258,6 +261,7 @@ typedef struct {
 	lv_obj_t *sel_queue_btn;
 	lv_obj_t *sel_fav_btn;
 	lv_obj_t *sel_add_btn;
+	lv_obj_t *sel_delete_btn; // when Music > Settings > Library allows it
 	lv_obj_t *sel_unfav_btn;  // favourites only
 	lv_obj_t *sel_unlist_btn; // a playlist only
 	lv_obj_t *sel_close_btn;
@@ -1052,6 +1056,14 @@ static void show_if(lv_obj_t *obj, bool show) {
 	}
 }
 
+// Whether a selection on this list may delete the tracks it holds. The option
+// is off until it is turned on in Music > Settings > Library, and only a list
+// of tracks can be deleted from: a row that stands for an album or an artist is
+// not a file.
+static bool panel_can_delete(const panel_t *p) {
+	return p->is_tracks && musicsettings_allow_delete();
+}
+
 // Selection mode's buttons, four on every list: the queue first, close last,
 // and in between what fits the list. A playlist trades "add to a playlist" for
 // "take out of this one", the favourites trade the star for its removal.
@@ -1061,6 +1073,7 @@ static void sel_buttons_show(panel_t *p, bool on) {
 	show_if(p->sel_queue_btn, on);
 	show_if(p->sel_fav_btn, on && !favourites);
 	show_if(p->sel_add_btn, on && !playlist);
+	show_if(p->sel_delete_btn, on && panel_can_delete(p));
 	show_if(p->sel_unfav_btn, on && favourites);
 	show_if(p->sel_unlist_btn, on && playlist);
 	show_if(p->sel_close_btn, on);
@@ -1102,7 +1115,10 @@ static void selection_start(panel_t *p) {
 		}
 	}
 	sel_buttons_show(p, true);
-	settingsrow_title_corner_slots(p->title_label, p->cfg, 4);
+	// Four buttons, or five where the list may also delete what is chosen: the
+	// heading gives up the room they take, which in selection mode is no great
+	// loss -- the rows are the page until the selection is dealt with.
+	settingsrow_title_corner_slots(p->title_label, p->cfg, panel_can_delete(p) ? 5 : 4);
 	lv_obj_move_foreground(p->corner);
 	rows_update_selection(p);
 }
@@ -1469,6 +1485,126 @@ static void sel_remove_ask(panel_t *p) {
 static void sel_unlist_cb(lv_event_t *e) { sel_remove_ask(lv_event_get_user_data(e)); }
 
 static void sel_unfav_cb(lv_event_t *e) { sel_remove_ask(lv_event_get_user_data(e)); }
+
+// ---------------------------------------------------------------------------
+// Deleting tracks from the card
+//
+// Off unless it is turned on in Music > Settings > Library, and offered only
+// on a list of tracks: those are the rows that name a file. Asked first with
+// the number of files in the question, because this is the one action in the
+// lists that cannot be undone -- a star can be put back, a playlist entry
+// re-added, a deleted recording cannot.
+//
+// The files go, and then their rows do: the index would otherwise keep
+// answering with tracks that are not on the card until the next Detect
+// changes, which is exactly the list the user has just cleaned.
+// ---------------------------------------------------------------------------
+
+static panel_t *delete_panel;
+static char **delete_paths;
+static int delete_count;
+
+static void delete_pending_free(void) {
+	for (int i = 0; delete_paths && i < delete_count; i++) {
+		free(delete_paths[i]);
+	}
+	free(delete_paths);
+	delete_paths = NULL;
+	delete_count = 0;
+	delete_panel = NULL;
+}
+
+// A file this player may delete: on the card it was given, and a file rather
+// than one track of a cue sheet -- "sheet.cue?track=3" is not a path to unlink,
+// and the sheet it belongs to is somebody else's selection.
+static bool deletable_path(const char *path) {
+	if (!path || !path[0] || strstr(path, "?track=")) {
+		return false;
+	}
+	const char *root = playlist_card_root();
+	if (!root || !root[0]) {
+		return false;
+	}
+	size_t len = strlen(root);
+	return strncmp(path, root, len) == 0 && path[len] == '/';
+}
+
+static void delete_confirmed(void *user) {
+	(void)user;
+	panel_t *p = delete_panel;
+	int asked = delete_count;
+	int deleted = 0;
+
+	char **gone = asked > 0 ? calloc((size_t)asked, sizeof(*gone)) : NULL;
+	for (int i = 0; gone && i < delete_count; i++) {
+		if (deletable_path(delete_paths[i]) && unlink(delete_paths[i]) == 0) {
+			gone[deleted++] = delete_paths[i];
+		}
+	}
+	if (deleted > 0) {
+		library_remove_tracks((const char *const *)gone, deleted);
+	}
+	free(gone);
+	delete_pending_free();
+
+	if (p) {
+		// The index moved under the list: everything the rows stand for is
+		// read again, and the ones that went are gone from it.
+		panel_refresh_stale(p);
+		window_update(p);
+	}
+
+	if (deleted == asked && asked > 0) {
+		toast_success(deleted == 1 ? "medialist_track_deleted" : "medialist_tracks_deleted");
+	} else if (deleted > 0) {
+		toast_error("medialist_some_tracks_not_deleted");
+	} else {
+		gui_notify_popup("medialist_cannot_delete_the_tracks");
+	}
+}
+
+static void sel_delete_ask(panel_t *p) {
+	if (!p || !p->selecting || p->sel_count == 0 || !panel_can_delete(p)) {
+		return;
+	}
+
+	delete_pending_free();
+	qsort(p->sel, (size_t)p->sel_count, sizeof(*p->sel), sel_by_index);
+	delete_paths = calloc((size_t)p->sel_count, sizeof(*delete_paths));
+	if (!delete_paths) {
+		return;
+	}
+	for (int i = 0; i < p->sel_count; i++) {
+		char path[512];
+		if (row_path_copy(p, p->sel[i].index, path, sizeof(path)) && path[0]) {
+			delete_paths[delete_count] = strdup(path);
+			if (delete_paths[delete_count]) {
+				delete_count++;
+			}
+		}
+	}
+
+	selection_stop(p);
+	if (delete_count == 0) {
+		delete_pending_free();
+		return;
+	}
+	delete_panel = p;
+
+	// The count in the message and the warning after it, because the title is
+	// one line and "Delete from the card?" on its own does not say how much.
+	char count[96];
+	if (delete_count == 1) {
+		snprintf(count, sizeof(count), "%s", tr("selection_one_track"));
+	} else {
+		snprintf(count, sizeof(count), tr("selection_tracks_count"), delete_count);
+	}
+	char message[320];
+	snprintf(message, sizeof(message), "%s. %s", count, tr("medialist_delete_note"));
+	confirm_show("medialist_delete_from_card", message, "delete", delete_confirmed, NULL);
+}
+
+static void sel_delete_cb(lv_event_t *e) { sel_delete_ask(lv_event_get_user_data(e)); }
 
 static void row_bind(panel_t *p, row_t *row, int index) {
 	if (row->index == index) {
@@ -2993,6 +3129,10 @@ static void play_menu_shuffle_cb(lv_event_t *e) {
 	(void)e;
 	panel_t *p = play_menu_panel;
 	play_menu_hide();
+	// A list dealt at random is not a walk through the records one after the
+	// other, so the random-order chaining stops here: what follows this list is
+	// the next record again.
+	device_state_set_album_chaining_random(false);
 	play_artist(p, true);
 }
 
@@ -3000,7 +3140,50 @@ static void play_menu_sequence_cb(lv_event_t *e) {
 	(void)e;
 	panel_t *p = play_menu_panel;
 	play_menu_hide();
+	device_state_set_album_chaining_random(false);
 	play_artist(p, false);
+}
+
+// "Play albums in random order": one of the records on this list, drawn at
+// random, played through from its first track -- and, with "Play albums back to
+// back" on, the records after it drawn at random too, each in its own running
+// order. What is random is the order of the records, not of the tracks.
+//
+// One record rather than a queue of all of them, because that is what the
+// chaining already does with a record: the queue is the record being listened
+// to, and the one after it is decided when it ends. It also keeps a library of
+// ten thousand tracks from being copied into the queue to play twenty.
+static void play_menu_albums_random_cb(lv_event_t *e) {
+	(void)e;
+	panel_t *p = play_menu_panel;
+	play_menu_hide();
+	if (!p || p->from_paths || p->kind != LIBRARY_LIST_ALBUMS || p->count <= 0) {
+		return;
+	}
+
+	int pick = p->count > 1 ? (int)lv_rand(0, (uint32_t)(p->count - 1)) : 0;
+	const char *name = NULL;
+	if (!row_at(p, pick, &name, NULL) || !name || !name[0]) {
+		return;
+	}
+	char album[256];
+	snprintf(album, sizeof(album), "%s", name);
+
+	// The records are shuffled, the tracks are not: a shuffled queue would
+	// scramble the record that was just drawn. Turning the mode off is part of
+	// what this action means, and it is saved like any other mode change.
+	device_state_set_album_chaining_random(true);
+	playlist_set_mode(PLAYBACK_MODE_NORMAL);
+
+	library_index_t *ix = library_index_open(LIBRARY_LIST_TRACKS, LIBRARY_FILTER_ALBUM, album, LIBRARY_ORDER_DEFAULT, false);
+	if (!ix || !device_state_play_index(ix, 0)) {
+		return;
+	}
+	// The queue is this record, so the chaining knows which one has ended and
+	// can draw the next.
+	playlist_set_album(album);
+	player_refresh_now_playing();
+	switch_screen(player_screen);
 }
 
 // One of the artist's tracks, chosen at random, put after what is playing.
@@ -3117,6 +3300,13 @@ static void play_menu_build(panel_t *p) {
 	play_menu_row(card, "medialist_play_in_random_order", play_menu_shuffle_cb, compact);
 	play_menu_row(card, "medialist_play_in_sequence", play_menu_sequence_cb, compact);
 	play_menu_row(card, "medialist_queue_random_track", play_menu_random_track_cb, compact);
+
+	// Only on a list of records, and only while the records are told to follow
+	// one another: an order for records that do not chain is not an option, it
+	// is a sentence about nothing. Its visibility is settled again every time
+	// the menu opens, since the switch that governs it lives on another page.
+	p->play_menu_albums_random =
+		play_menu_row(card, "medialist_play_albums_in_random_order", play_menu_albums_random_cb, compact);
 }
 
 static void play_menu_clicked_cb(lv_event_t *e) {
@@ -3126,6 +3316,10 @@ static void play_menu_clicked_cb(lv_event_t *e) {
 	}
 	if (!p->play_menu) {
 		play_menu_build(p);
+	}
+	if (p->play_menu_albums_random) {
+		bool show = p->kind == LIBRARY_LIST_ALBUMS && !p->from_paths && device_state_album_chaining();
+		lv_obj_set_hidden(p->play_menu_albums_random, !show);
 	}
 	play_menu_panel = p;
 	lv_obj_set_hidden(p->play_menu, false);
@@ -3438,12 +3632,18 @@ static void build_panel(panel_t *p, gui_config_t *cfg, bool is_tracks, int slot_
 	p->sel_queue_btn = corner_button(p->corner, &icon_list_queue, sel_queue_cb, p);
 	p->sel_fav_btn = corner_button(p->corner, &icon_star_plus, sel_fav_cb, p);
 	p->sel_add_btn = corner_button(p->corner, &icon_list_plus, sel_add_cb, p);
+	// Deleting from the card, when that is allowed. Between "add to a
+	// playlist" and the way out, where a destructive action belongs: not next
+	// to the way out, which a thumb looking for it should reach without
+	// passing over this.
+	p->sel_delete_btn = corner_button(p->corner, &icon_trash, sel_delete_cb, p);
 	p->sel_unfav_btn = corner_button(p->corner, &icon_star_x, sel_unfav_cb, p);
 	p->sel_unlist_btn = corner_button(p->corner, &icon_list_x, sel_unlist_cb, p);
 	p->sel_close_btn = corner_button(p->corner, &icon_close, sel_close_cb, p);
 	lv_obj_set_hidden(p->sel_queue_btn, true);
 	lv_obj_set_hidden(p->sel_fav_btn, true);
 	lv_obj_set_hidden(p->sel_add_btn, true);
+	lv_obj_set_hidden(p->sel_delete_btn, true);
 	lv_obj_set_hidden(p->sel_close_btn, true);
 
 	p->empty = lv_label_create(p->list);
