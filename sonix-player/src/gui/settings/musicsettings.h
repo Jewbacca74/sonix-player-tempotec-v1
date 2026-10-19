@@ -54,6 +54,10 @@ bool musicsettings_playlists_first(void);
 
 bool musicsettings_endless_shuffle(void);
 
+// Whether a selection in the library lists may delete the tracks it holds from
+// the card. Off by default; Music > Settings > Library > Allow deleting tracks.
+bool musicsettings_allow_delete(void);
+
 bool musicsettings_high_gain(void);
 void musicsettings_set_high_gain(bool enabled);
 

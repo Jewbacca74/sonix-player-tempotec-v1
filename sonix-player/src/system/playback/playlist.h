@@ -221,4 +221,21 @@ playback_mode_t playlist_get_mode(void);
 // NORMAL) and returns the new mode.
 playback_mode_t playlist_cycle_mode(void);
 
+// --- Changing the queue (for the queue page) ---
+//
+// Both speak playback order, the same indices the reading calls below use: the
+// order on screen, which under shuffle is the dealt order and not the listed
+// one. Neither touches the files, and neither re-deals a shuffle: an edit moves
+// what is on screen rather than producing a new random order.
+//
+// A queue built from a library list is given its own paths the first time one
+// of these is called, because rows held as ids cannot be taken out of or moved,
+// and a queue that no longer matches the query it came from cannot be written
+// down as that query either.
+//
+// playlist_remove_at() leaves the position on the slot the next entry fills;
+// when that was the entry playing, the caller decides what starts next.
+bool playlist_remove_at(int index);
+bool playlist_move(int from, int to);
+
 #endif // PLAYLIST_H

@@ -384,6 +384,16 @@ int library_fav_remove_many(const char *const *paths, int count);
 // startup. Returns how many rows it removed.
 int library_forget_under(const char *prefix);
 
+// Takes the rows of files that are no longer on the card out of the index, as
+// if Detect changes had looked and found them gone: the media rows (a cue
+// sheet's tracks included), their artist and genre links, the names nothing is
+// filed under any more, and the star, the play count and the remembered
+// position kept beside them. What deleting tracks from a list asks for, so the
+// library stops listing a file the user has just removed.
+//
+// Paths are exact, not prefixes. Returns how many tracks went.
+int library_remove_tracks(const char *const *paths, int count);
+
 // The ordering used everywhere (group by script, case/accent folded, leading
 // English/Italian articles skipped: "The Beatles" files under B). Exported so
 // the audiobook database can register the identical collation.

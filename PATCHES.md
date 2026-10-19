@@ -663,3 +663,141 @@ Two differences worth writing down, neither of which needed code:
 
 `GBINPUT_MAX_CONTACTS` stays 5 on both players. It is an array size, not a
 request, and a driver that reports two fills two slots.
+
+## Editing the queue
+
+The track menu's queue page used to be a list you could only tap: one entry
+started, the rest read. It is now the same list the library pages have --
+long press to choose, a corner button to take the chosen entries out, a grip to
+move one -- and the edits are made in the queue itself rather than in anything
+that mirrors it.
+
+### The queue becomes its own list
+
+A library-backed queue is a handle over row ids, not a list of paths, and the
+query it writes down cannot say "all of this except those three". So the first
+edit turns it into what a queue of paths already is: every entry copied out
+through `library_index_window()` in windows of 256, the playing order carried
+over on top (the shuffle deal included), and the position playback is at
+following the entry it was at rather than the slot number. `materialise_source()`
+in `src/system/playback/playlist.c` does that, once per editing session's first
+edit; a queue that came from "add to queue" or from the file browser is left
+alone. If the copy cannot be allocated the edit fails and the queue is exactly
+as it was.
+
+Two operations sit on top of it:
+
+* `playlist_remove_at(int index)`, indices in playback order. When it was the
+  entry playing, the position stays on the slot the next entry now fills, and
+  the page decides what that means.
+* `playlist_move(int from, int to)`. Playback follows the entry it was on, so
+  moving the playing row does not restart the track; moving a row across it
+  shifts the position by one.
+
+Both bump `revision` and clear `chain_valid`, so the on-disk queue is written
+again by `device_state_queue_changed()` -- called by the page straight after the
+edit, not left to the next track change.
+
+### Choosing rows
+
+Long press starts a selection, exactly as the library lists do. What is chosen
+is kept as **one flag per queue position**, not a set of paths, because the same
+track can sit in a queue twice and "remove the second copy" has to mean
+something. A tap on a row takes it in or out; when the last one goes out the
+mode leaves by itself. The title row then shows two corner buttons -- trash in
+slot 1, close in slot 0 -- and asks for two button slots rather than none.
+
+Removal is bottom-up: position 7 is still position 7 whatever happened to
+position 2. The confirmation names the count (`selection_one_track` or
+`selection_tracks_count` under the `trackmenu_remove_from_queue` title), and
+after it the rows are rebuilt, the queue is persisted and a toast says how many
+went. If the playing track was one of them, the track that followed it starts;
+if nothing followed, or nothing is left, playback stops instead of stepping back
+to the record before.
+
+### Moving a row
+
+Only the grip at the right of a row drags. A list that reorders on any downward
+swipe is a list that can no longer be scrolled, and a queue can be hundreds of
+rows long. The drag engages after `QUEUE_DRAG_ENGAGE_PX` (6 px) of travel, then
+turns the list's own scrolling off (`LV_DIR_NONE`) for the duration, marks the
+carried row with the accent, and follows the finger. Within `QUEUE_EDGE_PX`
+(56 px) of either end it scrolls the list `QUEUE_EDGE_STEP` (18 px) at a time,
+so a row can be carried past the window. An accent rule sits where the row would
+land, and the drop uses the same index the rule described. A tap or a long press
+on the grip is swallowed (`lv_event_stop_bubbling`) so that reaching for the
+handle never starts the track.
+
+## Deleting tracks from the card
+
+Off by default: **Music → Settings → Library → Allow deleting tracks**
+(`library/allow_delete` in the config, `musicsettings_allow_delete()` in the
+interface). Of everything a selection can do this is the one that destroys
+something, and it is not a thing to discover by pressing the button beside "add
+to the favourites".
+
+With it on, a track list's selection gains a trash button; the library lists
+size their corner strip for five buttons instead of four, and the heading gives
+up the room (36 px buttons, 4 px apart, on the V1). Only a list of tracks offers
+it: an album or an artist row is not a file, and `panel_can_delete()` asks both
+that and the setting.
+
+The confirmation comes first and carries the count. A row is deletable when it
+names a path under the card root and is not one track of a cue sheet --
+`sheet.cue?track=3` is not something to `unlink()`, and the sheet is somebody
+else's selection. Files that go are handed to `library_remove_tracks()`
+(`src/system/library/library.c`), which forgets the media rows, the star, the
+play count and the saved position for exactly those paths, then prunes the links
+and the names left empty and bumps `GEN_MEDIA`. Nothing waits for the next
+scan: the list the user just cleaned would otherwise keep answering with rows
+for files that are no longer there.
+
+A partial result is reported as such (`medialist_some_tracks_not_deleted`); a
+complete failure says so instead of claiming a success.
+
+## Play albums in random order
+
+The circle-play menu of an album list gains a fourth action while **Play albums
+back to back** is on: one record is drawn from the list, played through from its
+first track, and -- with the chaining on -- the records that follow are drawn at
+random too, each in its own running order. What is random is the order of the
+records, not of the tracks. The row's visibility is settled each time the menu
+opens, since the switch that governs it lives on another page.
+
+It is stored as `player/album_chaining_random`, beside `player/album_chaining`,
+and is only read while the chaining is on; turning the chaining off clears it,
+because an order for records that no longer follow one another is state with no
+meaning. Both survive a reboot, like the chaining itself, so a random walk
+continues across a power cycle in the middle of a record.
+
+The draw is a reservoir sample over `library_for_each(LIBRARY_LIST_ALBUMS)`
+(`album_random_cb()`), so the walk is one pass over the album names and nothing
+is copied. The record that just ended is never drawn again. Backwards stays the
+alphabetical step: there is no "previous" record in an order that was drawn at
+random.
+
+The action fills the queue with that one record, not with every track of every
+album: the chaining already decides the next record when the current one ends,
+and a library of ten thousand tracks should not be copied into the queue to
+play twenty of them. It also turns shuffle off -- a shuffled queue would
+scramble the record that was just drawn -- and clears the random order again
+when the plain "Play in random order" or "Play in sequence" is chosen from the
+same menu, since either is an explicit statement about what follows.
+
+### Keys
+
+| what | key |
+|---|---|
+| the setting | `library/allow_delete` |
+| the album order | `player/album_chaining_random` |
+| settings row, and its note | `musicsettings_allow_delete`, `musicsettings_allow_delete_note` |
+| trash button, and its ask | `medialist_delete_from_card`, `medialist_delete_note` |
+| its results | `medialist_track_deleted`, `medialist_tracks_deleted`, `medialist_some_tracks_not_deleted`, `medialist_cannot_delete_the_tracks` |
+| the menu row | `medialist_play_albums_in_random_order` |
+| the queue page | `trackmenu_remove_from_queue`, `trackmenu_move_failed` |
+
+The eleven new strings are appended to all eleven `.ini` files in
+`sonix-packer/assets/{R1,R3PII}/usr/resource/sonix/language/`, under a comment
+naming the three features. Everything else the three features say -- `delete`,
+`remove`, `cancel`, `selection_one_track`, `selection_tracks_count` -- was
+already translated.

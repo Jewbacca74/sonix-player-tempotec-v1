@@ -138,6 +138,13 @@ bool device_state_advance_auto(char *out_path, size_t out_size);
 bool device_state_album_chaining(void);
 void device_state_set_album_chaining(bool on);
 
+// Which record follows the one that ends: the next in the album list, or one
+// drawn at random. Only read while album chaining is on; clearing the chaining
+// clears this too. Chosen from the circle play menu of an album list, "Play
+// albums in random order", and remembered across a reboot.
+bool device_state_album_chaining_random(void);
+void device_state_set_album_chaining_random(bool on);
+
 // And the same for folders: when a folder queue runs out, playback carries on
 // into the next folder on the card instead of stopping. The order is the walk
 // playlist_next_folder() describes -- an artist's albums, then that artist's

@@ -829,6 +829,240 @@ bool playlist_locate(const char *path) {
 }
 
 // ---------------------------------------------------------------------------
+// changing the queue
+//
+// Two edits the queue page offers: taking an entry out, and moving one. Both
+// need the entries themselves, which a library-backed queue does not hold --
+// it holds a handle over row ids -- so it is turned into a list of its own
+// paths first (see materialise_source below). The alternative, keeping the
+// handle and marking entries as gone, would leave the on-disk mirror of the
+// queue describing a list that no longer matches what is playing: the query it
+// writes down has no way to say "all of this except those three".
+// ---------------------------------------------------------------------------
+
+static void refresh_stale_source(void);
+
+typedef struct {
+	char **out;
+	int *map;		// old entry -> new entry, -1 for a row that is gone
+	size_t *kept;	// how many have been put in `out`
+	size_t base;	// the entry the window starts at
+	size_t given;	// how many rows this window has offered
+} materialise_t;
+
+static bool materialise_cb(const char *name, const char *path, const char *artist, void *user) {
+	(void)name;
+	(void)artist;
+	materialise_t *m = user;
+	if (path && path[0]) {
+		char *copy = strdup(path);
+		if (!copy) {
+			return false;
+		}
+		m->map[m->base + m->given] = (int)*m->kept;
+		m->out[*m->kept] = copy;
+		(*m->kept)++;
+	}
+	m->given++;
+	return true;
+}
+
+// Gives the queue its own copy of every path, in the order the entries are
+// stored, and keeps the playing order on top of it -- the shuffle deal
+// included. The position playback is at follows the entry it was at, so a
+// queue can be edited without moving the music.
+//
+// Called only from the two edits below, and only when the queue is a library
+// list: on a queue of paths it is already true. False when the paths could not
+// be allocated, in which case the queue is left exactly as it was.
+static bool materialise_source(void) {
+	if (!source_ix) {
+		return true;
+	}
+	if (!order || entry_count == 0) {
+		return false; // a handle with no order is not a queue that can be edited
+	}
+
+	size_t total = entry_count;
+	char **fresh = calloc(total ? total : 1, sizeof(*fresh));
+	int *map = malloc((total ? total : 1) * sizeof(*map));
+	if (!fresh || !map) {
+		free(fresh);
+		free(map);
+		return false;
+	}
+	for (size_t i = 0; i < total; i++) {
+		map[i] = -1;
+	}
+
+	size_t kept = 0;
+	size_t offset = 0;
+	while (offset < ix_count) {
+		size_t want = ix_count - offset;
+		if (want > 256) {
+			want = 256;
+		}
+		materialise_t m = {fresh, map, &kept, offset, 0};
+		int got = library_index_window(source_ix, (int)offset, (int)want, materialise_cb, &m);
+		if (got <= 0) {
+			break; // a stale handle: the rows it cannot answer are left out
+		}
+		offset += (size_t)got;
+		if ((size_t)got < want) {
+			break;
+		}
+	}
+
+	// What "add to queue" put there after the list was built. The strings are
+	// moved across rather than copied.
+	size_t extra = appended_count();
+	for (size_t i = 0; i < extra; i++) {
+		map[ix_count + i] = (int)kept;
+		fresh[kept++] = paths[i];
+		paths[i] = NULL;
+	}
+	free(paths);
+
+	// The order array is a permutation of the old entry numbers; it becomes one
+	// of the new ones. A row that could not be read is taken out of it, and a
+	// row before the playing one moves that position down accordingly.
+	size_t *fresh_order = malloc((total ? total : 1) * sizeof(*fresh_order));
+	if (!fresh_order) {
+		for (size_t i = 0; i < kept; i++) {
+			free(fresh[i]);
+		}
+		free(fresh);
+		free(map);
+		return false;
+	}
+	size_t written = 0;
+	size_t drops_before_pos = 0;
+	bool pos_dropped = false;
+	for (size_t i = 0; i < total && order; i++) {
+		int mapped = map[order[i]];
+		if (mapped < 0) {
+			if (i < pos) {
+				drops_before_pos++;
+			} else if (i == pos) {
+				pos_dropped = true;
+			}
+			continue;
+		}
+		fresh_order[written++] = (size_t)mapped;
+	}
+
+	pos = pos >= drops_before_pos ? pos - drops_before_pos : 0;
+	if (pos >= written) {
+		pos = written ? written - 1 : 0;
+	}
+	(void)pos_dropped;
+
+	library_index_close(source_ix);
+	source_ix = NULL;
+	ix_count = 0;
+	path_cache_clear();
+	paths = fresh;
+	capacity = kept;
+	entry_count = kept;
+	free(order);
+	order = fresh_order;
+	free(map);
+
+	if (entry_count == 0) {
+		free(order);
+		order = NULL;
+		pos = 0;
+	}
+	revision++;
+	return true;
+}
+
+// Takes the entry at playback position `index` out of the queue. The track it
+// names is not touched: this is the queue being edited, not the card.
+//
+// When it was the entry playing, the position is left on the slot the next
+// entry now fills -- the caller decides whether to start it or to stop.
+bool playlist_remove_at(int index) {
+	refresh_stale_source();
+	if (!order || index < 0 || (size_t)index >= entry_count) {
+		return false;
+	}
+	if (!materialise_source()) {
+		return false;
+	}
+	if (!order || index < 0 || (size_t)index >= entry_count) {
+		return false;
+	}
+
+	size_t entry = order[index];
+	size_t old_count = entry_count;
+
+	// The strings are no longer looked up through a handle, so the entry number
+	// is the slot in `paths`. Everything above it moves down one, in the
+	// storage and in the playing order alike.
+	if (entry < entry_count && paths) {
+		free(paths[entry]);
+		memmove(&paths[entry], &paths[entry + 1], (entry_count - entry - 1) * sizeof(*paths));
+		for (size_t i = 0; i < old_count; i++) {
+			if (order[i] > entry) {
+				order[i]--;
+			}
+		}
+		entry_count--;
+	}
+	memmove(&order[index], &order[index + 1], (old_count - (size_t)index - 1) * sizeof(*order));
+
+	if ((size_t)index < pos) {
+		pos--;
+	} else if ((size_t)index == pos && pos >= entry_count) {
+		pos = entry_count ? entry_count - 1 : 0;
+	}
+
+	chain_valid = false;
+	revision++;
+	return true;
+}
+
+// Moves the entry at playback position `from` so that it sits at `to`, the
+// positions being those of the queue as it is on screen.
+bool playlist_move(int from, int to) {
+	refresh_stale_source();
+	if (!order || from < 0 || to < 0 || (size_t)from >= entry_count || (size_t)to >= entry_count) {
+		return false;
+	}
+	if (from == to) {
+		return true;
+	}
+	if (!materialise_source()) {
+		return false;
+	}
+	if (!order || (size_t)from >= entry_count || (size_t)to >= entry_count) {
+		return false;
+	}
+
+	size_t moving = order[from];
+	if (from < to) {
+		memmove(&order[from], &order[from + 1], (size_t)(to - from) * sizeof(*order));
+	} else {
+		memmove(&order[to + 1], &order[to], (size_t)(from - to) * sizeof(*order));
+	}
+	order[to] = moving;
+
+	// Playback follows the entry it was on, not the slot number.
+	if (pos == (size_t)from) {
+		pos = (size_t)to;
+	} else if (from < to && pos > (size_t)from && pos <= (size_t)to) {
+		pos--;
+	} else if (to < from && pos >= (size_t)to && pos < (size_t)from) {
+		pos++;
+	}
+
+	chain_valid = false;
+	revision++;
+	return true;
+}
+
+// ---------------------------------------------------------------------------
 // reading (everything is in playback order: index i = i-th slot of `order`)
 // ---------------------------------------------------------------------------
 

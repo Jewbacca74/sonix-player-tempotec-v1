@@ -1257,6 +1257,7 @@ static lv_obj_t *display_screen;
 static lv_obj_t *library_screen;
 static lv_obj_t *album_view_switch;
 static lv_obj_t *quality_badges_switch;
+static lv_obj_t *allow_delete_switch;
 static lv_obj_t *go_to_current_switch;
 
 static void folder_chain_cb(lv_event_t *e) {
@@ -1517,6 +1518,16 @@ static void go_to_current_cb(lv_event_t *e) {
 
 static void quality_badges_cb(lv_event_t *e) {
 	medialist_set_quality_badges(lv_obj_has_state(lv_event_get_target(e), LV_STATE_CHECKED));
+}
+
+// Deleting tracks from the card. Off by default: of everything a selection can
+// do, this is the one that destroys something, and it is not a thing to
+// discover by pressing the button next to "add to the favourites".
+bool musicsettings_allow_delete(void) { return config_get_bool("library", "allow_delete", false); }
+
+static void allow_delete_cb(lv_event_t *e) {
+	config_set_bool("library", "allow_delete", lv_obj_has_state(lv_event_get_target(e), LV_STATE_CHECKED));
+	config_save();
 }
 
 // "Show artist": a switch, and under it one pill per list it can be shown on.
@@ -2282,6 +2293,15 @@ static void build_library_page(gui_config_t *cfg) {
 	option_note(container, "musicsettings_shows_the_tracks_audio_quality_wi");
 	if (medialist_quality_badges()) {
 		lv_obj_add_state(quality_badges_switch, LV_STATE_CHECKED);
+	}
+
+	// Deleting tracks from the card: the trash button in a selection. Off by
+	// default, because it is the one thing a selection can do that cannot be
+	// undone.
+	settingsrow_toggle(container, "musicsettings_allow_delete", &allow_delete_switch, allow_delete_cb);
+	option_note(container, "musicsettings_allow_delete_note");
+	if (musicsettings_allow_delete()) {
+		lv_obj_add_state(allow_delete_switch, LV_STATE_CHECKED);
 	}
 
 	switcher_attach_back_gesture(library_screen);
