@@ -590,14 +590,6 @@ static void tokyo_music_build(gui_config_t *cfg) {
 		lv_obj_set_hidden(row->button, true);
 	}
 
-	lv_obj_t *queue_note = lv_label_create(tokyo_music_panel);
-	lv_label_set_text(queue_note, tr("music_queue_recent_note"));
-	lv_label_set_long_mode(queue_note, LV_LABEL_LONG_DOT);
-	lv_obj_set_width(queue_note, lv_pct(100));
-	lv_obj_set_height(queue_note, lv_font_get_line_height(&font_ui_14));
-	lv_obj_add_style(queue_note, &theme_style_text_dim, 0);
-	lv_obj_set_style_text_font(queue_note, &font_ui_14, 0);
-
 	lv_obj_t *browse_card = lv_obj_create(tokyo_music_panel);
 	music_remove_edges(browse_card);
 	lv_obj_set_width(browse_card, lv_pct(100));
@@ -667,7 +659,6 @@ static void tokyo_music_build(gui_config_t *cfg) {
 	lv_obj_move_to_index(tokyo_scan_button, 2);
 	lv_obj_move_to_index(recent_heading, 3);
 	lv_obj_move_to_index(tokyo_recent_card, 4);
-	lv_obj_move_to_index(queue_note, 5);
 	lv_obj_update_layout(tokyo_music_panel);
 
 	player_sheet_attach_drag(tokyo_music_panel, true);
