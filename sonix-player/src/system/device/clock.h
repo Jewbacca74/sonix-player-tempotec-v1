@@ -66,9 +66,10 @@ bool clock_automatic_enabled(void);
 void clock_set_automatic(bool on);
 
 // Asks the network for the current time and, when automatic mode is enabled,
-// the time zone inferred from the public IP address. Runs off the UI thread,
-// on Wi-Fi association, and is rate-limited internally to one attempt per half
-// hour. A successful time answer is written through to the RTC.
+// the time zone inferred from the public IP address. Runs off the UI thread;
+// Wi-Fi polls it while connected, and the worker rate-limits successful syncs
+// to half an hour while retrying failures sooner. A successful time answer is
+// written through to the RTC.
 void clock_network_sync(void);
 bool clock_network_sync_busy(void);
 bool clock_network_sync_succeeded(void);

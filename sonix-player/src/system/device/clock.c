@@ -58,9 +58,11 @@ static const char *const RTC_DEVICES[] = {"/dev/rtc0", "/dev/rtc", "/dev/misc/rt
 #define NTPDATE_BIN "/usr/bin/ntpdate"
 #define NTP_SERVERS "0.pool.ntp.org time.windows.com"
 
-// Once every half hour is plenty: the point is to correct an RTC that has
-// wandered, not to discipline the clock continuously.
+// A successful sync only needs a half-hour refresh. Failed attempts are
+// retried sooner while Wi-Fi remains connected, so one transient DNS/route
+// startup failure does not leave the clock stale for the whole session.
 #define NTP_MIN_INTERVAL_SECONDS 1800
+#define NTP_RETRY_INTERVAL_SECONDS 120
 
 // ---------------------------------------------------------------------------
 // the timezone
@@ -292,7 +294,8 @@ static time_t read_rtc(void) {
 
 static pthread_mutex_t ntp_lock = PTHREAD_MUTEX_INITIALIZER;
 static bool ntp_running;
-static time_t ntp_last_attempt;
+static bool ntp_attempted;
+static struct timespec ntp_last_attempt_mono;
 static atomic_bool network_sync_succeeded = ATOMIC_VAR_INIT(false);
 
 // The timezone endpoint returns an IANA name (for example Europe/Paris) and
@@ -452,11 +455,6 @@ static void *ntp_worker(void *unused) {
 	atomic_store(&network_sync_succeeded, rc == 0 && after >= CLOCK_PLAUSIBLE_FROM && timezone_ok);
 
 	pthread_mutex_lock(&ntp_lock);
-	if (!atomic_load(&network_sync_succeeded)) {
-		// A failed time or zone lookup should be retried on the next Wi-Fi
-		// association instead of imposing the normal successful-sync cooldown.
-		ntp_last_attempt = 0;
-	}
 	ntp_running = false;
 	pthread_mutex_unlock(&ntp_lock);
 	return NULL;
@@ -467,13 +465,23 @@ void clock_network_sync(void) {
 		return;
 	}
 
-	time_t now = time(NULL);
+	struct timespec now;
+	if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
+		return;
+	}
 
 	pthread_mutex_lock(&ntp_lock);
-	bool skip = ntp_running || (ntp_last_attempt != 0 && now - ntp_last_attempt < NTP_MIN_INTERVAL_SECONDS);
+	int interval = atomic_load(&network_sync_succeeded) ? NTP_MIN_INTERVAL_SECONDS : NTP_RETRY_INTERVAL_SECONDS;
+	time_t elapsed = now.tv_sec - ntp_last_attempt_mono.tv_sec;
+	if (now.tv_nsec < ntp_last_attempt_mono.tv_nsec) {
+		elapsed--;
+	}
+	bool cooldown = ntp_attempted && elapsed >= 0 && elapsed < interval;
+	bool skip = ntp_running || cooldown;
 	if (!skip) {
 		ntp_running = true;
-		ntp_last_attempt = now;
+		ntp_attempted = true;
+		ntp_last_attempt_mono = now;
 		atomic_store(&network_sync_succeeded, false);
 	}
 	pthread_mutex_unlock(&ntp_lock);
@@ -486,6 +494,7 @@ void clock_network_sync(void) {
 	if (pthread_create(&t, NULL, ntp_worker, NULL) != 0) {
 		pthread_mutex_lock(&ntp_lock);
 		ntp_running = false;
+		ntp_attempted = false;
 		pthread_mutex_unlock(&ntp_lock);
 		return;
 	}
