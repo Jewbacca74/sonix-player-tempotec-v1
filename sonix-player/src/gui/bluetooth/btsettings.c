@@ -12,6 +12,7 @@
 #include "src/gui/fonts/fonts.h"
 #include "src/gui/shell/gui.h"
 #include "src/gui/shell/icons.h"
+#include "src/gui/shell/keyboard.h"
 #include "src/gui/shell/popover.h"
 #include "src/gui/shell/scrolltext.h"
 #include "src/gui/shell/settingsrow.h"
@@ -44,8 +45,14 @@ static lv_timer_t *poll_timer;
 static uint32_t drawn_serial = 0xFFFFFFFFu;
 static bool drawn_enabled;
 
+static lv_obj_t *rename_layer;
+static lv_obj_t *rename_field;
+static keyboard_t *rename_keyboard;
+static char rename_mac[BT_MAC_MAX];
+
 // The device a popover is about. Copied, so the list can be rebuilt under it.
 static char menu_mac[BT_MAC_MAX];
+static char last_action_mac[BT_MAC_MAX];
 
 // The last action requested. The radio reports the same "it worked" for
 // connect, disconnect and forget alike, so this is what picks the wording of
@@ -189,6 +196,79 @@ static void refresh_status_label(void) {
 // Actions
 // ---------------------------------------------------------------------------
 
+static void rename_layer_hide(void) {
+	if (rename_layer) {
+		lv_obj_set_hidden(rename_layer, true);
+	}
+	back_btn_force_hidden(false);
+}
+
+static void rename_cancel_cb(lv_event_t *e) {
+	(void)e;
+	rename_layer_hide();
+}
+
+static void rename_accept_cb(lv_event_t *e) {
+	(void)e;
+	const char *typed = lv_textarea_get_text(rename_field);
+	const char *first = typed ? typed : "";
+	while (*first == ' ' || *first == '\t') {
+		first++;
+	}
+	if (!*first) {
+		gui_notify_popup("name_required");
+		return;
+	}
+	if (!bluetooth_set_device_alias(rename_mac, typed)) {
+		gui_notify_popup("bt_rename_failed");
+		return;
+	}
+
+	rename_layer_hide();
+	drawn_serial = 0xFFFFFFFFu;
+	rebuild_lists();
+	toast_success("bt_name_changed");
+}
+
+static void rename_action(void *user) {
+	(void)user;
+	if (!rename_layer || !rename_field) {
+		return;
+	}
+	snprintf(rename_mac, sizeof(rename_mac), "%s", menu_mac);
+
+	char name[BT_NAME_MAX] = "";
+	if (!bluetooth_get_device_alias(rename_mac, name, sizeof(name))) {
+		bt_device_t devices[BT_MAX_DEVICES];
+		int count = bluetooth_get_paired(devices, BT_MAX_DEVICES);
+		for (int i = 0; i < count; i++) {
+			if (strcasecmp(devices[i].mac, rename_mac) == 0) {
+				snprintf(name, sizeof(name), "%s", devices[i].name);
+				break;
+			}
+		}
+	}
+	if (!name[0]) {
+		snprintf(name, sizeof(name), "%s", rename_mac);
+	}
+	lv_textarea_set_text(rename_field, name);
+	keyboard_reset(rename_keyboard);
+	lv_obj_set_hidden(rename_layer, false);
+	lv_obj_move_foreground(rename_layer);
+	back_btn_force_hidden(true);
+}
+
+static void restore_name_action(void *user) {
+	(void)user;
+	if (!bluetooth_clear_device_alias(menu_mac)) {
+		gui_notify_popup("bt_rename_failed");
+		return;
+	}
+	drawn_serial = 0xFFFFFFFFu;
+	rebuild_lists();
+	toast_success("bt_name_changed");
+}
+
 static void connect_action(void *user) {
 	(void)user;
 	last_action = ACTION_CONNECT;
@@ -204,6 +284,7 @@ static void disconnect_action(void *user) {
 static void forget_action(void *user) {
 	(void)user;
 	last_action = ACTION_FORGET;
+	snprintf(last_action_mac, sizeof(last_action_mac), "%s", menu_mac);
 	bluetooth_forget(menu_mac);
 }
 
@@ -212,28 +293,27 @@ static void row_free_cb(lv_event_t *e) { free(lv_event_get_user_data(e)); }
 static void remember_mac(const char *mac) { snprintf(menu_mac, sizeof(menu_mac), "%s", mac); }
 
 static void show_device_menu(lv_obj_t *anchor, bool connected, bool audio_connected) {
+	popover_item_t items[5];
+	int count = 0;
+
 	if (audio_connected) {
-		static const popover_item_t items[] = {
-			{"disconnect", disconnect_action, NULL},
-			{"bt_forget", forget_action, NULL},
-		};
-		popover_show(anchor, items, 2);
+		items[count++] = (popover_item_t){"disconnect", disconnect_action, NULL, false};
 	} else if (connected) {
 		// The ACL link can remain up after A2DP has gone. Let the user request
 		// the audio profile again without cycling the whole Bluetooth radio.
-		static const popover_item_t items[] = {
-			{"connect", connect_action, NULL},
-			{"disconnect", disconnect_action, NULL},
-			{"bt_forget", forget_action, NULL},
-		};
-		popover_show(anchor, items, 3);
+		items[count++] = (popover_item_t){"connect", connect_action, NULL, false};
+		items[count++] = (popover_item_t){"disconnect", disconnect_action, NULL, false};
 	} else {
-		static const popover_item_t items[] = {
-			{"connect", connect_action, NULL},
-			{"bt_forget", forget_action, NULL},
-		};
-		popover_show(anchor, items, 2);
+		items[count++] = (popover_item_t){"connect", connect_action, NULL, false};
 	}
+
+	items[count++] = (popover_item_t){"bt_rename_device", rename_action, NULL, false};
+	char alias[BT_NAME_MAX];
+	if (bluetooth_get_device_alias(menu_mac, alias, sizeof(alias))) {
+		items[count++] = (popover_item_t){"bt_restore_device_name", restore_name_action, NULL, false};
+	}
+	items[count++] = (popover_item_t){"bt_forget", forget_action, NULL, false};
+	popover_show(anchor, items, count);
 }
 
 // A tap on a disconnected paired device connects it. A row with an ACL link
@@ -615,6 +695,7 @@ static void poll_cb(lv_timer_t *timer) {
 			toast_success("bt_device_disconnected");
 			break;
 		case ACTION_FORGET:
+			bluetooth_clear_device_alias(last_action_mac);
 			toast_success("bt_device_removed");
 			break;
 		default:
@@ -622,15 +703,18 @@ static void poll_cb(lv_timer_t *timer) {
 			break;
 		}
 		last_action = ACTION_NONE;
+		last_action_mac[0] = '\0';
 		topbar_refresh_radios();
 		break;
 	case BT_OP_PAIRED:
 		last_action = ACTION_NONE;
+		last_action_mac[0] = '\0';
 		toast_success("bt_device_paired");
 		topbar_refresh_radios();
 		break;
 	case BT_OP_FAILED:
 		last_action = ACTION_NONE;
+		last_action_mac[0] = '\0';
 		gui_notify_popup("bt_connect_failed");
 		break;
 	default:
@@ -662,6 +746,9 @@ static void screen_loaded_cb(lv_event_t *e) {
 static void screen_unloaded_cb(lv_event_t *e) {
 	(void)e;
 	lv_timer_pause(poll_timer);
+	if (rename_layer && !lv_obj_is_hidden(rename_layer)) {
+		rename_layer_hide();
+	}
 	bluetooth_set_discoverable(false);
 	if (bluetooth_scan_running()) {
 		bluetooth_scan_stop(); // a scan nobody is watching only costs battery
@@ -688,6 +775,57 @@ static lv_obj_t *corner_button(lv_obj_t *screen, gui_config_t *cfg, int slot, co
 	}
 
 	return button;
+}
+
+static void build_rename_layer(gui_config_t *cfg) {
+	rename_layer = lv_obj_create(btsettings_screen);
+	lv_obj_set_size(rename_layer, lv_pct(100), lv_pct(100));
+	lv_obj_align(rename_layer, LV_ALIGN_TOP_LEFT, 0, 0);
+	lv_obj_add_style(rename_layer, &theme_style_screen, 0);
+	lv_obj_set_style_bg_opa(rename_layer, LV_OPA_COVER, 0);
+	lv_obj_set_style_border_width(rename_layer, 0, 0);
+	lv_obj_set_style_radius(rename_layer, 0, 0);
+	lv_obj_set_style_pad_all(rename_layer, 0, 0);
+	lv_obj_set_scrollable(rename_layer, false);
+	lv_obj_set_hidden(rename_layer, true);
+
+	lv_obj_t *heading = lv_label_create(rename_layer);
+	lv_label_set_text(heading, tr("bt_rename_device"));
+	lv_obj_add_style(heading, &theme_style_text, 0);
+	lv_obj_set_style_text_font(heading, &font_ui_24, 0);
+	lv_obj_align(heading, LV_ALIGN_TOP_LEFT, cfg->padding, cfg->padding + cfg->top_bar_height + 10);
+
+	lv_obj_t *cancel = lv_btn_create(rename_layer);
+	settingsrow_place_corner_button(cancel, cfg, 0);
+	lv_obj_set_style_bg_opa(cancel, LV_OPA_TRANSP, 0);
+	lv_obj_set_style_border_width(cancel, 0, 0);
+	lv_obj_set_style_shadow_width(cancel, 0, 0);
+	lv_obj_set_style_pad_all(cancel, 0, 0);
+	lv_obj_add_event_cb(cancel, rename_cancel_cb, LV_EVENT_CLICKED, NULL);
+
+	lv_obj_t *cancel_icon = lv_image_create(cancel);
+	lv_image_set_src(cancel_icon, &icon_close);
+	lv_obj_add_style(cancel_icon, &theme_style_icon, 0);
+	settingsrow_scale_corner_icon(cancel_icon, cfg);
+	lv_obj_center(cancel_icon);
+
+	rename_field = lv_textarea_create(rename_layer);
+	lv_textarea_set_one_line(rename_field, true);
+	lv_textarea_set_max_length(rename_field, BT_NAME_MAX - 1);
+	lv_textarea_set_placeholder_text(rename_field, tr("name"));
+	lv_obj_set_size(rename_field, cfg->screen_width - 2 * cfg->padding, 62);
+	lv_obj_set_scrollbar_mode(rename_field, LV_SCROLLBAR_MODE_OFF);
+	lv_obj_align(rename_field, LV_ALIGN_TOP_LEFT, cfg->padding, cfg->padding + cfg->top_bar_height + 60);
+	lv_obj_add_style(rename_field, &theme_style_card, 0);
+	lv_obj_set_style_radius(rename_field, 12, 0);
+	lv_obj_set_style_border_width(rename_field, 0, 0);
+	lv_obj_set_style_shadow_width(rename_field, 0, 0);
+	lv_obj_set_style_pad_all(rename_field, 14, 0);
+	lv_obj_set_style_text_font(rename_field, &font_ui_24, 0);
+	keyboard_style_caret(rename_field);
+
+	rename_keyboard = keyboard_create(rename_layer, cfg->screen_width, cfg->screen_width < 320 ? 144 : 316,
+									 rename_field, NULL, "ok", rename_accept_cb, NULL);
 }
 
 static lv_obj_t *make_section(lv_obj_t *container, const char *title, lv_obj_t **label_out) {
@@ -753,6 +891,8 @@ void btsettings_init(gui_config_t *cfg) {
 	lv_obj_add_event_cb(scan_btn, scan_clicked_cb, LV_EVENT_CLICKED, NULL);
 	lv_obj_add_state(scan_btn, LV_STATE_DISABLED); // enabled by the poll once the radio answers
 	lv_obj_set_style_image_opa(scan_icon, LV_OPA_20, 0);
+
+	build_rename_layer(cfg);
 
 	poll_timer = lv_timer_create(poll_cb, BT_PAGE_POLL_MS, NULL);
 	lv_timer_pause(poll_timer);

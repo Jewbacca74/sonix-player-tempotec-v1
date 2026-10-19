@@ -1960,9 +1960,13 @@ static bool chapters_from_toc;	 // its own index, or the spine standing in for o
 // the recolour is a style set when the object is built -- a snapshot of the
 // theme at that moment. The menu is built once, at startup, so these have to be
 // recoloured by hand when the theme changes.
-#define MENU_GLYPH_MAX 4
+#define MENU_GLYPH_MAX 5
 static lv_obj_t *menu_glyphs[MENU_GLYPH_MAX];
 static int menu_glyph_count;
+
+static lv_obj_t *reader_brightness_slider;
+static lv_obj_t *reader_brightness_value;
+static lv_obj_t *reader_brightness_icon;
 
 static void remember_glyph(lv_obj_t *glyph) {
 	if (menu_glyph_count < MENU_GLYPH_MAX) {
@@ -1976,11 +1980,17 @@ static void menu_theme_refresh(void) {
 			lv_obj_set_style_image_recolor(menu_glyphs[i], theme()->text_primary, 0);
 		}
 	}
+	if (reader_brightness_slider) {
+		lv_obj_set_style_bg_color(reader_brightness_slider, theme()->text_secondary, LV_PART_MAIN);
+		lv_obj_set_style_bg_color(reader_brightness_slider, theme()->accent, LV_PART_INDICATOR);
+		theme_apply_slider_knob(reader_brightness_slider);
+	}
 }
 
 static void build_chapters(void);
 static void build_font(void);
 static void build_theme(void);
+static void reader_brightness_sync(void);
 
 static void menu_close(void) {
 	if (menu_veil) {
@@ -2000,6 +2010,7 @@ static void menu_open(void) {
 	}
 	lv_obj_set_hidden(menu_card, true);
 	lv_obj_set_hidden(menu_bar, false);
+	reader_brightness_sync();
 	lv_obj_set_hidden(menu_veil, false);
 	lv_obj_move_foreground(menu_veil);
 }
@@ -2556,6 +2567,127 @@ static void bar_button(lv_obj_t *parent, const lv_image_dsc_t *icon, const char 
 	lv_obj_set_style_text_font(name, &font_ui_18, 0);
 }
 
+static void reader_brightness_show_value(long value, long max) {
+	if (!reader_brightness_value) {
+		return;
+	}
+	if (max <= 0) {
+		max = 100;
+	}
+	int percent = (int)((value * 100 + max / 2) / max);
+	lv_label_set_text_fmt(reader_brightness_value, "%d%%", percent);
+}
+
+static void reader_brightness_sync(void) {
+	if (!reader_brightness_slider) {
+		return;
+	}
+	long max = power_get_max_brightness();
+	if (max <= 0) {
+		max = 100;
+	}
+	long floor = power_get_min_brightness();
+	if (floor < 1) {
+		floor = 1;
+	}
+	lv_slider_set_range(reader_brightness_slider, (int32_t)floor, (int32_t)max);
+
+	long value = power_get_brightness();
+	if (value < floor || value > max) {
+		value = max;
+	}
+	lv_slider_set_value(reader_brightness_slider, (int32_t)value, LV_ANIM_OFF);
+	reader_brightness_show_value(value, max);
+}
+
+static void reader_brightness_changed_cb(lv_event_t *e) {
+	(void)e;
+	long value = lv_slider_get_value(reader_brightness_slider);
+	power_set_brightness(value);
+	reader_brightness_show_value(value, power_get_max_brightness());
+}
+
+static void reader_brightness_released_cb(lv_event_t *e) {
+	(void)e;
+	config_set_int("screen", "brightness", lv_slider_get_value(reader_brightness_slider));
+	config_save();
+}
+
+// Brightness lives in the reader's long-press menu, so the page can be dimmed
+// without leaving a book. The slider uses the same device range and persistent
+// setting as Screen settings and the control centre.
+static void build_reader_brightness_control(lv_obj_t *parent) {
+	lv_obj_t *section = lv_obj_create(parent);
+	lv_obj_remove_style_all(section);
+	lv_obj_set_width(section, lv_pct(100));
+	lv_obj_set_height(section, LV_SIZE_CONTENT);
+	lv_obj_set_style_pad_all(section, 0, 0);
+	lv_obj_set_style_pad_row(section, 4, 0);
+	lv_obj_set_flex_flow(section, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_scrollable(section, false);
+
+	lv_obj_t *heading = lv_obj_create(section);
+	lv_obj_remove_style_all(heading);
+	lv_obj_set_size(heading, lv_pct(100), 28);
+	lv_obj_set_style_pad_all(heading, 0, 0);
+	lv_obj_set_style_pad_column(heading, 8, 0);
+	lv_obj_set_flex_flow(heading, LV_FLEX_FLOW_ROW);
+	lv_obj_set_flex_align(heading, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	lv_obj_set_scrollable(heading, false);
+
+	reader_brightness_icon = lv_image_create(heading);
+	lv_image_set_src(reader_brightness_icon, &icon_sun);
+	lv_obj_set_size(reader_brightness_icon, 18, 18);
+	lv_obj_add_style(reader_brightness_icon, &theme_style_icon, 0);
+	int icon_side = LV_MAX((int)icon_sun.header.w, (int)icon_sun.header.h);
+	lv_image_set_scale(reader_brightness_icon,
+					   icon_side ? (uint32_t)(LV_SCALE_NONE * 18 / icon_side) : LV_SCALE_NONE);
+	lv_obj_set_style_image_recolor(reader_brightness_icon, theme()->text_primary, 0);
+	lv_obj_set_style_image_recolor_opa(reader_brightness_icon, LV_OPA_COVER, 0);
+	remember_glyph(reader_brightness_icon);
+
+	lv_obj_t *label = lv_label_create(heading);
+	lv_label_set_text(label, tr("brightness"));
+	lv_obj_add_style(label, &theme_style_text, 0);
+	lv_obj_set_style_text_font(label, &font_ui_18, 0);
+	lv_obj_set_flex_grow(label, 1);
+
+	reader_brightness_value = lv_label_create(heading);
+	lv_obj_add_style(reader_brightness_value, &theme_style_text_dim, 0);
+	lv_obj_set_style_text_font(reader_brightness_value, &font_ui_18, 0);
+	lv_obj_set_style_text_align(reader_brightness_value, LV_TEXT_ALIGN_RIGHT, 0);
+	lv_label_set_text(reader_brightness_value, "");
+
+	lv_obj_t *track = lv_obj_create(section);
+	lv_obj_remove_style_all(track);
+	lv_obj_set_size(track, lv_pct(100), 28);
+	lv_obj_set_style_pad_hor(track, 14, 0);
+	lv_obj_set_style_pad_ver(track, 9, 0);
+	lv_obj_set_scrollable(track, false);
+
+	reader_brightness_slider = lv_slider_create(track);
+	lv_obj_set_size(reader_brightness_slider, lv_pct(100), 10);
+	lv_obj_center(reader_brightness_slider);
+	lv_obj_set_style_radius(reader_brightness_slider, LV_RADIUS_CIRCLE, LV_PART_MAIN);
+	lv_obj_set_style_bg_color(reader_brightness_slider, theme()->text_secondary, LV_PART_MAIN);
+	lv_obj_set_style_bg_opa(reader_brightness_slider, LV_OPA_40, LV_PART_MAIN);
+	lv_obj_set_style_radius(reader_brightness_slider, LV_RADIUS_CIRCLE, LV_PART_INDICATOR);
+	lv_obj_set_style_bg_color(reader_brightness_slider, theme()->accent, LV_PART_INDICATOR);
+	lv_obj_set_style_radius(reader_brightness_slider, LV_RADIUS_CIRCLE, LV_PART_KNOB);
+	lv_obj_set_style_bg_color(reader_brightness_slider, lv_color_white(), LV_PART_KNOB);
+	theme_apply_slider_knob(reader_brightness_slider);
+	lv_obj_set_style_pad_all(reader_brightness_slider, 5, LV_PART_KNOB);
+	lv_obj_set_style_shadow_width(reader_brightness_slider, 8, LV_PART_KNOB);
+	lv_obj_set_style_shadow_opa(reader_brightness_slider, LV_OPA_30, LV_PART_KNOB);
+	lv_obj_set_style_shadow_color(reader_brightness_slider, lv_color_black(), LV_PART_KNOB);
+	lv_obj_set_ext_click_area(reader_brightness_slider, 16);
+	lv_obj_add_event_cb(reader_brightness_slider, reader_brightness_changed_cb, LV_EVENT_VALUE_CHANGED, NULL);
+	lv_obj_add_event_cb(reader_brightness_slider, reader_brightness_released_cb, LV_EVENT_RELEASED, NULL);
+	lv_obj_add_event_cb(reader_brightness_slider, reader_brightness_released_cb, LV_EVENT_PRESS_LOST, NULL);
+
+	reader_brightness_sync();
+}
+
 static void build_menu(gui_config_t *cfg) {
 	// The same veil the pop-overs put over a page, for the same reason: what is
 	// underneath stays visible and every tap that misses the menu closes it.
@@ -2590,6 +2722,8 @@ static void build_menu(gui_config_t *cfg) {
 	bar_button(icons, &icon_ebook_chapter, "chapters", SECTION_CHAPTERS);
 	bar_button(icons, &icon_ebook_font, "ebookreader_font_settings", SECTION_FONT);
 	bar_button(icons, &icon_ebook_theme, "ebookreader_book_theme", SECTION_THEME);
+
+	build_reader_brightness_control(menu_bar);
 
 	// Under the three, separated: leaving is not a fourth thing to look at
 	// while reading, but it has to be somewhere and this is the only panel the

@@ -91,6 +91,14 @@ const char *bluetooth_local_name(void);
 // when the radio is on, and at the next bring-up when it is not.
 bool bluetooth_set_local_name(const char *name);
 
+// A paired device's display alias, stored locally by MAC and shown in this
+// player only; the remote device's own name is not changed. The getter returns
+// false when no custom alias is set. Set rejects a blank name; clear restores
+// the name BlueZ reports. The devices serial moves when either changes.
+bool bluetooth_get_device_alias(const char *mac, char *out, int size);
+bool bluetooth_set_device_alias(const char *mac, const char *name);
+bool bluetooth_clear_device_alias(const char *mac);
+
 // Paired devices, then the ones a scan has turned up. Bumped whenever either
 // list changes.
 uint32_t bluetooth_devices_serial(void);
