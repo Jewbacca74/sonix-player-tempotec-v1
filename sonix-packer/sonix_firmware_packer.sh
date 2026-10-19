@@ -388,6 +388,22 @@ build_one() {
 				<(cd "$ASSETS_DIR/$MODEL_DIR" && find . -type f | sort))
 		done
 	fi
+
+	# The trust store every https:// connection is checked against. Strict
+	# TLS -- the default -- refuses to connect when there is no bundle, so an
+	# image without one looks like "no reply" from Last.fm, Tidal, Qobuz,
+	# podcasts, radio and Subsonic. None of the three stock firmwares can be
+	# relied on to carry one, so each asset tree supplies Mozilla's at
+	# etc/ssl/cert.pem, the path this OpenSSL uses by itself (OPENSSLDIR is
+	# /etc/ssl).
+	CA_BUNDLE="$SQUASH_DIR/etc/ssl/cert.pem"
+	if [ -s "$CA_BUNDLE" ]; then
+		CA_COUNT="$(grep -c '^-----BEGIN CERTIFICATE-----' "$CA_BUNDLE" || true)"
+		say "    etc/ssl/cert.pem: $CA_COUNT certificates, $(get_size "$CA_BUNDLE") bytes"
+	else
+		warn "no /etc/ssl/cert.pem in the image: https streaming will refuse to connect."
+		warn "add Mozilla's bundle at assets/$MODEL_DIR/etc/ssl/cert.pem -- https://curl.se/ca/cacert.pem"
+	fi
 	say ""
 
 	# ==========================================================================

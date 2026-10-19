@@ -130,7 +130,24 @@ if $EXPECT_SONIX; then
 	grep -qE '"device-name"[[:space:]]*:[[:space:]]*"TempoTec V1"' "$INFO" || {
 		echo "Error: system-info.json does not identify TempoTec V1." >&2; exit 1;
 	}
+
+	# Every https:// connection the player opens -- Tidal, Qobuz, podcasts,
+	# radio, Last.fm, Subsonic -- is verified against this bundle, and strict
+	# mode refuses to connect without one. The failure it causes on the device
+	# ("no reply", or nothing at all) does not say a file is missing, so it is
+	# checked here instead of being found in the field.
+	CA_BUNDLE="$WORK/cert.pem"
+	if ! unsquashfs -cat "$WORK/rootfs.squashfs" etc/ssl/cert.pem > "$CA_BUNDLE" 2>/dev/null; then
+		: > "$CA_BUNDLE"
+	fi
+	grep -q '^-----BEGIN CERTIFICATE-----' "$CA_BUNDLE" || {
+		echo "Error: rootfs has no usable etc/ssl/cert.pem; https streaming would fail." >&2
+		exit 1
+	}
 	printf 'Verified Sonix player and TempoTec V1 identity in rootfs.\n'
+	printf 'Verified CA bundle: %s certificates, %s bytes.\n' \
+		"$(grep -c '^-----BEGIN CERTIFICATE-----' "$CA_BUNDLE")" \
+		"$(wc -c < "$CA_BUNDLE" | tr -d ' ')"
 fi
 
 printf 'UPT validation passed: %s\n' "$UPT"
