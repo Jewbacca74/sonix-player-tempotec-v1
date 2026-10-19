@@ -13,8 +13,23 @@
 /* Supply deterministic font metrics instead of opening device font files.
  * Two sizes, so that a page which draws one part of itself in a larger font
  * than the rest -- the calculator's symbol keys -- can be told apart from one
- * that does not, and so that the layout is measured with both shapes. */
+ * that does not, and so that the layout is measured with both shapes.
+ *
+ * The others are the sizes the screensaver's strip is drawn at: title, artist
+ * and clock, on the V1 and on the 480-wide panels. Its test then replaces their
+ * line boxes with the ones the device's FreeType faces give, which is what
+ * decides whether the clock clears the swipe-up sign (see test_screensaver.c). */
 #undef LV_FONT_MONTSERRAT_14
 #define LV_FONT_MONTSERRAT_14 1
 #undef LV_FONT_MONTSERRAT_20
 #define LV_FONT_MONTSERRAT_20 1
+#undef LV_FONT_MONTSERRAT_16
+#define LV_FONT_MONTSERRAT_16 1
+#undef LV_FONT_MONTSERRAT_22
+#define LV_FONT_MONTSERRAT_22 1
+#undef LV_FONT_MONTSERRAT_28
+#define LV_FONT_MONTSERRAT_28 1
+#undef LV_FONT_MONTSERRAT_36
+#define LV_FONT_MONTSERRAT_36 1
+#undef LV_FONT_MONTSERRAT_48
+#define LV_FONT_MONTSERRAT_48 1

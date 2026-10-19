@@ -56,6 +56,18 @@ static int strip_h;
 #define AMBER_STRIP_OPA LV_OPA_50
 #define TOKYO_STRIP_OPA LV_OPA_60
 
+// How far the clock is lifted out of its line in the strip. It is the strip's
+// last line and the swipe-up sign hangs over the strip's foot, and the room
+// between the two is whatever descent the face leaves under the digits -- a
+// quantity that depends on the face, and on the Text size, which moves the
+// centred strip above the clock as well. With MiSans at the V1's sizes the two
+// come within a pixel or two of touching, and a face with a shallower descent
+// runs the sign through the figures. A lift, rather than a change of the
+// strip's padding: it moves the clock and nothing else, so the title and the
+// artist keep the places they were tuned for, and the clock gains its air
+// under every face.
+#define CLOCK_LIFT bp_pick(6, 10)
+
 // The Framed style's sleeve. It keeps at least this much of the panel free on
 // either side, and above and below itself inside the area over the strip; its
 // side is the largest square both allow. That is worked out once, from the
@@ -1100,10 +1112,12 @@ void screensaver_init(gui_config_t *cfg) {
 	lv_obj_set_style_text_align(artist_label, LV_TEXT_ALIGN_CENTER, 0);
 	scrolltext_apply(artist_label);
 
-	// The time, in the largest figures the screen has.
+	// The time, in the largest figures the screen has -- lifted clear of the
+	// sign below it (see CLOCK_LIFT).
 	clock_label = lv_label_create(info_strip);
 	lv_obj_set_style_text_font(clock_label, &font_ui_72, 0);
 	lv_obj_set_style_pad_top(clock_label, bp_pick(2, 6), 0);
+	lv_obj_set_style_translate_y(clock_label, -CLOCK_LIFT, 0);
 
 	// The way out, spelled out: swipe up. A sign, not a button -- tapping it
 	// does nothing, since the screensaver is only dismissed by dragging -- so it
