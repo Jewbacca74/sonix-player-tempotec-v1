@@ -5852,13 +5852,6 @@ void player_init(gui_config_t *cfg) {
 	lv_obj_set_style_border_width(player_controls_buttons, 0, 0);
 	lv_obj_set_style_radius(player_controls_buttons, 0, 0);
 	lv_obj_set_style_pad_all(player_controls_buttons, 0, 0);
-	// In compact mode, reserve space on both sides for the corner buttons
-	// (speed/repeat on left, more on right) so the centred transport group
-	// doesn't butt up against them.
-	if (compact) {
-		lv_obj_set_style_pad_left(player_controls_buttons, COMPACT_SKIP_BTN + 8, 0);
-		lv_obj_set_style_pad_right(player_controls_buttons, COMPACT_SKIP_BTN + 8, 0);
-	}
 	lv_obj_set_flex_flow(player_controls_buttons, LV_FLEX_FLOW_ROW);
 	lv_obj_set_flex_align(player_controls_buttons, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	// Lift the transport from the bottom bezel on the HiBy panels. Not on the
@@ -5879,9 +5872,12 @@ void player_init(gui_config_t *cfg) {
 	lv_obj_set_ignore_layout(repeat_btn, true);
 	lv_obj_set_size(repeat_btn, compact ? COMPACT_SKIP_BTN : 76, compact ? COMPACT_SKIP_BTN : 76);
 	lv_obj_set_style_bg_opa(repeat_btn, 0, 0);
+	lv_obj_set_style_border_width(repeat_btn, 0, 0);
 	lv_obj_set_style_shadow_width(repeat_btn, 0, 0);
 	lv_obj_add_event_cb(repeat_btn, repeat_btn_event_cb, LV_EVENT_CLICKED, NULL);
-	lv_obj_align(repeat_btn, LV_ALIGN_LEFT_MID, 0, 0);
+	// Inset slightly from the left edge so it doesn't visually crowd the
+	// centred transport group (prev/play/next).
+	lv_obj_align(repeat_btn, LV_ALIGN_LEFT_MID, compact ? 4 : 0, 0);
 	// The side controls grow their hit targets without stealing the adjacent
 	// skip button's tap, even in the tighter V1 layout.
 	lv_obj_set_ext_click_area(repeat_btn, compact ? COMPACT_CORNER_BTN_EXT_CLICK : CORNER_BTN_EXT_CLICK);
@@ -5899,9 +5895,12 @@ void player_init(gui_config_t *cfg) {
 	lv_obj_set_ignore_layout(speed_btn, true);
 	lv_obj_set_size(speed_btn, compact ? COMPACT_SKIP_BTN : 76, compact ? COMPACT_SKIP_BTN : 76);
 	lv_obj_set_style_bg_opa(speed_btn, 0, 0);
+	lv_obj_set_style_border_width(speed_btn, 0, 0);
 	lv_obj_set_style_shadow_width(speed_btn, 0, 0);
 	lv_obj_add_event_cb(speed_btn, speed_btn_event_cb, LV_EVENT_CLICKED, NULL);
-	lv_obj_align(speed_btn, LV_ALIGN_LEFT_MID, 0, 0);
+	// Inset slightly from the left edge (same as repeat button) so it
+	// doesn't visually crowd the centred transport group.
+	lv_obj_align(speed_btn, LV_ALIGN_LEFT_MID, compact ? 4 : 0, 0);
 	lv_obj_set_ext_click_area(speed_btn, compact ? COMPACT_CORNER_BTN_EXT_CLICK : CORNER_BTN_EXT_CLICK);
 	lv_obj_set_hidden(speed_btn, true);
 
@@ -5920,9 +5919,12 @@ void player_init(gui_config_t *cfg) {
 	lv_obj_set_ignore_layout(more_btn, true);
 	lv_obj_set_size(more_btn, compact ? COMPACT_SKIP_BTN : 76, compact ? COMPACT_SKIP_BTN : 76);
 	lv_obj_set_style_bg_opa(more_btn, 0, 0);
+	lv_obj_set_style_border_width(more_btn, 0, 0);
 	lv_obj_set_style_shadow_width(more_btn, 0, 0);
 	lv_obj_add_event_cb(more_btn, more_btn_event_cb, LV_EVENT_CLICKED, NULL);
-	lv_obj_align(more_btn, LV_ALIGN_RIGHT_MID, 0, 0);
+	// Inset slightly from the right edge so it doesn't visually crowd the
+	// centred transport group.
+	lv_obj_align(more_btn, LV_ALIGN_RIGHT_MID, compact ? -4 : 0, 0);
 	lv_obj_set_ext_click_area(more_btn, compact ? COMPACT_CORNER_BTN_EXT_CLICK : CORNER_BTN_EXT_CLICK);
 
 	lv_obj_t *more_icon = lv_image_create(more_btn);
@@ -5939,6 +5941,7 @@ void player_init(gui_config_t *cfg) {
 	prev_btn_obj = prev_btn;
 	lv_obj_set_size(prev_btn, compact ? COMPACT_SKIP_BTN : 76, compact ? COMPACT_SKIP_BTN : 76);
 	lv_obj_set_style_bg_opa(prev_btn, 0, 0);
+	lv_obj_set_style_border_width(prev_btn, 0, 0);
 	lv_obj_set_style_shadow_width(prev_btn, 0, 0);
 	prev_icon = lv_image_create(prev_btn);
 	lv_image_set_src(prev_icon, &icon_skip_back);
@@ -5952,6 +5955,7 @@ void player_init(gui_config_t *cfg) {
 	play_btn = lv_btn_create(player_controls_buttons);
 	lv_obj_set_size(play_btn, compact ? COMPACT_PLAY_BTN : 84, compact ? COMPACT_PLAY_BTN : 84);
 	lv_obj_set_style_bg_opa(play_btn, LV_OPA_TRANSP, 0);
+	lv_obj_set_style_border_width(play_btn, 0, 0);
 	lv_obj_set_style_shadow_width(play_btn, 0, 0);
 	lv_obj_add_event_cb(play_btn, play_btn_event_cb, LV_EVENT_CLICKED, NULL);
 	lv_obj_set_style_opa(play_btn, LV_OPA_40, LV_STATE_DISABLED);
@@ -5964,6 +5968,7 @@ void player_init(gui_config_t *cfg) {
 	next_btn_obj = next_btn;
 	lv_obj_set_size(next_btn, compact ? COMPACT_SKIP_BTN : 76, compact ? COMPACT_SKIP_BTN : 76);
 	lv_obj_set_style_bg_opa(next_btn, 0, 0);
+	lv_obj_set_style_border_width(next_btn, 0, 0);
 	lv_obj_set_style_shadow_width(next_btn, 0, 0);
 	next_icon = lv_image_create(next_btn);
 	lv_image_set_src(next_icon, &icon_skip_forward);
