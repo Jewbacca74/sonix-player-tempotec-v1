@@ -228,7 +228,7 @@ static lv_obj_t *more_btn_obj;
 static lv_obj_t *more_btn_icon; // ellipsis on a track, chapters on a book
 static lv_obj_t *repeat_btn_obj;
 static lv_obj_t *speed_btn_obj;	 // stands in the repeat button's place on a book
-static lv_obj_t *speed_btn_icon;
+static lv_obj_t *speed_btn_label;
 static lv_obj_t *below_slider_obj; // the two clocks under the bar
 // How far the four source marks keep from the corner of the artwork they
 // share. One number, because they replace each other in that corner and a
@@ -4278,22 +4278,32 @@ static int speed_current_permille(void) {
 	return speed_is_podcast() ? podcast_speed_permille() : audiobook_speed_permille();
 }
 
-// The gauge wears the accent colour whenever the book or episode is not at
-// normal speed, the way the repeat glyph it stands in for marks a mode that is
-// on.
+// The speed label shows the current rate (e.g. "1x", "1.5x", "2x").
+// Uses the accent colour when not at normal speed, muted otherwise.
 static void update_speed_button(void) {
-	if (!speed_btn_icon) {
+	if (!speed_btn_label) {
 		return;
 	}
-	bool normal = speed_current_permille() == AUDIOBOOK_SPEED_NORMAL;
-	lv_color_t inactive = theme_is_monochrome()
-						  ? theme_player_chrome_color(THEME_PLAYER_CHROME_MUTED)
-						  : lv_color_make(100, 100, 100);
-	lv_color_t active = theme_is_monochrome()
-						? theme_player_chrome_color(THEME_PLAYER_CHROME_PLAYBACK)
-						: theme()->accent;
-	lv_obj_set_style_image_recolor(speed_btn_icon, normal ? inactive : active, 0);
-	lv_obj_set_style_image_recolor_opa(speed_btn_icon, LV_OPA_COVER, 0);
+	int permille = speed_current_permille();
+	bool normal = permille == AUDIOBOOK_SPEED_NORMAL;
+
+	// Format as "1x", "1.5x", "2x", etc. (permille is 1000 = 1.0x)
+	char buf[8];
+	if (permille % 1000 == 0) {
+		snprintf(buf, sizeof(buf), "%dx", permille / 1000);
+	} else {
+		// e.g. 1250 -> "1.25x", 1750 -> "1.75x"
+		snprintf(buf, sizeof(buf), "%.2fx", permille / 1000.0);
+	}
+	lv_label_set_text(speed_btn_label, buf);
+
+	lv_color_t color = normal ? (theme_is_monochrome()
+		    	  	  ? theme_player_chrome_color(THEME_PLAYER_CHROME_MUTED)
+		    	  	  : lv_color_make(100, 100, 100))
+		    	  	: (theme_is_monochrome()
+		    	  	? theme_player_chrome_color(THEME_PLAYER_CHROME_PLAYBACK)
+		    	  	: theme()->accent);
+	lv_obj_set_style_text_color(speed_btn_label, color, 0);
 }
 
 static void speed_pick(void *user) {
@@ -5842,6 +5852,13 @@ void player_init(gui_config_t *cfg) {
 	lv_obj_set_style_border_width(player_controls_buttons, 0, 0);
 	lv_obj_set_style_radius(player_controls_buttons, 0, 0);
 	lv_obj_set_style_pad_all(player_controls_buttons, 0, 0);
+	// In compact mode, reserve space on both sides for the corner buttons
+	// (speed/repeat on left, more on right) so the centred transport group
+	// doesn't butt up against them.
+	if (compact) {
+		lv_obj_set_style_pad_left(player_controls_buttons, COMPACT_SKIP_BTN + 8, 0);
+		lv_obj_set_style_pad_right(player_controls_buttons, COMPACT_SKIP_BTN + 8, 0);
+	}
 	lv_obj_set_flex_flow(player_controls_buttons, LV_FLEX_FLOW_ROW);
 	lv_obj_set_flex_align(player_controls_buttons, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	// Lift the transport from the bottom bezel on the HiBy panels. Not on the
@@ -5855,11 +5872,12 @@ void player_init(gui_config_t *cfg) {
 	}
 
 	// The repeat/shuffle button, kept out of the flex row so the transport
-	// stays centred on the screen.
+	// stays centred on the screen. Match the skip button height so the row
+	// reads as one consistent line.
 	lv_obj_t *repeat_btn = lv_btn_create(player_controls_buttons);
 	repeat_btn_obj = repeat_btn;
 	lv_obj_set_ignore_layout(repeat_btn, true);
-	lv_obj_set_size(repeat_btn, compact ? 36 : 56, compact ? 36 : 56);
+	lv_obj_set_size(repeat_btn, compact ? COMPACT_SKIP_BTN : 76, compact ? COMPACT_SKIP_BTN : 76);
 	lv_obj_set_style_bg_opa(repeat_btn, 0, 0);
 	lv_obj_set_style_shadow_width(repeat_btn, 0, 0);
 	lv_obj_add_event_cb(repeat_btn, repeat_btn_event_cb, LV_EVENT_CLICKED, NULL);
@@ -5874,11 +5892,12 @@ void player_init(gui_config_t *cfg) {
 
 	// The playback-speed gauge, in exactly the same corner: on a book the
 	// repeat mode is meaningless and the speed is the thing worth reaching,
-	// so one hides and the other appears in its place.
+	// so one hides and the other appears in its place. Use the same size as
+	// the skip buttons so the row reads as one consistent height.
 	lv_obj_t *speed_btn = lv_btn_create(player_controls_buttons);
 	speed_btn_obj = speed_btn;
 	lv_obj_set_ignore_layout(speed_btn, true);
-	lv_obj_set_size(speed_btn, compact ? 36 : 56, compact ? 36 : 56);
+	lv_obj_set_size(speed_btn, compact ? COMPACT_SKIP_BTN : 76, compact ? COMPACT_SKIP_BTN : 76);
 	lv_obj_set_style_bg_opa(speed_btn, 0, 0);
 	lv_obj_set_style_shadow_width(speed_btn, 0, 0);
 	lv_obj_add_event_cb(speed_btn, speed_btn_event_cb, LV_EVENT_CLICKED, NULL);
@@ -5886,18 +5905,20 @@ void player_init(gui_config_t *cfg) {
 	lv_obj_set_ext_click_area(speed_btn, compact ? COMPACT_CORNER_BTN_EXT_CLICK : CORNER_BTN_EXT_CLICK);
 	lv_obj_set_hidden(speed_btn, true);
 
-	speed_btn_icon = lv_image_create(speed_btn);
-	lv_image_set_src(speed_btn_icon, &icon_play_speed);
-	lv_obj_add_style(speed_btn_icon, &theme_style_icon, 0);
-	lv_obj_center(speed_btn_icon);
+	// Speed label shows the current rate (e.g. "1x", "1.5x") instead of an
+	// icon. This is clearer than a glyph and matches the popover choices.
+	speed_btn_label = lv_label_create(speed_btn);
+	lv_obj_center(speed_btn_label);
+	lv_obj_set_style_text_font(speed_btn_label, compact ? &font_ui_14 : &font_ui_20, 0);
 	update_speed_button();
 
 	// The overflow menu, mirroring the repeat button on the right: queue and
-	// details in an iOS-style popover next to the button.
+	// details in an iOS-style popover next to the button. Match the skip
+	// button height so the row reads as one consistent line.
 	lv_obj_t *more_btn = lv_btn_create(player_controls_buttons);
 	more_btn_obj = more_btn;
 	lv_obj_set_ignore_layout(more_btn, true);
-	lv_obj_set_size(more_btn, compact ? 36 : 56, compact ? 36 : 56);
+	lv_obj_set_size(more_btn, compact ? COMPACT_SKIP_BTN : 76, compact ? COMPACT_SKIP_BTN : 76);
 	lv_obj_set_style_bg_opa(more_btn, 0, 0);
 	lv_obj_set_style_shadow_width(more_btn, 0, 0);
 	lv_obj_add_event_cb(more_btn, more_btn_event_cb, LV_EVENT_CLICKED, NULL);
