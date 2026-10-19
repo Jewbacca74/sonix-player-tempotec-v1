@@ -54,6 +54,9 @@ jobs:
       - name: Check the Calculator's arithmetic and the notes folder
         run: make -C sonix-player/tests calculator notes -j"$(nproc)"
 
+      - name: Check EQ, PEQ and MSEB on PCM, including radio rates
+        run: make -C sonix-player/tests eq
+
       - name: Check the Screensaver folder's picture rules
         run: make -C sonix-player/tests pictures
 

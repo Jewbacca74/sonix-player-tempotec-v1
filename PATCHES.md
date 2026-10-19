@@ -22,6 +22,13 @@ real 240×320 panel, a 24 px status bar and 6 px page padding; remaps the named 
 font faces to compact raster sizes; and gives shared headers, settings rows,
 grids and status icons compact geometry.
 
+Rounded screen corners, the optional black quarter-circles on the system layer
+in Settings → Appearance, use **16 px** on this board (`bp_screen_corner_radius()`).
+The original mask is 28 px on the 480-wide HiBy panels; 28 px here would swallow
+the 24 px status bar, and 14 px (half of 28 by pixel count) undershoots the 2"
+IPS, whose visible corner is about 2 mm. The masks are A8, built the first time
+the option is turned on, and stay above busy veils and the screensaver.
+
 The face those sizes are drawn from is not part of the profile any more. The V1
 had Neon 80s as its primary face; it is now one of the choices in
 Settings → Appearance → Font, beside MiSans (the default, and the face the

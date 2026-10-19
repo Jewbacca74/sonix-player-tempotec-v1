@@ -6,6 +6,7 @@ Run from the repository root on a Linux host:
 make -C sonix-player/tests test
 make -C sonix-player/tests sanitize
 make -C sonix-player/tests swvolume
+make -C sonix-player/tests eq
 make -C sonix-player/tests calculator
 make -C sonix-player/tests notes
 ```
@@ -41,6 +42,17 @@ and dithered, not truncated into grit), and the scaling must apply only while
 the sound is leaving over the USB-C port. The three routing answers (Bluetooth,
 a card on the port, that card's volume control) are stubbed; the curve, the
 coefficients and the scaling are the real ones.
+
+## Equaliser on PCM, including radio
+
+`make -C sonix-player/tests eq` checks the chain radio stations share with a
+track from the card. Internet radio does not go through `audio.c`: it decodes
+on its own thread and writes through `audio_external_write()`, and
+`radio_push_pcm()` runs `eq_process()` on the stereo 16-bit frames about to
+be written. The suite links the real `eq.c` and drives that function: with
+EQ, PEQ and MSEB all off it is a no-op; with each one on in turn a sine
+changes; and both 44.1 kHz and 48 kHz, the rates stations arrive at, run.
+The config store is a temporary file; nothing else is stubbed.
 
 ## Wi-Fi hidden networks
 

@@ -217,11 +217,13 @@ The player UI is built with LVGL 9.6 and adapted for the V1's small display. The
 
 The project includes a local music library and file browser, album artwork, playlists, lyrics, audiobooks, DSP controls, an EPUB reader, and a Gearboy Game Boy / Game Boy Color emulator. The player also contains code for streaming and network features such as Bluetooth audio, AirPlay, DLNA and Wi-Fi file transfer.
 
-Local audio decoder inputs include WAV, FLAC, MP3, Ogg Vorbis, Opus, M4A/M4B/MP4, AAC, ALAC, WavPack, APE, AIFF/AIFC, CAF and DSD (DSF/DFF) files. DSP features include a 10-band graphic equalizer, parametric EQ, MSEB, crossfeed, channel balance and ReplayGain.
+Local audio decoder inputs include WAV, FLAC, MP3, Ogg Vorbis, Opus, M4A/M4B/MP4, AAC, ALAC, WavPack, APE, AIFF/AIFC, CAF and DSD (DSF/DFF) files. DSP features include a 10-band graphic equalizer, parametric EQ, MSEB, crossfeed, channel balance and ReplayGain. The graphic EQ, PEQ and MSEB also run on internet radio stations.
 
 The interface font is a setting (Settings → Appearance → Font): MiSans, Neon 80s and Roboto (Roboto Mono on the R3 Pro II), plus any `.ttf`/`.otf` file put in the `Fonts` folder on the card. Whatever a face is missing — Cyrillic, Greek, Hangul, kanji, Arabic — is drawn by MiSans behind it, so the whole interface stays legible in every language. The added family is under the SIL Open Font License; see [`sonix-player/assets/fonts/FONT-LICENSES.txt`](sonix-player/assets/fonts/FONT-LICENSES.txt) for the copyright notices and the exact files.
 
 The boot screen is a setting too (Settings → Appearance → Boot screen): **Retrospace**, the default, **Space**, **Travelling in space**, or **Stock**, the firmware's own light and dark pictures. The choice cannot live in the config — the script that draws the logo runs before any filesystem holding a config is mounted — so it is written to the same flash marker the theme uses, and appears from the next power-on.
+
+Rounded screen corners are optional (Settings → Appearance → Rounded corners), off by default. On the V1 the arc is 16 px, sized to the 2" 240×320 panel's glass.
 
 See [FEATURES.md](FEATURES.md) for a longer feature list. Streaming services also require valid credentials and may depend on third-party service availability.
 

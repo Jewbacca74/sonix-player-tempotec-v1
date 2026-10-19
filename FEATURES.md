@@ -28,6 +28,9 @@
 - **MSEB** - HiBy's MageSound tuning, matched to the stock player: 10
   characteristics driven by 13 filters, with the slider travel selectable
   between 20, 40 and 100.
+- The graphic EQ, PEQ and MSEB run on **radio stations** too: the same chain a
+  track from the card goes through, applied to the stereo PCM about to be
+  written. A station is not a file, but what is tuned is for the headphones.
 - **Soundfield** - mid/side width from mono to twice natural, starting at 1.50
   for an audible widening when switched on (1.00 is neutral).
 - **Channel balance** - ±20 dB in half-decibel steps.
@@ -213,7 +216,7 @@ a self-signed certificate), and HLS.
 
 ## Settings
 
-- **Appearance** - dark and light, plus the V1 palettes Tokyo Night, Amber on Black and OLED (true black with no grey cards, white as its accent, and a main menu without the title and tagline); twelve accent colors, clock position, a dynamic tint that borrows the accent's hue for backgrounds and cards, and a toggle to show/hide the battery percentage.
+- **Appearance** - dark and light, plus the V1 palettes Tokyo Night, Amber on Black and OLED (true black with no grey cards, white as its accent, and a main menu without the title and tagline); twelve accent colors, clock position, a dynamic tint that borrows the accent's hue for backgrounds and cards, a toggle to show/hide the battery percentage, and **rounded screen corners** (off by default). On the V1 the arc is 16 px, sized to the 2" 240×320 panel's glass rather than scaled down from the 28 px HiBy mask.
 - **Appearance → Browse on home screen** - replaces the Music tile with Browse, opening the card’s file browser in the card’s `Music` folder directly; a card without that folder still opens at its root. The chevron and the root button still walk up to the rest of the card. Off by default; Music remains available when switched off.
 - **Appearance → Show Books on home screen** - replaces the Audiobooks tile with Books, opening the EPUB shelf directly from home. Off by default; Audiobooks remain available when switched off. Switched on, the two swap places in **More** as well: its Books row becomes Audiobooks, so both libraries stay one tap away and neither is listed twice.
 - **Appearance → Main menu icons only** - optionally hide the six main-menu tile labels and show larger, centered icons. Dedicated native-pixel art avoids stretching small toolbar glyphs or repeatedly filtering the colored illustrations. Applies immediately in every theme and is saved across restarts; other menus, the status bar and the now-playing strip are unchanged. Off by default.
