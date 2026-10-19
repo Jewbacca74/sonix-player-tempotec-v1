@@ -614,7 +614,7 @@ static void panel_prepare(void) {
 	if (max <= 0) {
 		max = 100;
 	}
-	long floor = max / 100 > 0 ? max / 100 : 1;
+	long floor = power_get_min_brightness();
 	lv_slider_set_range(brightness_slider, (int32_t)floor, (int32_t)max);
 	long value = power_get_brightness();
 	if (value < floor) {

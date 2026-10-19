@@ -177,6 +177,7 @@ bool power_headset_keys_settling(void);
 void power_set_brightness(long value); // raw backlight units, clamped to [0, max]
 long power_get_brightness(void);	   // current on-level
 long power_get_max_brightness(void);   // -1 if unknown
+long power_get_min_brightness(void);   // dimmest level the sliders offer
 
 // While held, the idle timer never blanks the screen. Used by anything the
 // user is expected to look at and think about before touching again -- the
