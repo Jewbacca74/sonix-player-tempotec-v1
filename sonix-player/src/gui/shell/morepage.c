@@ -123,9 +123,9 @@ static void more_list_add_entries(const grid_entry_t *entries, int count) {
 
 static int more_grid_columns(int count) { return count > 2 * MORE_GRID_ROWS ? 3 : 2; }
 
-// Everything More can hold, without the optional Audiobooks entry. The array
-// stays constant; more_entries_build() copies it and inserts what the current
-// settings add.
+// Everything More holds. The array stays constant; more_entries_build() copies
+// it and swaps the library entry for whichever of the two libraries the home
+// screen is not showing.
 static const grid_entry_t MORE_ENTRIES[] = {
 	{"dac", &icon_menu_dac, &dacpage_screen, NULL},
 #if GB_CORE
@@ -155,24 +155,25 @@ static const grid_entry_t MORE_ENTRIES[] = {
 // The page's destinations for the settings in force now.
 //
 // The home screen has one slot for the two libraries: Audiobooks normally, and
-// Books when Settings -> Appearance hands it over. Books has always been here;
-// while it holds the home slot Audiobooks joins it, right beside it, so the
-// library that left the home screen does not leave the player with nothing to
-// open. With the option off this page is exactly what it was before.
+// Books when Settings -> Appearance hands it over. The same rule applies here,
+// so the two never appear twice in the interface at once: with the option off
+// this page offers Books, exactly as it always has, and with it on Books has
+// moved up to the home screen and this entry becomes the Audiobooks section
+// instead. The place, the count and the page's shape are the same either way.
 static int more_entries_build(grid_entry_t *out, int max) {
 	int count = 0;
-	bool audiobooks = main_menu_books();
+	bool books_on_home = main_menu_books();
 	int base_count = (int)(sizeof(MORE_ENTRIES) / sizeof(MORE_ENTRIES[0]));
 
 	for (int i = 0; i < base_count && count < max; i++) {
-		out[count++] = MORE_ENTRIES[i];
-		if (audiobooks && strcmp(MORE_ENTRIES[i].label, "books") == 0 && count < max) {
+		out[count] = MORE_ENTRIES[i];
+		if (books_on_home && strcmp(MORE_ENTRIES[i].label, "books") == 0) {
 			out[count].label = "audiobooks";
 			out[count].icon = &icon_menu_audiobooks;
 			out[count].target = NULL;
 			out[count].action = audiobooks_open;
-			count++;
 		}
+		count++;
 	}
 	return count;
 }

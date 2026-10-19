@@ -473,8 +473,9 @@ static void check_more_page(gui_config_t *cfg, const char *tag) {
 }
 
 /* The two libraries share one slot on the home screen. When Books takes it,
- * Audiobooks has to stay reachable, and More is where it goes: the choice made
- * on the Appearance page has to reach a page that was built at startup. */
+ * Audiobooks takes over More's library entry, so the two are never offered
+ * twice and neither is ever unreachable: the choice made on the Appearance page
+ * has to reach a page that was built at startup. */
 static lv_obj_t *morepage_shape(bool *tiles) {
 	// Leave and come back: the page catches the choice up on the way in, and
 	// loading the screen that is already active would not enter it again.
@@ -499,11 +500,12 @@ static void check_more_audiobooks_option(gui_config_t *cfg) {
 		assert(has_entry(shown, tr("books")));
 		assert(!has_entry(shown, tr("audiobooks")));
 
-		// On: both libraries, one tap apart.
+		// On: Books has moved to the home screen, so More offers the other
+		// library in its place rather than repeating Books.
 		config_set_bool("ui", "home_books", true);
 		shown = morepage_shape(&tiles);
-		assert(has_entry(shown, tr("books")));
 		assert(has_entry(shown, tr("audiobooks")));
+		assert(!has_entry(shown, tr("books")));
 		check_within_panel(morepage_screen, cfg, "More with Audiobooks");
 
 		// And the row opens the section it names.
