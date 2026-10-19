@@ -51,6 +51,49 @@ bool playlists_create(const char *name);
 // display name come from the file's tags, like the stock player's entries.
 bool playlists_add_track(const char *name, const char *track_path);
 
+// ---------------------------------------------------------------------------
+// Duplicate protection
+//
+// Adding the same file twice is the common mistake -- a track forgotten about
+// and added again -- and the one the player can catch without touching the card.
+// The setting chooses what happens when the playlist already holds the path:
+//   ask   : the caller decides (the picker shows a dialog)
+//   skip  : the track is left where it is, no duplicate row is written
+//   allow : the track is added again, the old behaviour
+// ---------------------------------------------------------------------------
+
+typedef enum {
+	PLAYLISTS_DUPLICATE_ASK = 0,
+	PLAYLISTS_DUPLICATE_SKIP = 1,
+	PLAYLISTS_DUPLICATE_ALLOW = 2,
+} playlists_duplicate_mode_t;
+
+typedef enum {
+	PLAYLISTS_ADD_OK = 0,		// track added
+	PLAYLISTS_ADD_DUPLICATE = 1, // already in the playlist, not added
+	PLAYLISTS_ADD_ERROR = 2,	 // name or path unusable, or database error
+} playlists_add_result_t;
+
+playlists_duplicate_mode_t playlists_duplicate_mode(void);
+void playlists_set_duplicate_mode(playlists_duplicate_mode_t mode);
+
+// Checked variant: honours the current duplicate mode when `check_duplicate` is
+// true. With `allow_duplicate` true the track is added even if it is already
+// there; without it a duplicate returns PLAYLISTS_ADD_DUPLICATE and nothing is
+// written. When `check_duplicate` is false the mode is ignored and duplicates
+// are always allowed, like playlists_add_track().
+playlists_add_result_t playlists_add_track_checked(const char *name, const char *track_path,
+												   bool check_duplicate, bool allow_duplicate);
+
+// Batch adding: adds every path in `paths` to `name`, honouring the duplicate
+// mode. `allow_duplicates` forces adding even when the track is already there
+// (used after the user said \"Add anyway\"). Returns how many were actually
+// added; `skipped_duplicates` (may be NULL) receives how many were skipped
+// because they were already in the playlist, and `failed` (may be NULL) how
+// many failed for other reasons.
+int playlists_add_tracks(const char *name, const char *const *paths, int count, bool allow_duplicates,
+						 int *skipped_duplicates, int *failed);
+
 // The name and artist a track is listed under: the index's, else the file's
 // tags, else the file name for the title. The artist may come back empty, the
 // title does not. Reads the card, so not on the GUI thread for many tracks.

@@ -1,5 +1,6 @@
 #include "playlists.h"
 
+#include "src/system/core/config.h"
 #include "src/system/decode/decode.h"
 #include "src/system/library/cue.h"
 #include "src/system/library/library.h"
@@ -348,6 +349,102 @@ bool playlists_remove_track(const char *name, const char *track_path) {
 
 bool playlists_has_track(const char *name, const char *track_path) {
 	return name_is_usable(name) && track_path && track_path[0] && library_playlist_contains(name, track_path);
+}
+
+// ---------------------------------------------------------------------------
+// Duplicate protection
+// ---------------------------------------------------------------------------
+
+playlists_duplicate_mode_t playlists_duplicate_mode(void) {
+	long v = config_get_int("playlist", "duplicate_mode", (long)PLAYLISTS_DUPLICATE_ASK);
+	if (v < PLAYLISTS_DUPLICATE_ASK || v > PLAYLISTS_DUPLICATE_ALLOW) {
+		return PLAYLISTS_DUPLICATE_ASK;
+	}
+	return (playlists_duplicate_mode_t)v;
+}
+
+void playlists_set_duplicate_mode(playlists_duplicate_mode_t mode) {
+	if (mode < PLAYLISTS_DUPLICATE_ASK || mode > PLAYLISTS_DUPLICATE_ALLOW) {
+		return;
+	}
+	config_set_int("playlist", "duplicate_mode", (long)mode);
+	config_save();
+}
+
+playlists_add_result_t playlists_add_track_checked(const char *name, const char *track_path,
+												   bool check_duplicate, bool allow_duplicate) {
+	if (!name_is_usable(name) || !track_path || !track_path[0]) {
+		return PLAYLISTS_ADD_ERROR;
+	}
+	if (check_duplicate && !allow_duplicate) {
+		playlists_duplicate_mode_t mode = playlists_duplicate_mode();
+		if (mode == PLAYLISTS_DUPLICATE_SKIP) {
+			if (playlists_has_track(name, track_path)) {
+				return PLAYLISTS_ADD_DUPLICATE;
+			}
+		} else if (mode == PLAYLISTS_DUPLICATE_ASK) {
+			// Caller uses this to decide whether to prompt; when the UI hasn't
+			// answered yet we treat the duplicate as a special return so it can.
+			if (playlists_has_track(name, track_path)) {
+				return PLAYLISTS_ADD_DUPLICATE;
+			}
+		}
+		// PLAYLISTS_DUPLICATE_ALLOW falls through to always add
+	} else if (check_duplicate && allow_duplicate) {
+		// Explicit allow: skip the check entirely.
+	} else if (check_duplicate && !allow_duplicate) {
+		// already handled
+	}
+	// When check_duplicate is false we always add; when allow_duplicate is true we also always add.
+	// The duplicate test above already returned for the SKIP/ASK cases that should block.
+	if (check_duplicate && !allow_duplicate) {
+		// duplicate already handled; if we are here the track is not a duplicate
+	}
+	library_playlist_row_t row = {{0}, {0}, {0}, -1, true};
+	copy_capped(row.path, sizeof(row.path), track_path);
+	playlists_track_names(track_path, row.title, sizeof(row.title), row.artist, sizeof(row.artist));
+	row.seconds = track_seconds(track_path);
+	return library_playlist_append(name, &row) ? PLAYLISTS_ADD_OK : PLAYLISTS_ADD_ERROR;
+}
+
+int playlists_add_tracks(const char *name, const char *const *paths, int count, bool allow_duplicates,
+						 int *skipped_duplicates, int *failed) {
+	if (skipped_duplicates) {
+		*skipped_duplicates = 0;
+	}
+	if (failed) {
+		*failed = 0;
+	}
+	if (!name_is_usable(name) || !paths || count <= 0) {
+		return 0;
+	}
+	int added = 0;
+	playlists_duplicate_mode_t mode = allow_duplicates ? PLAYLISTS_DUPLICATE_ALLOW : playlists_duplicate_mode();
+	for (int i = 0; i < count; i++) {
+		if (!paths[i] || !paths[i][0]) {
+			if (failed) {
+				(*failed)++;
+			}
+			continue;
+		}
+		bool is_dup = playlists_has_track(name, paths[i]);
+		if (is_dup && mode != PLAYLISTS_DUPLICATE_ALLOW) {
+			if (skipped_duplicates) {
+				(*skipped_duplicates)++;
+			}
+			continue;
+		}
+		library_playlist_row_t row = {{0}, {0}, {0}, -1, true};
+		copy_capped(row.path, sizeof(row.path), paths[i]);
+		playlists_track_names(paths[i], row.title, sizeof(row.title), row.artist, sizeof(row.artist));
+		row.seconds = track_seconds(paths[i]);
+		if (library_playlist_append(name, &row)) {
+			added++;
+		} else if (failed) {
+			(*failed)++;
+		}
+	}
+	return added;
 }
 
 int playlists_remove_positions(const char *name, const int *positions, int count) {

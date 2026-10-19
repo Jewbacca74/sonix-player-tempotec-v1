@@ -37,6 +37,7 @@
 #include "src/system/core/config.h"
 #include "src/system/core/lang.h"
 #include "src/system/library/library.h"
+#include "src/system/library/playlists.h"
 #include "src/system/library/metadata.h"
 
 lv_obj_t *musicsettings_screen;
@@ -1505,6 +1506,25 @@ static void playlists_first_cb(lv_event_t *e) {
 	music_refresh_layout();
 }
 
+// Duplicate handling: ask / skip / allow
+static lv_obj_t *duplicate_pills;
+static lv_obj_t *duplicate_ask_pill;
+static lv_obj_t *duplicate_skip_pill;
+static lv_obj_t *duplicate_allow_pill;
+
+static void duplicate_refresh(void) {
+	playlists_duplicate_mode_t m = playlists_duplicate_mode();
+	if (duplicate_ask_pill) settingsrow_pill_active(duplicate_ask_pill, m == PLAYLISTS_DUPLICATE_ASK);
+	if (duplicate_skip_pill) settingsrow_pill_active(duplicate_skip_pill, m == PLAYLISTS_DUPLICATE_SKIP);
+	if (duplicate_allow_pill) settingsrow_pill_active(duplicate_allow_pill, m == PLAYLISTS_DUPLICATE_ALLOW);
+}
+
+static void duplicate_pick_cb(lv_event_t *e) {
+	int v = (int)(intptr_t)lv_event_get_user_data(e);
+	playlists_set_duplicate_mode((playlists_duplicate_mode_t)v);
+	duplicate_refresh();
+}
+
 static lv_obj_t *nowplaying_at_boot_switch;
 
 static void nowplaying_at_boot_cb(lv_event_t *e) {
@@ -2285,6 +2305,16 @@ static void build_library_page(gui_config_t *cfg) {
 	if (musicsettings_playlists_first()) {
 		lv_obj_add_state(playlists_first_switch, LV_STATE_CHECKED);
 	}
+
+	// Duplicate protection: what happens when a track already in the playlist is added again
+	duplicate_pills = NULL;
+	settingsrow_pills(container, "playlist_duplicate_mode", &duplicate_pills);
+	duplicate_ask_pill = settingsrow_pill(duplicate_pills, "playlist_duplicate_ask", PLAYLISTS_DUPLICATE_ASK, duplicate_pick_cb);
+	duplicate_skip_pill = settingsrow_pill(duplicate_pills, "playlist_duplicate_skip", PLAYLISTS_DUPLICATE_SKIP, duplicate_pick_cb);
+	duplicate_allow_pill = settingsrow_pill(duplicate_pills, "playlist_duplicate_allow", PLAYLISTS_DUPLICATE_ALLOW, duplicate_pick_cb);
+	option_note(container, "playlist_duplicate_mode_note");
+	duplicate_refresh();
+	theme_register_refresh(duplicate_refresh);
 
 	// A small mark under a track's title saying what the file is. It comes from
 	// what the scan wrote down, so a library indexed by an older build wears no

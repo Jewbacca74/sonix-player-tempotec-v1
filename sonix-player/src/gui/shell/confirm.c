@@ -1,5 +1,6 @@
 #include "confirm.h"
 
+#include <stdio.h>
 #include <string.h>
 
 #include "src/gui/board_profile.h"
@@ -25,6 +26,9 @@ static lv_obj_t *cancel_btn;
 
 static void (*pending_action)(void *user);
 static void *pending_user;
+static void (*pending_cancel)(void *user);
+static void *pending_cancel_user;
+static char pending_cancel_label[64];
 
 static void refresh_theme(void);
 
@@ -42,6 +46,21 @@ static void run_pending_cb(void *unused) {
 	void *user = pending_user;
 	pending_action = NULL;
 	pending_user = NULL;
+	pending_cancel = NULL;
+	pending_cancel_user = NULL;
+	if (action) {
+		action(user);
+	}
+}
+
+static void run_pending_cancel_cb(void *unused) {
+	(void)unused;
+	void (*action)(void *) = pending_cancel;
+	void *user = pending_cancel_user;
+	pending_action = NULL;
+	pending_user = NULL;
+	pending_cancel = NULL;
+	pending_cancel_user = NULL;
 	if (action) {
 		action(user);
 	}
@@ -49,6 +68,11 @@ static void run_pending_cb(void *unused) {
 
 static void cancel_cb(lv_event_t *e) {
 	(void)e;
+	if (pending_cancel) {
+		confirm_close();
+		lv_async_call(run_pending_cancel_cb, NULL);
+		return;
+	}
 	pending_action = NULL;
 	pending_user = NULL;
 	confirm_close();
@@ -175,21 +199,47 @@ static void refresh_theme(void) {
 
 void confirm_show(const char *title, const char *message, const char *ok_text, void (*on_ok)(void *user),
 				  void *user) {
+	confirm_show_with_cancel(title, message, ok_text, on_ok, user, NULL, NULL, NULL);
+}
+
+void confirm_show_with_cancel(const char *title, const char *message, const char *ok_text, void (*on_ok)(void *user),
+							  void *user, const char *cancel_text, void (*on_cancel)(void *user), void *cancel_user) {
 	if (!veil) {
 		return;
 	}
 
 	pending_action = on_ok;
 	pending_user = user;
+	pending_cancel = on_cancel;
+	pending_cancel_user = cancel_user;
+	if (cancel_text) {
+		snprintf(pending_cancel_label, sizeof(pending_cancel_label), "%s", cancel_text);
+	} else {
+		pending_cancel_label[0] = '\0';
+	}
 
-	lv_label_set_text(title_label, title ? tr(title) : "");
+	// Some callers pass a formatted message already translated; others pass a key.
+	// We translate only when the string is a known key (tr returns a different pointer).
+	// For formatted messages we keep them as-is; they are already in the right language.
+	const char *title_tr = title ? tr(title) : "";
+	// If title equals its translation, it may be a formatted string already.
+	lv_label_set_text(title_label, title_tr);
 	if (message && message[0]) {
-		lv_label_set_text(message_label, tr(message));
+		const char *msg_tr = tr(message);
+		// If tr returned the same pointer, it was not a known key -> keep original
+		if (msg_tr == message) {
+			lv_label_set_text(message_label, message);
+		} else {
+			lv_label_set_text(message_label, msg_tr);
+		}
 		lv_obj_set_hidden(message_label, false);
 	} else {
 		lv_obj_set_hidden(message_label, true);
 	}
 	lv_label_set_text(ok_label, tr(ok_text && ok_text[0] ? ok_text : "ok"));
+	if (cancel_label) {
+		lv_label_set_text(cancel_label, tr(cancel_text && cancel_text[0] ? cancel_text : "cancel"));
+	}
 	// Repaint on the way up too, in case the theme changed while the dialog was
 	// hidden.
 	refresh_theme();
