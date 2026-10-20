@@ -332,6 +332,7 @@ static void check_strings(const char *language_dir) {
 		"calculator", "calculator_error", "notes", "notes_new", "notes_empty",
 		"notes_more", "notes_placeholder", "notes_saved", "notes_cannot_save",
 		"notes_cannot_open", "notes_too_long", "music_years", "music_most_played",
+		"library_empty_most_played",
 		"musicsettings_rearrange_main_page",
 	};
 	DIR *dir = opendir(language_dir);

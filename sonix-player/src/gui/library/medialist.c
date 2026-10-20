@@ -3646,7 +3646,13 @@ static void build_panel(panel_t *p, gui_config_t *cfg, bool is_tracks, int slot_
 	lv_obj_set_hidden(p->sel_delete_btn, true);
 	lv_obj_set_hidden(p->sel_close_btn, true);
 
+	// The "nothing here" note. Wraps at the rows' width: at the V1's font 24
+	// the second line of the note is wider than the panel, and an unbounded
+	// label centres its overflow off both edges of the screen -- "Nothing to
+	// show" over "...can the library from the settings."
 	p->empty = lv_label_create(p->list);
+	lv_label_set_long_mode(p->empty, LV_LABEL_LONG_WRAP);
+	lv_obj_set_width(p->empty, width);
 	lv_label_set_text(p->empty, tr("library_empty_note"));
 	lv_obj_set_style_text_align(p->empty, LV_TEXT_ALIGN_CENTER, 0);
 	lv_obj_add_style(p->empty, &theme_style_text_dim, 0);
@@ -3907,6 +3913,14 @@ void medialist_open(const char *title, library_list_t kind, library_filter_t fil
 
 	lv_label_set_text(p->title_label, p->title);
 
+	// The empty note names the thing this list is short of. The generic one
+	// tells the user to scan the library, which is the wrong instruction for
+	// Most played -- that list fills from listening, and the scan it demands
+	// changes nothing. (A rescan is also exactly what a confused user tries,
+	// so a note that sends them there hides the real answer.)
+	lv_label_set_text(p->empty,
+					  tr(kind == LIBRARY_LIST_MOST_PLAYED ? "library_empty_most_played" : "library_empty_note"));
+
 	// Which of the corner buttons this list has a use for.
 	//
 	// An artist's own tracks and records get the disc button that swaps one for
@@ -4065,6 +4079,9 @@ void medialist_open_paths(const char *title, const char *const *paths, const cha
 	snprintf(p->signature, sizeof(p->signature), "paths|%s", title ? title : "");
 
 	lv_label_set_text(p->title_label, title ? title : "");
+	// This panel can have just come from Most played, whose empty note names
+	// a different remedy; a playlist goes back to the generic one.
+	lv_label_set_text(p->empty, tr("library_empty_note"));
 
 	// A list handed in as paths has an order of its own -- the one whoever
 	// built it put it in -- so the buttons that reorder the list stay away.
