@@ -9,6 +9,7 @@ make -C sonix-player/tests swvolume
 make -C sonix-player/tests eq
 make -C sonix-player/tests calculator
 make -C sonix-player/tests notes
+make -C sonix-player/tests tagdate
 ```
 
 These require only a C compiler, Make and Python 3 (plus standard pthread/dl/math libraries). They **do not require LVGL, ALSA, a MIPS toolchain, a music server, a real account, or downloaded audio**.
@@ -203,6 +204,20 @@ rather than bytes, so a note of three-byte letters is measured by the letters
 -- and reading the files a computer leaves behind: UTF-8 with a byte order
 mark, UTF-16, CRLF, tabs, Windows-1252 accents, control characters, an empty
 file, and a file too long for the editor.
+
+## The dates tags carry
+
+`make -C sonix-player/tests tagdate` checks the reader of date-tag text
+(`src/system/library/tagdate.c`), which the podcast lists order episodes and
+write "12 March 2026" from. Every shape the taggers write is read: a bare
+year, a year and a month, the ISO date with dashes or slashes, the compact
+"20260312", one- and two-digit parts, and any of them carrying a time, a zone
+or the far end of an ID3v2.4 range after it. Parts that name no real month or
+day drop to whatever the tag did say ("2026-13" is a year), and a text with
+no date in it -- including a day-first date, which this reader will not guess
+at -- comes back empty. The fuller of two dates wins whatever order they
+arrive in, and each date resolves to one moment for sorting with the parts it
+left out settled on the first of January, and of the month.
 
 ## Headless calculator and notes page tests
 

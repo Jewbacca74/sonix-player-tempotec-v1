@@ -2,6 +2,7 @@
 #include "metadata.h"
 
 #include "src/system/library/cue.h"
+#include "src/system/library/tagdate.h"
 #include "src/system/decode/decode.h"
 #include "src/system/decode/mp4.h"
 #include "src/system/decode/stb_vorbis_decl.h"
@@ -48,6 +49,35 @@ static void copy_bounded(char *dst, size_t dst_size, const char *src) {
 	size_t copy_len = len < dst_size - 1 ? len : dst_size - 1;
 	memcpy(dst, src, copy_len);
 	dst[copy_len] = '\0';
+}
+
+// Offers one date tag's text to the file's date. A file can carry the same
+// date twice at different precision -- TYER's bare year and TDRC's full
+// moment in one ID3 tag, or an ID3v2 tag and an ID3v1 after it -- and the
+// frames arrive in whatever order the tagger wrote them. The fuller date
+// wins; the first one there wins a tie. What is kept is the text itself, at
+// whatever precision it has, for whoever parses it later (tagdate.h).
+static void date_offer(song_metadata_t *out, const char *text, size_t len) {
+	char buf[sizeof(out->date)];
+	while (len > 0 && (text[len - 1] == ' ' || text[len - 1] == '\0')) {
+		len--;
+	}
+	if (len == 0) {
+		return;
+	}
+	size_t copy_len = len < sizeof(buf) - 1 ? len : sizeof(buf) - 1;
+	memcpy(buf, text, copy_len);
+	buf[copy_len] = '\0';
+
+	tagdate_t offered;
+	if (!tagdate_parse(buf, &offered)) {
+		return;
+	}
+	tagdate_t current;
+	if (out->date[0] && tagdate_parse(out->date, &current) && !tagdate_better(&offered, &current)) {
+		return;
+	}
+	copy_bounded(out->date, sizeof(out->date), buf);
 }
 
 // One more value of a tag that can hold several -- a second ARTIST comment, the
@@ -422,6 +452,7 @@ static void apply_vorbis_comment(song_metadata_t *out, const char *comment, size
 		size_t n = value_len < sizeof(num_buf) - 1 ? value_len : sizeof(num_buf) - 1;
 		memcpy(num_buf, value, n);
 		num_buf[n] = '\0';
+		date_offer(out, value, value_len);
 		out->year = (int)strtol(num_buf, NULL, 10);
 		return;
 	} else if (strncmp(key, "REPLAYGAIN_", 11) == 0) {
@@ -1032,6 +1063,10 @@ static bool read_id3v2(FILE *f, song_metadata_t *out) {
 	bool v22 = major_version == 2;
 	int header_size = v22 ? 6 : 10;
 
+	// TYER's year and TDAT's day and month, kept apart until the walk is done:
+	// see the TDAT branch below.
+	char tdat[16] = {0};
+
 	for (int frames = 0; frames < ID3_MAX_FRAMES && ftello(f) < tag_end - header_size; frames++) {
 		off_t frame_at = ftello(f);
 		uint8_t frame_header[10];
@@ -1077,7 +1112,8 @@ static bool read_id3v2(FILE *f, song_metadata_t *out) {
 		if (v22) {
 			static const char *const V22_MAP[][2] = {{"TT2", "TIT2"}, {"TP1", "TPE1"}, {"TP2", "TPE2"},
 													 {"TAL", "TALB"}, {"TCO", "TCON"}, {"TRK", "TRCK"},
-													 {"TPA", "TPOS"}, {"TYE", "TYER"}, {"TXX", "TXXX"},
+													 {"TPA", "TPOS"}, {"TYE", "TYER"}, {"TDA", "TDAT"},
+													 {"TXX", "TXXX"},
 													 {"ULT", "USLT"}, {"SLT", "SYLT"}, {"TCP", "TCMP"}, {"COM", "COMM"}};
 			for (size_t i = 0; i < sizeof(V22_MAP) / sizeof(V22_MAP[0]); i++) {
 				if (strcmp(frame_id, V22_MAP[i][0]) == 0) {
@@ -1087,7 +1123,7 @@ static bool read_id3v2(FILE *f, song_metadata_t *out) {
 			}
 		}
 
-		bool wanted = strcmp(frame_id, "MVNM") == 0 || strcmp(frame_id, "MVIN") == 0 || strcmp(frame_id, "TIT2") == 0 || strcmp(frame_id, "TPE1") == 0 || strcmp(frame_id, "TPE2") == 0 || strcmp(frame_id, "TALB") == 0 || strcmp(frame_id, "TCON") == 0 || strcmp(frame_id, "TRCK") == 0 || strcmp(frame_id, "TPOS") == 0 || strcmp(frame_id, "TYER") == 0 || strcmp(frame_id, "TDRC") == 0 || strcmp(frame_id, "TXXX") == 0 || strcmp(frame_id, "TCMP") == 0;
+		bool wanted = strcmp(frame_id, "MVNM") == 0 || strcmp(frame_id, "MVIN") == 0 || strcmp(frame_id, "TIT2") == 0 || strcmp(frame_id, "TPE1") == 0 || strcmp(frame_id, "TPE2") == 0 || strcmp(frame_id, "TALB") == 0 || strcmp(frame_id, "TCON") == 0 || strcmp(frame_id, "TRCK") == 0 || strcmp(frame_id, "TPOS") == 0 || strcmp(frame_id, "TYER") == 0 || strcmp(frame_id, "TDRC") == 0 || strcmp(frame_id, "TDRL") == 0 || strcmp(frame_id, "TDAT") == 0 || strcmp(frame_id, "TXXX") == 0 || strcmp(frame_id, "TCMP") == 0;
 
 		bool lyrics_frame = lyrics_wanted && (strcmp(frame_id, "USLT") == 0 || strcmp(frame_id, "SYLT") == 0);
 		bool comment_frame = description_wanted && strcmp(frame_id, "COMM") == 0;
@@ -1184,15 +1220,43 @@ static bool read_id3v2(FILE *f, song_metadata_t *out) {
 		} else if (strcmp(frame_id, "TPOS") == 0) {
 			// "2" or "2/3"; strtol stops at the slash.
 			out->disc_number = (int)strtol(decoded, NULL, 10);
-		} else if (strcmp(frame_id, "TYER") == 0 || strcmp(frame_id, "TDRC") == 0) {
+		} else if (strcmp(frame_id, "TYER") == 0 || strcmp(frame_id, "TDRC") == 0 || strcmp(frame_id, "TDRL") == 0) {
 			if (out->year == 0)
 				out->year = (int)strtol(decoded, NULL, 10);
+			date_offer(out, decoded, strlen(decoded));
+		} else if (strcmp(frame_id, "TDAT") == 0) {
+			// ID3v2.3 splits the date across frames: TYER's year, and this
+			// one's day and month ("1203" is the twelfth of March). The two
+			// are put together after the walk -- either frame may come
+			// first -- which is also why the month and day are validated
+			// there rather than here.
+			copy_bounded(tdat, sizeof(tdat), decoded);
 		} else if (strcmp(frame_id, "MVNM") == 0) {
 			if (!out->series[0])
 				copy_bounded(out->series, sizeof(out->series), decoded);
 		} else if (strcmp(frame_id, "MVIN") == 0) {
 			if (!out->series_part[0])
 				copy_bounded(out->series_part, sizeof(out->series_part), decoded);
+		}
+	}
+
+	// TYER's year and TDAT's day and month, put together now that both have
+	// been seen. The year comes from whatever said one -- TYER, TDRC or a
+	// date frame read earlier -- and the pair is offered as a full date, which
+	// wins over the bare year however the frames were ordered.
+	if (strlen(tdat) == 4 && strspn(tdat, "0123456789") == 4) {
+		tagdate_t so_far;
+		int year = out->year;
+		if (!year && out->date[0] && tagdate_parse(out->date, &so_far)) {
+			year = so_far.year;
+		}
+		// "1203" is the twelfth of March: the day's two digits come first.
+		int day = (tdat[0] - '0') * 10 + (tdat[1] - '0');
+		int month = (tdat[2] - '0') * 10 + (tdat[3] - '0');
+		if (year > 0 && day >= 1 && day <= 31 && month >= 1 && month <= 12) {
+			char full[32];
+			snprintf(full, sizeof(full), "%d-%02d-%02d", year, month, day);
+			date_offer(out, full, strlen(full));
 		}
 	}
 
@@ -1229,10 +1293,15 @@ static void read_id3v1(FILE *f, song_metadata_t *out) {
 	if (out->album[0] == '\0')
 		set_field_bounded(out->album, sizeof(out->album), (const char *)tag + 63, 30);
 
-	if (out->year == 0) {
+	if (out->year == 0 || !out->date[0]) {
 		char year_buf[5] = {0};
 		memcpy(year_buf, tag + 93, 4);
-		out->year = (int)strtol(year_buf, NULL, 10);
+		if (out->year == 0) {
+			out->year = (int)strtol(year_buf, NULL, 10);
+		}
+		// The same four digits as a date text: the last word on the date when
+		// nothing before said more (date_offer keeps the fuller one).
+		date_offer(out, year_buf, 4);
 	}
 
 	if (out->genre[0] == '\0') {
@@ -1472,6 +1541,7 @@ static void read_wav_info(FILE *f, off_t list_end, song_metadata_t *info) {
 		} else if (memcmp(sub.id, "IGNR", 4) == 0) {
 			info_text(value, read_size, info->genre, sizeof(info->genre));
 		} else if (memcmp(sub.id, "ICRD", 4) == 0) {
+			info_text(value, read_size, info->date, sizeof(info->date));
 			info->year = (int)strtol(value, NULL, 10);
 		} else if (memcmp(sub.id, "ITRK", 4) == 0 || memcmp(sub.id, "IPRT", 4) == 0) {
 			// "3" or "3/12"; strtol stops at the slash.
@@ -1505,6 +1575,8 @@ static void fill_from_info(song_metadata_t *out, const song_metadata_t *info) {
 		copy_bounded(out->genre, sizeof(out->genre), info->genre);
 	if (out->year == 0)
 		out->year = info->year;
+	if (info->date[0])
+		date_offer(out, info->date, strlen(info->date));
 	if (out->track_number == 0)
 		out->track_number = info->track_number;
 }
@@ -1632,6 +1704,7 @@ static void read_mp4_metadata(const char *filepath, song_metadata_t *out) {
 	snprintf(out->album, sizeof(out->album), "%s", mp4_tag_album(m));
 	snprintf(out->genre, sizeof(out->genre), "%s", mp4_tag_genre(m));
 	out->year = mp4_tag_year(m);
+	date_offer(out, mp4_tag_date(m), strlen(mp4_tag_date(m)));
 	snprintf(out->series, sizeof(out->series), "%s", mp4_tag_series(m));
 	snprintf(out->series_part, sizeof(out->series_part), "%s", mp4_tag_series_part(m));
 	const char *lyrics = mp4_tag_lyrics(m);
@@ -1803,6 +1876,10 @@ static void read_sidecar_tags(const char *filepath, song_metadata_t *out) {
 			out->disc_number = atoi(value);
 		} else if (strcmp(key, "year") == 0) {
 			out->year = atoi(value);
+		} else if (strcmp(key, "date") == 0) {
+			// The service's date, whole. Like the fields above it wins over
+			// the file's own tags, at whatever precision it has.
+			snprintf(out->date, sizeof(out->date), "%s", value);
 		}
 	}
 	fclose(f);

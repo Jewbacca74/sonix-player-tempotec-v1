@@ -106,6 +106,10 @@ bool mp4_tag_compilation(const mp4_file_t *m);
 const char *mp4_tag_album(const mp4_file_t *m);
 const char *mp4_tag_genre(const mp4_file_t *m);
 int mp4_tag_year(const mp4_file_t *m);
+// The ©day atom as the file wrote it: "2026", "2026-03-12" or a moment with a
+// time on it. Empty string when absent, never NULL. `mp4_tag_year` is its
+// leading number.
+const char *mp4_tag_date(const mp4_file_t *m);
 
 // The value of an iTunes freeform tag -- a "----" atom, whose name sits in a
 // `name` box beside the data. ReplayGain on an .m4a is written this way and

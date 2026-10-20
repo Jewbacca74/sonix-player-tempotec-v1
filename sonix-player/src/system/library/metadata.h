@@ -11,8 +11,15 @@ typedef struct {
 	char genre[128];
 	int track_number; // 0 if unknown
 	int disc_number;  // 0 if unknown, which is read as disc one; see below
-	int year;		  // 0 if unknown
+	int year;	  // 0 if unknown
 	bool has_tags;	  // true if any tag field was found
+
+	// The date tag's own text: "2026", "2026-03", "2026-03-12" or
+	// "2026-03-12T08:00:00". `year` above is its leading number; the podcast
+	// lists want the day as well, to date an episode and to order episodes
+	// newest first. Empty when the file carries no date tag. The parts it
+	// holds are read with tagdate_parse() from tagdate.h.
+	char date[40];
 
 	// Marked as a compilation: COMPILATION (or ITUNESCOMPILATION) in Vorbis
 	// and APE tags, TCMP or TXXX:COMPILATION in ID3v2, cpil in MP4. Each track

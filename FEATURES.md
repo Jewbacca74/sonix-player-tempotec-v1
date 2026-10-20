@@ -83,7 +83,9 @@
 - **Tidal** - sign in with the code on screen or with the QR-Code; Low, High, CD and Hi-res quality. Search, albums, artists, playlists, favourites and the featured lists. Favourites and playlists can be managed from the player.
 - **Qobuz** - sign in with the account; MP3 320, FLAC 16/44.1, 24/96 and 24/192. Search, albums, artists, playlists, favourites and the featured lists. Favourites and playlists can be managed from the player.
 - **Podcasts** - the Podcast Index catalogue: search, trending, follow up to 100
-shows kept on the device.
+shows kept on the device. Downloaded episodes land in the card's `Podcast`
+folder, which also takes podcasts copied there by hand — see
+[Podcasts on the card](#podcasts-on-the-card).
 - **Radio** - the radio-browser.info directory by language, country or genre,
 plus search, favourites, recently played, and **My stations** read from a
 `radio.txt` you write yourself in the card root. MP3 and AAC, HTTPS with real
@@ -116,6 +118,25 @@ a self-signed certificate), and HLS.
   once and queries it locally instead of paging over the wire. Playback state,
   queue, favourites, artwork and commands.
 - **USB mass storage** - connect the device to a PC or a Smartphone to manage the files on the SD Card.
+
+## Podcasts on the card
+
+> Podcasts kept on the card live in the `Podcast` folder, one folder per
+> podcast. A folder can be filled by downloading episodes in the Podcasts
+> section, or by copying files onto the card from a computer — both are listed
+> together behind the section's corner button, and neither needs a network.
+
+- **Title and date from the tags** - a copied episode is listed under its
+  title tag and dated by its date tag, at whatever precision the tagger wrote
+  it ("2026", "March 2026" or "12 March 2026"), the podcast's episodes newest
+  first. What the tags leave out falls back to the file's name and its date on
+  the card. A downloaded episode keeps the downloader's word instead: the
+  title the catalogue gave it and the publication date stamped on the file.
+- **Cover from the folder, else from the tags** - a podcast shows its
+  `cover.jpg` (or `cover.png`) beside the episodes, and with no picture there,
+  the artwork embedded in the episode files' own tags.
+- **Played as podcasts** - the now-playing page marks an episode from this
+  folder as a podcast, with its own skip buttons and sleep timer.
 
 ## Audiobooks
 

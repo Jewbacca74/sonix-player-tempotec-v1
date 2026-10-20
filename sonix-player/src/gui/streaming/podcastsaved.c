@@ -21,6 +21,8 @@
 #include "src/gui/shell/theme.h"
 #include "src/gui/shell/toast.h"
 #include "src/system/core/lang.h"
+#include "src/system/library/metadata.h"
+#include "src/system/library/tagdate.h"
 #include "src/system/playback/device_state.h"
 #include "src/system/playback/playlist.h"
 #include "src/system/streaming/podcastcache.h"
@@ -48,7 +50,13 @@ typedef struct {
 
 typedef struct {
 	char *path;
-	time_t when;
+	// The title and date the row shows. They are resolved once per read of the
+	// card, because the answer comes from different places: the downloader's
+	// sidecar when there is one, else the file's own tags, else the file's
+	// name and the file's mtime. See episodes_read().
+	char title[256];
+	tagdate_t date; // what the date came to, at the precision it had
+	time_t when;	// the same date as one moment: what the list sorts by
 } episode_t;
 
 static show_t *shows;
@@ -141,8 +149,78 @@ static void episodes_free(void) {
 	cover_free(&episode_thumb);
 }
 
+// The file name without its folder and extension: the episode's title when
+// nothing better is on the card.
+static void episode_name(const char *path, char *out, size_t size) {
+	const char *slash = strrchr(path, '/');
+	snprintf(out, size, "%s", slash ? slash + 1 : path);
+	char *dot = strrchr(out, '.');
+	if (dot && dot != out) {
+		*dot = '\0';
+	}
+}
+
+// The title and date an episode's row shows, resolved from whatever the card
+// carries.
+//
+// A downloaded episode has the sidecar the downloader wrote beside it: that
+// is the catalogue speaking, and it wins -- a podcast enclosure is often an
+// MP3 carrying another episode's tags, or no tags at all -- and the file's
+// mtime is its publication date, stamped there by podcastdl.c when the
+// download landed. The sidecar is asked only for the title; the date is the
+// mtime, full and reliable.
+//
+// A file put on the card by hand has no sidecar, and its own tags speak: the
+// title tag, and the date tag at whatever precision it carries ("2026",
+// "2026-03-12", "2026-03-12T08:00:00"). What the tags leave out falls back to
+// the file's name and mtime -- the copy's date is better than no date, but
+// worse than the one the file was published with.
+static void episode_row_read(const char *path, const struct stat *st, episode_t *ep) {
+	char sidecar[1200];
+	snprintf(sidecar, sizeof(sidecar), "%.1100s.tags", path);
+	struct stat side_st;
+	if (stat(sidecar, &side_st) == 0) {
+		if (!podcastcache_tag(path, "title", ep->title, sizeof(ep->title)) || !ep->title[0]) {
+			episode_name(path, ep->title, sizeof(ep->title));
+		}
+		ep->when = st->st_mtime;
+		struct tm tm_when;
+		if (localtime_r(&ep->when, &tm_when)) {
+			ep->date.year = tm_when.tm_year + 1900;
+			ep->date.month = tm_when.tm_mon + 1;
+			ep->date.day = tm_when.tm_mday;
+		}
+		return;
+	}
+
+	song_metadata_t meta;
+	metadata_read(path, &meta);
+	if (meta.title[0]) {
+		snprintf(ep->title, sizeof(ep->title), "%s", meta.title);
+	} else {
+		episode_name(path, ep->title, sizeof(ep->title));
+	}
+	if (meta.date[0] && tagdate_parse(meta.date, &ep->date)) {
+		ep->when = tagdate_to_time(&ep->date);
+	}
+	if (ep->when <= 0) {
+		// No date tag, or one that names no moment (a year past 2037 does
+		// not fit the device's 32-bit time_t). The mtime sorts the row; the
+		// tag's date, when there was one, still shows.
+		ep->when = st->st_mtime;
+		if (!ep->date.year) {
+			struct tm tm_when;
+			if (localtime_r(&ep->when, &tm_when)) {
+				ep->date.year = tm_when.tm_year + 1900;
+				ep->date.month = tm_when.tm_mon + 1;
+				ep->date.day = tm_when.tm_mday;
+			}
+		}
+	}
+}
+
 // The episodes of the open podcast, newest first: podcastdl.c dates each file
-// to the episode's publication.
+// to the episode's publication, and a hand-copied file is dated by its tags.
 static void episodes_read(void) {
 	episodes_free();
 	char folder[800];
@@ -166,8 +244,10 @@ static void episodes_read(void) {
 		if (!copy) {
 			break;
 		}
-		episodes[episode_count].path = copy;
-		episodes[episode_count].when = st.st_mtime;
+		episode_t *ep = &episodes[episode_count];
+		memset(ep, 0, sizeof(*ep)); // a fresh row: no stale title from the last fill
+		ep->path = copy;
+		episode_row_read(path, &st, ep);
 		episode_count++;
 	}
 	closedir(dir);
@@ -179,18 +259,29 @@ static void episodes_read(void) {
 // the rows
 // ---------------------------------------------------------------------------
 
-// "12 March 2026", in the interface language (see podcastpage.c).
-static void format_date(time_t when, char *out, size_t size) {
+// "12 March 2026", "March 2026" or "2026", in the interface language (see
+// podcastpage.c): a date tag may name only the year, and printing "1 January
+// 2026" would say more than the file does. The dates taken from an mtime are
+// whole days and read as they always did.
+static void format_date(const tagdate_t *date, char *out, size_t size) {
 	static const char *const MONTHS[12] = {"podcast_january", "podcast_february", "podcast_march",
-										   "podcast_april",	  "podcast_may",	  "podcast_june",
-										   "podcast_july",	  "podcast_august",	  "podcast_september",
+										   "podcast_april",   "podcast_may",	  "podcast_june",
+										   "podcast_july",   "podcast_august",  "podcast_september",
 										   "podcast_october", "podcast_november", "podcast_december"};
-	struct tm tm_when;
-	if (when <= 0 || !localtime_r(&when, &tm_when)) {
+	if (!date->year) {
 		out[0] = '\0';
 		return;
 	}
-	snprintf(out, size, "%d %s %d", tm_when.tm_mday, tr(MONTHS[tm_when.tm_mon % 12]), tm_when.tm_year + 1900);
+	if (!date->month) {
+		snprintf(out, size, "%d", date->year);
+		return;
+	}
+	const char *month = tr(MONTHS[(date->month - 1) % 12]);
+	if (!date->day) {
+		snprintf(out, size, "%s %d", month, date->year);
+		return;
+	}
+	snprintf(out, size, "%d %s %d", date->day, month, date->year);
 }
 
 static void paint_thumb(lv_obj_t *thumb, const cover_image_t *image) {
@@ -259,16 +350,6 @@ static lv_obj_t *make_row(lv_obj_t *parent, const cover_image_t *image, const ch
 		lv_obj_set_style_text_font(sub, &font_ui_18, 0);
 	}
 	return row;
-}
-
-// The file name without its folder and extension: the episode's title.
-static void episode_name(const char *path, char *out, size_t size) {
-	const char *slash = strrchr(path, '/');
-	snprintf(out, size, "%s", slash ? slash + 1 : path);
-	char *dot = strrchr(out, '.');
-	if (dot && dot != out) {
-		*dot = '\0';
-	}
 }
 
 // ---------------------------------------------------------------------------
@@ -387,9 +468,7 @@ static void delete_cb(void *user) {
 	if (menu_episode < 0 || menu_episode >= episode_count) {
 		return;
 	}
-	char name[256];
-	episode_name(episodes[menu_episode].path, name, sizeof(name));
-	confirm_show("podcast_delete_download", name, "delete", delete_confirmed, NULL);
+	confirm_show("podcast_delete_download", episodes[menu_episode].title, "delete", delete_confirmed, NULL);
 }
 
 static void episode_long_cb(lv_event_t *e) {
@@ -414,13 +493,9 @@ static void episodes_fill(void) {
 	lv_label_set_text(episodes_title, open_show);
 	settingsrow_title_corner_slots(episodes_title, g_cfg, 0);
 	for (int i = 0; i < episode_count; i++) {
-		char name[256];
 		char when[48];
-		if (!podcastcache_tag(episodes[i].path, "title", name, sizeof(name))) {
-			episode_name(episodes[i].path, name, sizeof(name));
-		}
-		format_date(episodes[i].when, when, sizeof(when));
-		make_row(episodes_list, &episode_thumb, name, when, episode_clicked_cb, episode_long_cb, i);
+		format_date(&episodes[i].date, when, sizeof(when));
+		make_row(episodes_list, &episode_thumb, episodes[i].title, when, episode_clicked_cb, episode_long_cb, i);
 	}
 }
 
@@ -443,7 +518,7 @@ void podcastsaved_init(gui_config_t *cfg) {
 	g_cfg = cfg;
 
 	podcastsaved_screen = lv_obj_create(NULL);
-	shows_list = settingsrow_page(podcastsaved_screen, cfg, "podcast_downloaded");
+	shows_list = settingsrow_page(podcastsaved_screen, cfg, "podcast_on_card");
 	lv_obj_set_flex_align(shows_list, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
 	player_sheet_attach_drag(shows_list, true);
 	switcher_attach_back_gesture(podcastsaved_screen);
@@ -451,7 +526,7 @@ void podcastsaved_init(gui_config_t *cfg) {
 	lv_obj_add_event_cb(podcastsaved_screen, shows_unloaded_cb, LV_EVENT_SCREEN_UNLOADED, NULL);
 
 	shows_empty = lv_label_create(podcastsaved_screen);
-	lv_label_set_text(shows_empty, tr("podcast_no_downloads"));
+	lv_label_set_text(shows_empty, tr("podcast_on_card_empty"));
 	lv_label_set_long_mode(shows_empty, LV_LABEL_LONG_WRAP);
 	lv_obj_set_width(shows_empty, cfg->screen_width - 4 * cfg->padding);
 	lv_obj_set_style_text_align(shows_empty, LV_TEXT_ALIGN_CENTER, 0);
