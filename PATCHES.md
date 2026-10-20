@@ -808,3 +808,68 @@ The eleven new strings are appended to all eleven `.ini` files in
 naming the three features. Everything else the three features say -- `delete`,
 `remove`, `cancel`, `selection_one_track`, `selection_tracks_count` -- was
 already translated.
+
+## Podcasts on the card
+
+The Podcasts section's corner button opens the podcasts kept under the card's
+`Podcast` folder -- one folder per podcast, exactly as the downloader writes
+them (`podcastdl.h`). Until now that list only described downloads: an episode
+copied onto the card from a computer was listed under its file name and dated
+by the mtime the copy left behind, which is the moment of the copy and not the
+publication. This change makes a hand-copied folder read like the music
+library reads a track -- from the file's own tags.
+
+An episode's row is resolved once per open of the list (`episode_row_read()`
+in `src/gui/streaming/podcastsaved.c`), and the answer comes from different
+places:
+
+* **A downloaded episode** carries the sidecar the downloader wrote beside it
+  ("<file>.tags"), which is the catalogue speaking and wins -- a podcast
+  enclosure is often an MP3 carrying another episode's tags, or no tags at
+  all. The title is the sidecar's, and the date is the file's mtime, which
+  podcastdl stamps with the publication date when the download lands.
+* **A file copied onto the card** has no sidecar, and its own tags speak: the
+  title tag, and the date tag at whatever precision it carries. What the tags
+  leave out falls back to the file's name and its mtime.
+
+The date is the new word in `song_metadata_t`: `date` keeps the tag's own
+text ("2026", "2026-03-12", "2026-03-12T08:00:00"), gathered from the same
+places already read for `year` -- the Vorbis/APE `DATE`, ID3v2's `TYER`,
+`TDRC` and `TDRL` (and `TDAT`, whose day and month join TYER's year after the
+frame walk), the ID3v1 year, the WAV `ICRD`, the MP4 `©day`, and a `date=`
+line in a sidecar, which like the other sidecar fields wins outright. When a
+file carries the same date twice at different precision -- TYER's bare year
+and TDRC's full moment in one tag -- the fuller one wins whatever order the
+frames arrive in.
+
+The text is read by `src/system/library/tagdate.c`, new and small on purpose:
+every shape the taggers write (dashes, slashes, the compact `20260312`, one-
+and two-digit parts, a time or a zone or an ID3v2.4 range after the date),
+what is missing stays missing -- "2026-13" is a year, never the first of
+January invented -- and the parts resolve to one moment for sorting with the
+gaps settled on the first of the month, of January. The episode list sorts by
+that moment newest first and formats the date at its own precision: "12 March
+2026", "March 2026" or "2026". `make -C sonix-player/tests tagdate` checks the
+reader headlessly.
+
+The covers are unchanged and already did the right thing: a podcast row shows
+its folder's `cover.jpg`, and with none there the artwork embedded in the
+first episode's tags (`albumart_load_dir_candidate()`).
+
+The screen is renamed with it. It held only downloads before and said so; it
+holds everything on the card now.
+
+### Keys
+
+| what | key |
+|---|---|
+| the screen title | `podcast_on_card` |
+| its empty message | `podcast_on_card_empty` |
+
+The two strings are appended to all eleven `.ini` files in
+`sonix-packer/assets/{R1,R3PII}/usr/resource/sonix/language/`, under a
+`; --- podcasts on the card` comment, and the two they replace
+(`podcast_downloaded`, `podcast_no_downloads`) are removed from the same
+block. Everything else this screen says -- `podcast_one_episode`,
+`podcast_episodes_2`, `podcast_delete_download`, the month names -- was
+already translated.

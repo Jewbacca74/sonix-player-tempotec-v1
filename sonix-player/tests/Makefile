@@ -102,6 +102,19 @@ $(BUILD)/test_notes: $(NOTES_SRC) $(ROOT)/src/system/notes/notesstore.h $(ROOT)/
 	@mkdir -p $(BUILD)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(NOTES_SRC) $(LDFLAGS) $(LDLIBS)
 
+# The dates tags carry: every shape the taggers write, the precision they
+# keep, and the moment they resolve to. The podcast lists order episodes and
+# write "12 March 2026" from this, so a misread date is a row in the wrong
+# place. Plain C, no LVGL and no files on disk.
+TAGDATE_SRC = test_tagdate.c $(ROOT)/src/system/library/tagdate.c
+.PHONY: tagdate
+tagdate: $(BUILD)/test_tagdate
+	$(BUILD)/test_tagdate
+
+$(BUILD)/test_tagdate: $(TAGDATE_SRC) $(ROOT)/src/system/library/tagdate.h
+	@mkdir -p $(BUILD)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(TAGDATE_SRC) $(LDFLAGS) $(LDLIBS)
+
 # Optional real-codec integration: the usual host development packages are
 # sufficient. No fake MP3/FLAC/Opus decoder is used. See tests/README.md.
 CODEC = $(filter-out %/wavpackdec.c %/opusdec.c,$(wildcard $(ROOT)/src/system/decode/*.c)) \

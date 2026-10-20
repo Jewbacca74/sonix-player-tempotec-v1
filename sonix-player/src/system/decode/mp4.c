@@ -103,6 +103,7 @@ struct mp4_file {
 	char album[256];
 	char genre[128];
 	int year;
+	char date[40]; // the ©day atom whole ("2026-03-12"), not just its year
 	int track_number;
 	int disc_number;
 	char series[256];	  // ----:SERIES, else the movement name
@@ -707,6 +708,7 @@ static void parse_ilst(mp4_file_t *m, const box_t *ilst) {
 			char buf[32];
 			copy_text(buf, sizeof(buf), value, value_len);
 			m->year = atoi(buf);
+			copy_text(m->date, sizeof(m->date), value, value_len);
 			break;
 		}
 		case FOURCC('t', 'r', 'k', 'n'):
@@ -1599,6 +1601,7 @@ bool mp4_tag_compilation(const mp4_file_t *m) { return m && m->compilation; }
 const char *mp4_tag_album(const mp4_file_t *m) { return m ? m->album : ""; }
 const char *mp4_tag_genre(const mp4_file_t *m) { return m ? m->genre : ""; }
 int mp4_tag_year(const mp4_file_t *m) { return m ? m->year : 0; }
+const char *mp4_tag_date(const mp4_file_t *m) { return m ? m->date : ""; }
 
 const char *mp4_tag_series(const mp4_file_t *m) { return m ? m->series : ""; }
 
