@@ -5,7 +5,6 @@
 #include "lvgl/lvgl.h"
 
 #include "src/gui/nowplaying/cover.h"
-#include "src/gui/nowplaying/player.h"
 #include "src/gui/shell/settingsrow.h"
 #include "src/gui/shell/switcher.h"
 #include "src/gui/shell/theme.h"
@@ -81,6 +80,8 @@ void pictureview_init(gui_config_t *cfg) {
 	lv_obj_set_scrollable(picture_image, false);
 	lv_obj_center(picture_image);
 
-	player_sheet_attach_drag(viewport, true);
+	// No player-sheet swipe here: the picture is the page, and a leftward drag
+	// across it was pulling the player over the picture being looked at. The
+	// text viewer is the same, and the swipe-back is the only way out of both.
 	switcher_attach_back_gesture(pictureview_screen);
 }

@@ -119,7 +119,14 @@ void switcher_attach_back_gesture(lv_obj_t *obj) { (void)obj; }
 bool switcher_back_drag_active(void) { return false; }
 void switcher_set_back_guard(lv_obj_t *screen, bool (*handler)(void)) { (void)screen; (void)handler; }
 void switcher_set_back_guard_peek(lv_obj_t *screen, bool (*peek)(void)) { (void)screen; (void)peek; }
-void player_sheet_attach_drag(lv_obj_t *obj, bool opening) { (void)obj; (void)opening; }
+/* Counted rather than ignored: the two file viewers must not take the
+ * player-sheet swipe (see the check after pictureview_init). */
+static int player_drag_attaches;
+void player_sheet_attach_drag(lv_obj_t *obj, bool opening) {
+	(void)obj;
+	(void)opening;
+	player_drag_attaches++;
+}
 bool player_sheet_drag_active(void) { return false; }
 void coverflow_attach_edge(lv_obj_t *obj, gui_config_t *cfg) { (void)obj; (void)cfg; }
 bool coverflow_drag_active(void) { return false; }
@@ -999,8 +1006,14 @@ int main(int argc, char **argv) {
 	noteeditor_init(&cfg);
 	notes_init(&cfg);
 	morepage_init(&cfg);
+	player_drag_attaches = 0; // counting from here: only the viewers are built below
 	textview_init(&cfg); // the notes shelf shows a long note through it
 	pictureview_init(&cfg);
+	/* Neither viewer takes the player-sheet swipe. A leftward drag across a text
+	 * file or a picture is not a way to the player: it was pulling the sheet
+	 * over what is being read or looked at, and the text viewer never did. The
+	 * back swipe is still the way out of both, attached separately. */
+	assert(player_drag_attaches == 0);
 
 	assert(pictureview_open(path));
 	assert(lv_screen_active() == pictureview_screen);
