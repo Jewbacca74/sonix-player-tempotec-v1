@@ -115,6 +115,30 @@ $(BUILD)/test_tagdate: $(TAGDATE_SRC) $(ROOT)/src/system/library/tagdate.h
 	@mkdir -p $(BUILD)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(TAGDATE_SRC) $(LDFLAGS) $(LDLIBS)
 
+# The Most played list against the real library database: the play upsert
+# device_state.c runs at track start, the handle the page opens, and the
+# streaming reader the queue is built from. The card is a temporary directory
+# and the scan's file-type probes are stubbed; the schema, the upsert and the
+# queries are the real ones. Plain C, no LVGL. See tests/README.md.
+MOSTPLAYED_SRC = test_mostplayed.c $(ROOT)/src/system/library/library.c \
+                 $(ROOT)/src/system/core/config.c $(ROOT)/src/system/core/utils.c
+.PHONY: mostplayed
+mostplayed: $(BUILD)/test_mostplayed
+	$(BUILD)/test_mostplayed
+
+$(BUILD)/test_mostplayed: $(MOSTPLAYED_SRC) $(BUILD)/sqlite3_impl.o \
+                          $(ROOT)/src/system/library/library.h $(ROOT)/src/system/library/cue.h \
+                          $(ROOT)/src/system/decode/mp4.h $(ROOT)/src/system/decode/apedec.h
+	@mkdir -p $(BUILD)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(MOSTPLAYED_SRC) $(BUILD)/sqlite3_impl.o $(LDFLAGS) $(LDLIBS)
+
+# The vendored SQLite amalgamation keeps its own warnings to itself: third-
+# party code, built separately (and quietly) so the suite around it keeps
+# -Werror.
+$(BUILD)/sqlite3_impl.o: $(ROOT)/src/system/db/sqlite3_impl.c $(ROOT)/src/system/db/sqlite3_amalgamation.h
+	@mkdir -p $(BUILD)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -w -c -o $@ $<
+
 # Optional real-codec integration: the usual host development packages are
 # sufficient. No fake MP3/FLAC/Opus decoder is used. See tests/README.md.
 CODEC = $(filter-out %/wavpackdec.c %/opusdec.c,$(wildcard $(ROOT)/src/system/decode/*.c)) \

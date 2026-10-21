@@ -114,8 +114,9 @@ static bool progress_running;
 #define POLL_PERIOD_IDLE_MS 2000
 
 // How far the end controls' hit areas grow past their visible buttons. On the
-// compact row the visible gap is much smaller, so its extension stays short of
-// the previous/next buttons instead of making adjacent targets overlap.
+// compact row the visible gap is much smaller, so its extension is short: the
+// centred transport's skip buttons are drawn over the corner buttons and keep
+// every tap inside their own boxes, whatever the corner buttons' reach.
 #define CORNER_BTN_EXT_CLICK 20
 #define COMPACT_CORNER_BTN_EXT_CLICK 6
 
@@ -180,6 +181,12 @@ static int polls_since_stop = POLLS_FAST_AFTER_STOP;
 #define POSTER_FADE_HEIGHT 36
 #define COMPACT_PLAY_BTN 44
 #define COMPACT_SKIP_BTN 42
+// The repeat/speed and ellipsis buttons at the ends of that row. The centred
+// transport is 42+8+44+8+42 = 144 wide, leaving 36 px of the 216 px row on
+// either side -- so a corner button the skip buttons' 42 px wide would sit
+// 6 px inside the transport's own box and its glyph would touch the skip
+// glyph beside it. 36 keeps each corner at its edge, clear of the group.
+#define COMPACT_CORNER_BTN 36
 #define COMPACT_SLEEVE_MARGIN 2
 #define COMPACT_STANDARD_SLEEVE_MARGIN 14
 // The visible stroke begins 8 px below the top of its 36 px touch slot.
@@ -1253,9 +1260,34 @@ static lv_color_t alt_ink(void) {
 
 static void lyrics_repaint_lit(void);
 
+// The ellipsis's colour. It trails the transport's accent whenever that accent
+// is the sleeve's -- the cover-tint switch, or the alternative arrangement's
+// sleeve-coloured glyphs -- so the overflow menu does not sit grey among
+// controls all wearing the record. Everywhere else it keeps the muted menu
+// grey it has always had: the theme accent is a page-wide accent, and the
+// overflow menu is deliberately not wearing it.
+static void paint_overflow_tint(void) {
+	if (!more_btn_icon) {
+		return;
+	}
+	lv_color_t color;
+	if (album_tone && (cover_tint || layout_wave_now)) {
+		color = chrome_accent();
+	} else if (theme_is_monochrome() || theme_is_tokyo_night()) {
+		// The deck's own muted role: grey-violet on Tokyo Night, the muted
+		// grey on Amber on Black and OLED.
+		color = theme_player_chrome_color(THEME_PLAYER_CHROME_OVERFLOW);
+	} else {
+		color = lv_color_make(150, 150, 150);
+	}
+	lv_obj_set_style_image_recolor(more_btn_icon, color, 0);
+	lv_obj_set_style_image_recolor_opa(more_btn_icon, LV_OPA_COVER, 0);
+}
+
 // The two glyphs that wear the accent, and the bar that wears its own,
 // repainted whenever the accent of the moment can have moved: the play/pause
 // glyph, the repeat/shuffle mode and the played stretch of the progress bar.
+// The ellipsis with them, whenever the accent is the sleeve's.
 static void paint_transport_tint(void) {
 	if (play_btn_icon) {
 		lv_obj_set_style_image_recolor(play_btn_icon, chrome_accent(), 0);
@@ -1264,6 +1296,7 @@ static void paint_transport_tint(void) {
 	if (repeat_btn_icon) {
 		update_repeat_button();
 	}
+	paint_overflow_tint();
 	paint_progress_tint();
 	wave_drawn = -1; // the bars, where they are up, are the old colour
 	lyrics_repaint_lit(); // the sung line wears it too
@@ -3739,14 +3772,8 @@ static void player_refresh_theme(void) {
 		player_clear_footer_edge();
 	}
 	lv_color_t progress_rest = lv_color_make(255, 255, 255);
-	lv_color_t overflow = lv_color_make(150, 150, 150);
 	if (mono) {
 		progress_rest = theme_player_chrome_color(THEME_PLAYER_CHROME_PROGRESS_REST);
-		overflow = theme_player_chrome_color(THEME_PLAYER_CHROME_OVERFLOW);
-	} else if (theme_is_tokyo_night()) {
-		// The ellipsis takes the deck's muted grey-violet; the bar keeps the
-		// theme accent, and the play glyph is chrome_accent()'s violet.
-		overflow = theme_player_chrome_color(THEME_PLAYER_CHROME_OVERFLOW);
 	}
 
 	if (studio_box) {
@@ -3769,9 +3796,7 @@ static void player_refresh_theme(void) {
 	paint_progress_tint(); // the theme's colour, or the sleeve's while the tint is on
 	set_over_cover(chrome_over_cover); // recolours the player chrome for the new palette
 	update_fav_button();
-	if (more_btn_icon) {
-		lv_obj_set_style_image_recolor(more_btn_icon, overflow, 0);
-	}
+	paint_overflow_tint(); // the muted menu grey, or the sleeve's with the tint on
 	update_repeat_button();
 	update_speed_button();
 
@@ -5531,13 +5556,9 @@ void player_init(gui_config_t *cfg) {
 	const bool mono_theme = theme_is_monochrome();
 	lv_color_t progress_rest_color = lv_color_make(255, 255, 255);
 	lv_color_t playback_color = theme()->accent;
-	lv_color_t overflow_color = lv_color_make(150, 150, 150);
 	if (mono_theme) {
 		progress_rest_color = theme_player_chrome_color(THEME_PLAYER_CHROME_PROGRESS_REST);
 		playback_color = theme_player_chrome_color(THEME_PLAYER_CHROME_PLAYBACK);
-		overflow_color = theme_player_chrome_color(THEME_PLAYER_CHROME_OVERFLOW);
-	} else if (theme_is_tokyo_night()) {
-		overflow_color = theme_player_chrome_color(THEME_PLAYER_CHROME_OVERFLOW);
 	}
 	backdrop_full = compact;
 	// The frost Immersive puts under its deck keeps more of the photograph's
@@ -5865,19 +5886,21 @@ void player_init(gui_config_t *cfg) {
 	}
 
 	// The repeat/shuffle button, kept out of the flex row so the transport
-	// stays centred on the screen. Match the skip button height so the row
-	// reads as one consistent line.
+	// stays centred on the screen. The corner buttons are their own compact
+	// size -- see COMPACT_CORNER_BTN -- and their glyphs still centre on the
+	// row's axis with the transport's, so the row reads as one line.
 	lv_obj_t *repeat_btn = lv_btn_create(player_controls_buttons);
 	repeat_btn_obj = repeat_btn;
 	lv_obj_set_ignore_layout(repeat_btn, true);
-	lv_obj_set_size(repeat_btn, compact ? COMPACT_SKIP_BTN : 76, compact ? COMPACT_SKIP_BTN : 76);
+	lv_obj_set_size(repeat_btn, compact ? COMPACT_CORNER_BTN : 76, compact ? COMPACT_CORNER_BTN : 76);
 	lv_obj_set_style_bg_opa(repeat_btn, 0, 0);
 	lv_obj_set_style_border_width(repeat_btn, 0, 0);
 	lv_obj_set_style_shadow_width(repeat_btn, 0, 0);
 	lv_obj_add_event_cb(repeat_btn, repeat_btn_event_cb, LV_EVENT_CLICKED, NULL);
-	// Inset slightly from the left edge so it doesn't visually crowd the
-	// centred transport group (prev/play/next).
-	lv_obj_align(repeat_btn, LV_ALIGN_LEFT_MID, compact ? 4 : 0, 0);
+	// Flush at the row's end: the narrower button is what keeps it clear of
+	// the centred transport group (prev/play/next), so no inset is needed on
+	// top of that -- and one would push it back towards the skip button.
+	lv_obj_align(repeat_btn, LV_ALIGN_LEFT_MID, 0, 0);
 	// The side controls grow their hit targets without stealing the adjacent
 	// skip button's tap, even in the tighter V1 layout.
 	lv_obj_set_ext_click_area(repeat_btn, compact ? COMPACT_CORNER_BTN_EXT_CLICK : CORNER_BTN_EXT_CLICK);
@@ -5888,19 +5911,19 @@ void player_init(gui_config_t *cfg) {
 
 	// The playback-speed gauge, in exactly the same corner: on a book the
 	// repeat mode is meaningless and the speed is the thing worth reaching,
-	// so one hides and the other appears in its place. Use the same size as
-	// the skip buttons so the row reads as one consistent height.
+	// so one hides and the other appears in its place. Same compact size as
+	// the repeat button, for the same reason.
 	lv_obj_t *speed_btn = lv_btn_create(player_controls_buttons);
 	speed_btn_obj = speed_btn;
 	lv_obj_set_ignore_layout(speed_btn, true);
-	lv_obj_set_size(speed_btn, compact ? COMPACT_SKIP_BTN : 76, compact ? COMPACT_SKIP_BTN : 76);
+	lv_obj_set_size(speed_btn, compact ? COMPACT_CORNER_BTN : 76, compact ? COMPACT_CORNER_BTN : 76);
 	lv_obj_set_style_bg_opa(speed_btn, 0, 0);
 	lv_obj_set_style_border_width(speed_btn, 0, 0);
 	lv_obj_set_style_shadow_width(speed_btn, 0, 0);
 	lv_obj_add_event_cb(speed_btn, speed_btn_event_cb, LV_EVENT_CLICKED, NULL);
-	// Inset slightly from the left edge (same as repeat button) so it
-	// doesn't visually crowd the centred transport group.
-	lv_obj_align(speed_btn, LV_ALIGN_LEFT_MID, compact ? 4 : 0, 0);
+	// Flush at the row's end (same as repeat button), so it stays clear of
+	// the centred transport group.
+	lv_obj_align(speed_btn, LV_ALIGN_LEFT_MID, 0, 0);
 	lv_obj_set_ext_click_area(speed_btn, compact ? COMPACT_CORNER_BTN_EXT_CLICK : CORNER_BTN_EXT_CLICK);
 	lv_obj_set_hidden(speed_btn, true);
 
@@ -5912,27 +5935,26 @@ void player_init(gui_config_t *cfg) {
 	update_speed_button();
 
 	// The overflow menu, mirroring the repeat button on the right: queue and
-	// details in an iOS-style popover next to the button. Match the skip
-	// button height so the row reads as one consistent line.
+	// details in an iOS-style popover next to the button. Same compact size
+	// as the repeat button, for the same reason.
 	lv_obj_t *more_btn = lv_btn_create(player_controls_buttons);
 	more_btn_obj = more_btn;
 	lv_obj_set_ignore_layout(more_btn, true);
-	lv_obj_set_size(more_btn, compact ? COMPACT_SKIP_BTN : 76, compact ? COMPACT_SKIP_BTN : 76);
+	lv_obj_set_size(more_btn, compact ? COMPACT_CORNER_BTN : 76, compact ? COMPACT_CORNER_BTN : 76);
 	lv_obj_set_style_bg_opa(more_btn, 0, 0);
 	lv_obj_set_style_border_width(more_btn, 0, 0);
 	lv_obj_set_style_shadow_width(more_btn, 0, 0);
 	lv_obj_add_event_cb(more_btn, more_btn_event_cb, LV_EVENT_CLICKED, NULL);
-	// Inset slightly from the right edge so it doesn't visually crowd the
-	// centred transport group.
-	lv_obj_align(more_btn, LV_ALIGN_RIGHT_MID, compact ? -4 : 0, 0);
+	// Flush at the row's end (mirroring the repeat button), so it stays
+	// clear of the centred transport group.
+	lv_obj_align(more_btn, LV_ALIGN_RIGHT_MID, 0, 0);
 	lv_obj_set_ext_click_area(more_btn, compact ? COMPACT_CORNER_BTN_EXT_CLICK : CORNER_BTN_EXT_CLICK);
 
 	lv_obj_t *more_icon = lv_image_create(more_btn);
 	more_btn_icon = more_icon;
 	lv_image_set_src(more_icon, &icon_ellipsis_vertical);
 	lv_obj_add_style(more_icon, &theme_style_icon, 0);
-	lv_obj_set_style_image_recolor(more_icon, overflow_color, 0);
-	lv_obj_set_style_image_recolor_opa(more_icon, LV_OPA_COVER, 0);
+	paint_overflow_tint(); // the muted menu grey, or the sleeve's with the tint on
 	lv_obj_center(more_icon);
 
 	// No button chrome on prev/next: they sit on top of the blurred artwork,

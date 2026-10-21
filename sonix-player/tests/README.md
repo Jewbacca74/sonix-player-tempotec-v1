@@ -10,6 +10,7 @@ make -C sonix-player/tests eq
 make -C sonix-player/tests calculator
 make -C sonix-player/tests notes
 make -C sonix-player/tests tagdate
+make -C sonix-player/tests mostplayed
 ```
 
 These require only a C compiler, Make and Python 3 (plus standard pthread/dl/math libraries). They **do not require LVGL, ALSA, a MIPS toolchain, a music server, a real account, or downloaded audio**.
@@ -218,6 +219,24 @@ no date in it -- including a day-first date, which this reader will not guess
 at -- comes back empty. The fuller of two dates wins whatever order they
 arrive in, and each date resolves to one moment for sorting with the parts it
 left out settled on the first of January, and of the month.
+
+## Most played, against the real database
+
+`make -C sonix-player/tests mostplayed` checks the list the Music page's
+**Most played** tile opens, against the real `library.c` and the real SQLite.
+The card is a temporary directory and the scan's file-type probes (the CUE
+sheet, MP4 and APE lookers) are stubbed; the schema, the play upsert
+`device_state.c` runs at track start, and every query are the production ones.
+The suite records plays by hand and reads the list back both ways the player
+does -- the row-id handle the page opens and the streaming reader the queue is
+built from -- and it pins three properties: plays are counted one per start
+from the beginning, the list runs in descending play-count order and follows
+the counts as they change without invalidating a queue built from the old
+handle, and the counts survive closing and reopening the database (a rescan or
+a reboot). It is a regression suite for a handle that answered zero rows over a
+table with plays in it: the row-id pass named a `sortkey` column that
+`PLAY_COUNTS` has never had, so the statement failed to prepare and the page
+showed its "nothing to show" note whatever was counted.
 
 ## Headless calculator and notes page tests
 

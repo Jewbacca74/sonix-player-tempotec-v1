@@ -1238,12 +1238,18 @@ static void backfill_stop_and_wait(void) {
 	backfill_started = false;
 }
 
-// Whether the ordered query may name the key. Favourites never may: they have
-// no such column and are ordered by when they were starred, not by name.
+// Whether the ordered query may name the key. Three lists never may: they are
+// not ordered by name and their tables carry no such column, so a query naming
+// one fails to prepare and the list comes up empty.
 static bool list_uses_sortkey(library_list_t kind) {
-	// Favourites run by when they were starred and a playlist by the order it
-	// was built, so neither has a sort key to read.
-	return sortkeys_ready && kind != LIBRARY_LIST_FAVOURITES && kind != LIBRARY_LIST_PLAYLIST;
+	// Favourites run by when they were starred, a playlist by the order it was
+	// built, and Most played by how often the track was played -- so none of
+	// the three has a sort key to read. PLAY_COUNTS especially: naming
+	// `sortkey` in its rows query answers "no such column", the handle holds
+	// zero rows, and Most played shows its empty note over a table that has
+	// everything the list needs.
+	return sortkeys_ready && kind != LIBRARY_LIST_FAVOURITES && kind != LIBRARY_LIST_PLAYLIST &&
+		   kind != LIBRARY_LIST_MOST_PLAYED;
 }
 
 static void next_mount_serial(void);
