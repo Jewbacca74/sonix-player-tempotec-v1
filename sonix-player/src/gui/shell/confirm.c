@@ -13,7 +13,7 @@
 // every question is a leak waiting to happen.
 
 #define CARD_W bp_pick(216, 400)
-#define BUTTON_H bp_pick(44, 64)
+#define BUTTON_H bp_pick(56, 64)
 
 static lv_obj_t *veil;
 static lv_obj_t *card;
@@ -111,6 +111,8 @@ static lv_obj_t *make_button(lv_obj_t *parent, const char *text, bool accent, lv
 	}
 
 	lv_obj_t *label = lv_label_create(btn);
+	lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
+	lv_obj_set_width(label, lv_pct(100));
 	lv_label_set_text(label, tr(text));
 	lv_obj_set_style_text_font(label, &font_ui_24, 0);
 	lv_obj_set_style_text_color(label, accent ? theme_on_accent() : theme()->text_primary, 0);
