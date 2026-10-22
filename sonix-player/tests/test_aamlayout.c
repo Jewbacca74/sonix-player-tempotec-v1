@@ -137,7 +137,45 @@ static void test_the_header_marks_stand_on_a_pitch(void) {
 	(void)star_centre;
 }
 
+static void test_the_strip_shares_its_room(void) {
+	int out[2];
+
+	// Both names fit: each gets exactly its own words, so neither scrolls.
+	// This is the case the arrangement was asked for -- a short artist and a
+	// short title on a 240 px panel -- and the bug it fixes: a third of the
+	// row each, regardless of what the words needed.
+	aam_strip_shares(160, 55, 90, out);
+	CHECK(out[0] == 55);
+	CHECK(out[1] == 90);
+
+	// A long title beside a short artist: the artist keeps its words whole and
+	// the title takes the remainder rather than being given a third of a row.
+	aam_strip_shares(160, 30, 240, out);
+	CHECK(out[0] == 30);
+	CHECK(out[1] == 130);
+
+	// And the same the other way round: a long artist does not crush the title.
+	aam_strip_shares(160, 240, 30, out);
+	CHECK(out[1] == 30);
+	CHECK(out[0] == 130);
+
+	// Neither fits: the row is shared in proportion to the two lengths, so a
+	// name twice as long gets twice the room.
+	aam_strip_shares(150, 100, 200, out);
+	CHECK(out[0] == 50);
+	CHECK(out[1] == 100);
+	CHECK(out[0] + out[1] == 150);
+
+	// Degenerate answers stay drawable rather than negative.
+	aam_strip_shares(0, 40, 40, out);
+	CHECK(out[0] >= 0 && out[1] >= 0);
+	CHECK(out[0] + out[1] <= 1);
+	aam_strip_shares(120, -5, -5, out);
+	CHECK(out[0] == 0 && out[1] == 0);
+}
+
 int main(void) {
+	test_the_strip_shares_its_room();
 	test_the_header_marks_stand_on_a_pitch();
 	test_the_panel_is_shared_out();
 	test_leftie_takes_its_width_off_the_sleeve();

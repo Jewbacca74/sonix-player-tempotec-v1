@@ -38,6 +38,13 @@
 // Where the format line begins: past the chevron's own slot on the left.
 #define AAM_FORMAT_X 46
 
+// The strip at the foot shares its width between the artist's name, the track's
+// and the place in the queue. When both names fit they get exactly the width
+// their own words take and neither scrolls; when they do not, the shorter one
+// keeps its words and the longer one takes the rest -- down to this share of
+// the row, under which a name is no longer a name.
+#define AAM_STRIP_MIN_SHARE 34
+
 typedef struct {
 	int status_h; // the shell's status bar, where the page begins
 	int header_h; // the row of chrome under it
@@ -60,5 +67,11 @@ void aam_head_slots(int screen_w, int out[3]);
 // The x where the marks' slots begin: what the format line has to its right,
 // and the number that says whether "16/44.1FLAC" still fits beside them.
 int aam_head_marks_left(int screen_w);
+
+// The strip's two names: how wide the artist's and the track's get, given how
+// wide their own words are (`artist_px`, `title_px`) and the room the row has
+// to share (`avail`, already less the padding, the queue position and the two
+// gaps). out[0] is the artist -- which stands first -- and out[1] the track.
+void aam_strip_shares(int avail, int artist_px, int title_px, int out[2]);
 
 #endif /* AAMLAYOUT_H */

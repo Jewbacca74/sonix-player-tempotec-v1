@@ -54,3 +54,43 @@ int aam_head_marks_left(int screen_w) {
 	aam_head_slots(screen_w, slots);
 	return screen_w - (slots[2] + AAM_HEAD_SLOT);
 }
+
+// The two names in the strip. The rule the arrangement was asked for: a name
+// that fits is not made to scroll, and the artist -- which stands first -- is
+// not squeezed to a sliver by a long track name beside it.
+void aam_strip_shares(int avail, int artist_px, int title_px, int out[2]) {
+	if (avail < 1) {
+		avail = 1;
+	}
+	if (artist_px < 0) {
+		artist_px = 0;
+	}
+	if (title_px < 0) {
+		title_px = 0;
+	}
+
+	int artist;
+	int title;
+	if (artist_px + title_px <= avail) {
+		// Both fit, so both take their own words and neither moves.
+		artist = artist_px;
+		title = title_px;
+	} else {
+		// One of them short enough to keep whole: it does, and the other has
+		// what is left. Otherwise they share the row in proportion to their
+		// own lengths, which is the fairest split when neither fits.
+		int floor_px = (avail * AAM_STRIP_MIN_SHARE) / 100;
+		if (artist_px <= floor_px) {
+			artist = artist_px;
+			title = avail - artist_px;
+		} else if (title_px <= floor_px) {
+			title = title_px;
+			artist = avail - title_px;
+		} else {
+			artist = (int)(((long long)avail * artist_px) / (artist_px + title_px));
+			title = avail - artist;
+		}
+	}
+	out[0] = artist;
+	out[1] = title;
+}

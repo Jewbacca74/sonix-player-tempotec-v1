@@ -79,10 +79,16 @@ static void update_repeat_button(void);
 // the shape of the track -- and a blue play button in the middle of it was the
 // one thing that still belonged to some other page.
 static lv_color_t chrome_accent(void);
-// The colour of the played stretch of the bar (and, in Album Art Max, of the
-// artist's name beside the title): the accent, or the sleeve's with the cover
-// tint on. Declared here for set_over_cover, which runs long before it.
+// The colour of the played stretch of the bar: the accent, or the sleeve's with
+// the cover tint on. Declared here for set_over_cover, which runs long before
+// it.
 static lv_color_t progress_tint(void);
+// Album Art Max's own ink. Declared with the two above because set_over_cover()
+// reaches for it long before the arrangement's section is reached.
+static lv_color_t aam_accent(void);
+// The strip's two names share their row by what they say: called from the track
+// change and from the queue position, both of which sit above its definition.
+static void aam_strip_fit(void);
 static lv_obj_t *progress_slider;
 // The compact slider leaves room for its oversized endpoint knob and shadow.
 // Zero means use the original percentage width on the HiBy panels.
@@ -345,8 +351,9 @@ static int alt_pill_pad_v = ALT_PILL_PAD_V;
 #define AAM_BAR_TAB 9	  // the marker's width, across the band
 #define AAM_STRIP_PAD_H 8 // what the strip keeps at either end
 #define AAM_STRIP_PAD_V 2
-#define AAM_STRIP_GAP 5	  // between the title and the artist beside it
-#define AAM_QUEUE_ROOM 44  // the strip reserves this much for "12/123"
+#define AAM_STRIP_GAP 5	  // between the two names and the queue position
+#define AAM_STRIP_GAPS 3  // artist | title | spacer | queue, so three of them
+#define AAM_QUEUE_MIN 30   // the least the queue position is given ("3/13")
 #define AAM_TIME_INSET 0   // the clocks, in the middle of the dimmed picture
 // How each of the header's marks is scaled out of the canvas it was drawn on:
 // the mode glyph is 30 px and the star 32, and both are drawn at the row's own
@@ -984,6 +991,7 @@ static void update_queue_position(void) {
 		} else {
 			lv_label_set_text(queue_position_label, "");
 		}
+		aam_strip_fit();
 		return;
 	}
 
@@ -993,9 +1001,11 @@ static void update_queue_position(void) {
 
 	if (!worth_saying) {
 		lv_label_set_text(queue_position_label, "");
+		aam_strip_fit(); // the room it has given back is the names' again
 		return;
 	}
 	lv_label_set_text_fmt(queue_position_label, "%d/%d", (int)playlist_current_entry() + 1, count);
+	aam_strip_fit();
 }
 
 // Works out view_start and view_length for playback at `position` in a file
@@ -1180,13 +1190,20 @@ static void set_over_cover(bool on) {
 			lv_obj_remove_local_style_prop(dim_objs[i], LV_STYLE_TEXT_COLOR, 0);
 		}
 	}
-	// Album Art Max's strip carries the artist in the record's colour rather than
-	// in the deck's secondary ink -- the concept's title and artist are two inks
-	// on the one black strip -- and that colour is the band's own. Set here, at
-	// the end of the dimming above, so that every path which recolours the
-	// chrome (a new palette, a new sleeve) leaves it saying the same thing.
-	if (layout_aam_now && song_artist_label) {
-		lv_obj_set_style_text_color(song_artist_label, progress_tint(), 0);
+	// Album Art Max's strip and header are drawn in the record's colour: the
+	// artist's name beside the title, the format line and the place in the queue
+	// are all the sleeve's, and so is the band under them (paint_progress_tint).
+	// Set here, at the end of the dimming above, so that every path which
+	// recolours the chrome -- a new palette, a new sleeve -- leaves them saying
+	// the same thing.
+	if (layout_aam_now) {
+		lv_color_t ink = aam_accent();
+		lv_obj_t *const tinted[] = {song_artist_label, format_label, queue_position_label};
+		for (size_t i = 0; i < sizeof(tinted) / sizeof(tinted[0]); i++) {
+			if (tinted[i]) {
+				lv_obj_set_style_text_color(tinted[i], ink, 0);
+			}
+		}
 	}
 
 	for (size_t i = 0; i < sizeof(icon_objs) / sizeof(icon_objs[0]); i++) {
@@ -1327,11 +1344,20 @@ static lv_color_t chrome_accent(void) {
 // ring and the unplayed stretch are set when the page is built and when the
 // theme changes, and are no part of this either way.
 static lv_color_t progress_tint(void) {
-	if (cover_tint && album_tone) {
+	// Album Art Max is the record's page and not the theme's: there the sleeve's
+	// colour is the design, whether or not the cover tint is switched on for the
+	// rest of the player.
+	if (album_tone && (cover_tint || layout_aam_now)) {
 		return cover_mark(); // the switch's colour, on the monochrome palettes too
 	}
 	return theme_is_monochrome() ? theme_player_chrome_color(THEME_PLAYER_CHROME_PLAYBACK) : theme()->accent;
 }
+
+// What Album Art Max draws its own marks in: the band, the artist's name, the
+// heart, the format line and the place in the queue are all one colour, and that
+// colour is the sleeve's. The theme takes over only when there is no artwork to
+// take it from.
+static lv_color_t aam_accent(void) { return album_tone ? cover_mark() : chrome_accent(); }
 
 static void paint_progress_tint(void) {
 	if (!progress_slider) {
@@ -3359,6 +3385,77 @@ static void aam_slider_style(bool aam) {
 	paint_progress_tint(); // the accent, or the sleeve's with the cover tint on
 }
 
+// How wide a label's words are on one line, in its own font. The strip shares
+// its width between two names and the queue position, and the point of the
+// sharing is that a name which fits is not made to scroll -- which cannot be
+// answered by the boxes, because the boxes are what is being set.
+static int aam_text_width(lv_obj_t *label) {
+	if (!label || lv_obj_is_hidden(label)) {
+		return 0;
+	}
+	const char *text = lv_label_get_text(label);
+	const lv_font_t *font = lv_obj_get_style_text_font(label, LV_PART_MAIN);
+	if (!text || !text[0] || !font) {
+		return 0;
+	}
+	lv_point_t size;
+	lv_text_get_size(&size, text, font, lv_obj_get_style_text_letter_space(label, LV_PART_MAIN),
+					 lv_obj_get_style_text_line_space(label, LV_PART_MAIN), LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+	return size.x;
+}
+
+// The two names and the queue position on one row: how wide each of them gets
+// for the words it is holding right now.
+//
+// The room is what the panel has left after the padding and the queue position,
+// and the split is aam_strip_shares()'s -- the artist first, and a name that
+// fits is never made to scroll. Measured rather than divided into thirds,
+// because a third of a 240 px panel is seven letters, which is what left the
+// artist of a real record reading \"Knxwled\".
+//
+// Called wherever either name or the count can change -- a new track, a new
+// place in the queue, the arrangement being entered -- and it writes only what
+// differs, since this is reached from the poll as well as from a track change.
+static void aam_strip_fit(void) {
+	if (!aam_strip) {
+		return;
+	}
+	int screen_w = (int)lv_obj_get_width(aam_strip);
+	if (screen_w <= 0 && player_screen) {
+		screen_w = (int)lv_obj_get_width(player_screen);
+	}
+	if (screen_w <= 0) {
+		return;
+	}
+
+	// The queue position is as wide as its own words, not as wide as the
+	// longest one it could ever hold: "3/13" and "12/123" are three pixels
+	// apart, and the room it does not need is room the names get -- which is
+	// the difference between a title that fits and one that has to scroll.
+	int queue_px = aam_text_width(queue_position_label);
+	if (queue_px < AAM_QUEUE_MIN) {
+		queue_px = AAM_QUEUE_MIN;
+	}
+	int room = screen_w - 2 * AAM_STRIP_PAD_H - queue_px - AAM_STRIP_GAPS * AAM_STRIP_GAP;
+	if (room < 40) {
+		room = 40;
+	}
+	int want[2];
+	aam_strip_shares(room, aam_text_width(song_artist_label), aam_text_width(song_title_label), want);
+
+	// A name with nothing to show keeps its zero: a width of 0 on an empty
+	// label is a divider with no words in it. Compared against the style's own
+	// answer rather than a copy kept here, so that a label whose width was taken
+	// off on the way out of the arrangement is always given it again on the way
+	// back in.
+	lv_obj_t *const named[] = {song_artist_label, song_title_label};
+	for (size_t i = 0; i < 2; i++) {
+		if (named[i] && want[i] > 0 && lv_obj_get_style_max_width(named[i], 0) != want[i]) {
+			lv_obj_set_style_max_width(named[i], want[i], 0);
+		}
+	}
+}
+
 // Where the pieces stand: the header under the status bar, the band along the
 // foot of the sleeve or up its left edge, and the strip at the bottom. Called
 // from the geometry, so it runs before the widgets have been moved here on the
@@ -3421,22 +3518,11 @@ static void aam_place(void) {
 		lv_obj_set_style_max_width(format_label, format_room, 0);
 	}
 
-	// The strip: the title, the artist beside it, the queue position at the
-	// right. The title takes the larger share of what is left, because it is
-	// the name of the thing; the artist keeps enough to be read and to scroll
-	// if it has to.
+	// The strip: the artist, the title beside it, the queue position at the
+	// right -- all three sharing one row of words (see aam_strip_shares).
 	if (aam_strip) {
 		lv_obj_set_size(aam_strip, screen_w, lv_pct(100));
-		int room = screen_w - 2 * AAM_STRIP_PAD_H - AAM_QUEUE_ROOM - 2 * AAM_STRIP_GAP;
-		if (room < 60) {
-			room = 60;
-		}
-		if (song_title_label) {
-			lv_obj_set_style_max_width(song_title_label, room - room / 3, 0);
-		}
-		if (song_artist_label) {
-			lv_obj_set_style_max_width(song_artist_label, room / 3, 0);
-		}
+		aam_strip_fit();
 	}
 }
 
@@ -3499,23 +3585,26 @@ static void aam_put(void) {
 		lv_obj_set_style_pad_hor(player_menu, 0, 0);
 		lv_obj_set_style_pad_ver(player_menu, 0, 0);
 	}
-	// The strip: title, then the artist in the record's colour, then the place
-	// in the queue pushed out to the right. The three are reparented in that
-	// order and then put in it, because flex lays a row out in the order its
-	// children were made and not in the order they were handed over.
+	// The strip: the artist in the record's colour, then the title in the
+	// theme's ink, then the place in the queue pushed out to the right. The
+	// three are reparented and then put in that order, because flex lays a row
+	// out in the order its children were made and not in the order they were
+	// handed over.
 	if (aam_strip) {
+		// The artist first, then the track: who it is before what it is called,
+		// in the record's colour against the title's plain ink.
+		if (song_artist_label) {
+			lv_obj_set_parent(song_artist_label, aam_strip);
+			lv_obj_set_ignore_layout(song_artist_label, false);
+			lv_obj_set_width(song_artist_label, LV_SIZE_CONTENT);
+			lv_obj_move_to_index(song_artist_label, 0);
+		}
 		if (song_title_label) {
 			lv_obj_set_parent(song_title_label, aam_strip);
 			lv_obj_set_ignore_layout(song_title_label, false); // the row places it
 			lv_obj_set_style_translate_y(song_title_label, 0, 0);
 			lv_obj_set_width(song_title_label, LV_SIZE_CONTENT);
-			lv_obj_move_to_index(song_title_label, 0);
-		}
-		if (song_artist_label) {
-			lv_obj_set_parent(song_artist_label, aam_strip);
-			lv_obj_set_ignore_layout(song_artist_label, false);
-			lv_obj_set_width(song_artist_label, LV_SIZE_CONTENT);
-			lv_obj_move_to_index(song_artist_label, 1);
+			lv_obj_move_to_index(song_title_label, 1);
 		}
 		if (aam_strip_space) {
 			lv_obj_move_to_index(aam_strip_space, 2);
@@ -3567,15 +3656,8 @@ static void aam_put(void) {
 			lv_obj_align(modes[i], LV_ALIGN_RIGHT_MID, -slots[2], 0);
 		}
 	}
-	// The three marks at one weight. The mode glyph is drawn from a 30 px
-	// canvas and the star from a 32, and left at their native sizes inside
-	// equal slots the mode reads as the bigger button -- which is what it did.
-	if (repeat_btn_icon) {
-		lv_image_set_scale(repeat_btn_icon, AAM_MODE_SCALE);
-	}
-	if (fav_btn_icon) {
-		lv_image_set_scale(fav_btn_icon, AAM_STAR_SCALE);
-	}
+	// The three marks are drawn at one weight: update_repeat_button() and
+	// update_fav_button() own their sizes and know this arrangement by name.
 
 	// The menu: three lines here, the ellipsis everywhere else (see aam_build).
 	if (more_btn_icon) {
@@ -3801,11 +3883,11 @@ static void aam_build(void) {
 	lv_obj_set_clickable(aam_scrim, false);
 	lv_obj_set_hidden(aam_scrim, true);
 
-	// The strip at the foot: the title, the artist beside it and the place in
-	// the queue against the right edge, in a row of its own. It lives in the
-	// deck (which is the strip's own height in this arrangement) but lays its
-	// children out itself, so that the artist follows a title of any length
-	// instead of standing at a position worked out from the last one.
+	// The strip at the foot: the artist, the title and the place in the queue
+	// against the right edge, in a row of its own. It lives in the deck (which
+	// is the strip's own height in this arrangement) but lays its children out
+	// itself, so that each name follows the other of any length instead of
+	// standing at a position worked out from the last one.
 	aam_strip = lv_obj_create(player_menu);
 	lv_obj_remove_style_all(aam_strip);
 	lv_obj_set_size(aam_strip, screen_w, lv_pct(100));
@@ -4006,6 +4088,11 @@ static void apply_layout(void) {
 	if (sheet_open) {
 		topbar_set_hidden(!layout_aam_now);
 		back_btn_player_top_inset(layout_aam_now ? aam_chevron_inset() : 0);
+		// And its stroke, not its button: the glyph is drawn with a third of its
+		// canvas empty on either side, so a chevron whose *button* starts where
+		// the star's does sits visibly further in. AAM_HEAD_END_PAD is the air
+		// the star's own stroke keeps from the edge, and the way back mirrors it.
+		back_btn_player_ink_inset(layout_aam_now ? AAM_HEAD_END_PAD : 0);
 		back_btn_player_mode(true);
 	}
 }
@@ -4631,6 +4718,7 @@ static void refresh_now_playing(void) {
 	const char *file = state.current_file;
 	const char *slash = strrchr(file, '/');
 	scrolltext_set(song_title_label, state.metadata.title[0] ? state.metadata.title : (slash ? slash + 1 : file));
+	aam_strip_fit(); // the strip shares its row by what the two names now say
 
 	// Whose name goes under the title: see metadata_shown_artist().
 	const char *artist = metadata_shown_artist(&state.metadata);
@@ -4836,7 +4924,12 @@ static void update_fav_button(void) {
 	// competing with the cream title and playback accent; OLED's in its muted
 	// grey, for the same reason.
 	lv_color_t favorite_color;
-	if (theme_is_tokyo_night()) {
+	if (layout_aam_now) {
+		// The sleeve's colour, as everything else on that page is: the star sits
+		// between two other marks drawn in it, and a grey one among them would
+		// read as the button being unavailable.
+		favorite_color = aam_accent();
+	} else if (theme_is_tokyo_night()) {
 		favorite_color = theme_semantic_color(THEME_SEMANTIC_CYAN);
 	} else if (theme_is_monochrome()) {
 		favorite_color = theme_player_chrome_color(THEME_PLAYER_CHROME_MUTED);
@@ -4846,7 +4939,11 @@ static void update_fav_button(void) {
 		favorite_color = layout_alt_now ? alt_ink() : lv_color_make(150, 150, 150);
 	}
 
-	const bool heart = layout_immersive_now || layout_poster_now;
+	// A heart in the arrangements that stand the page on the photograph -- and
+	// Album Art Max is one of them: its header has no transport to share the row
+	// with, and the mark that says "this one is mine" is the one thing in it that
+	// is about the record rather than about playing it.
+	const bool heart = layout_immersive_now || layout_poster_now || layout_aam_now;
 	const lv_image_dsc_t *favorite_icon = heart
 			? (starred ? &icon_heart_filled : &icon_heart_outline)
 			: (starred ? &icon_star_filled : &icon_star);
@@ -5461,6 +5558,55 @@ static void next_btn_event_cb(lv_event_t *e) {
 	player_screen_next();
 }
 
+// --- the sleeve as transport (Album Art Max) ---
+//
+// That arrangement trades the on-screen buttons for the picture, so the picture
+// gets their two jobs: a double tap on its left side goes back a track, on its
+// right side forward. One tap does nothing -- the gesture has to be unambiguous,
+// because a finger meant to drag the player away or call the control centre down
+// starts the same way.
+//
+// Double taps are LVGL's own (LV_EVENT_DOUBLE_CLICKED): the indev already counts
+// short clicks in the same place within its configured double-click time, which
+// is the answer a page should be using rather than a second clock of its own.
+//
+// The handler hangs on the panel the sheet is dragged by rather than on the
+// sleeve frame: that frame is deliberately not clickable, and making it so would
+// take presses away from the drag. The panel already sees every press that lands
+// on the artwork; all this adds is a second one.
+#define AAM_TAP_EDGE_SHARE 3 // the sleeve is split into this many columns
+
+static void aam_sleeve_tap_cb(lv_event_t *e) {
+	(void)e;
+	if (!layout_aam_now || !cover_art_group || player_sheet_drag_active()) {
+		return;
+	}
+
+	lv_indev_t *indev = lv_indev_active();
+	if (!indev) {
+		return;
+	}
+	lv_point_t at;
+	lv_indev_get_point(indev, &at);
+
+	lv_area_t sleeve;
+	lv_obj_get_coords(cover_art_group, &sleeve);
+	if (at.x < sleeve.x1 || at.x > sleeve.x2 || at.y < sleeve.y1 || at.y > sleeve.y2) {
+		return; // not on the picture
+	}
+
+	// Which side of it the pair landed on. The middle column does nothing: the
+	// edges are where a thumb reaches without covering the sleeve, and a tap in
+	// the middle is more likely to be somebody looking at it.
+	int span = (sleeve.x2 - sleeve.x1 + 1) / AAM_TAP_EDGE_SHARE;
+	int x = at.x - sleeve.x1;
+	if (x < span) {
+		player_screen_prev();
+	} else if (x >= span * 2) {
+		player_screen_next();
+	}
+}
+
 // --- hardware transport keys ---
 //
 // They do exactly what the on-screen buttons do, whichever page is showing:
@@ -5960,6 +6106,7 @@ void player_sheet_open(bool animate) {
 	// it for the same reason (see apply_layout).
 	topbar_set_hidden(!layout_aam_now);
 	back_btn_player_top_inset(layout_aam_now ? aam_chevron_inset() : 0);
+	back_btn_player_ink_inset(layout_aam_now ? AAM_HEAD_END_PAD : 0);
 	back_btn_player_mode(true);
 
 	sheet_move_to(0, animate);
@@ -5979,6 +6126,7 @@ static void sheet_hidden_anim_ready_cb(lv_anim_t *a) {
 void player_sheet_close(bool animate) {
 	bool was_open = sheet_open;
 	sheet_open = false;
+	back_btn_player_ink_inset(0); // the chevron back in the middle of its slot
 	back_btn_player_mode(false);
 	lyrics_screen_hold_update();
 	topbar_set_hidden(false);
@@ -6874,6 +7022,11 @@ void player_init(gui_config_t *cfg) {
 	cover_panel = lv_obj_create(player_screen);
 	// Dragging the artwork to the right pushes the player back off screen.
 	player_sheet_attach_drag(cover_panel, false);
+	// And the two taps that stand in for the transport in Album Art Max. On the
+	// panel rather than on the sleeve so that the drag above keeps seeing its
+	// presses; the callback decides for itself whether the pair landed on the
+	// picture.
+	lv_obj_add_event_cb(cover_panel, aam_sleeve_tap_cb, LV_EVENT_DOUBLE_CLICKED, NULL);
 	// Studio stretches the panel down over the top of the controls, where the
 	// taller shape of the track can reach: presses there go to the slider.
 	lv_obj_set_adv_hittest(cover_panel, true);
