@@ -45,7 +45,13 @@ static int8_t back_btn_top_bar_height;
 // air it keeps instead, and what the player's own header row is aligned to.
 #define BACK_BTN_PLAYER_TOP 14
 
-static int back_btn_player_top(void) { return bp_is_tempotec_v1() ? 4 : BACK_BTN_PLAYER_TOP; }
+// An arrangement that keeps the status bar (Album Art Max) leaves the chevron
+// no such air: the row is there, and the chevron belongs under it.
+static int8_t back_btn_player_inset;
+
+static int back_btn_player_top(void) {
+	return (bp_is_tempotec_v1() ? 4 : BACK_BTN_PLAYER_TOP) + back_btn_player_inset;
+}
 
 static void place_back_btn(bool below_top_bar) {
 	// Same offsets as the corner buttons on the right (playlists, settings,
@@ -54,6 +60,19 @@ static void place_back_btn(bool below_top_bar) {
 	// under, so the chevron takes the offset above.
 	int y = back_btn_padding + (below_top_bar ? back_btn_top_bar_height : back_btn_player_top());
 	lv_obj_align(back_btn, LV_ALIGN_TOP_LEFT, back_btn_padding, y);
+}
+
+void back_btn_player_top_inset(int inset) {
+	if (inset < 0) {
+		inset = 0;
+	}
+	if (inset == back_btn_player_inset) {
+		return;
+	}
+	back_btn_player_inset = (int8_t)inset;
+	if (back_btn && chevron_in_player) {
+		place_back_btn(false);
+	}
 }
 
 // Where the back button goes. A page can be reached by more than one route --

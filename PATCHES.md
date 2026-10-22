@@ -157,6 +157,76 @@ keeps its own foot, and the other arrangements keep the edges they have. Without
 cover's own colour from edge to edge, and the blurred copy stays down: the
 deck no longer shows it through, and the sleeve covers everything above it.
 
+The sixth arrangement, **Album Art Max** ("AAM"), is the sleeve instead of the
+controls: the picture at the full width of the panel and everything between the
+status bar and the strip under it, with the transport gone and the first row's
+worth of chrome above it. It is the one arrangement built for the physical
+keys — the concept it comes from says so in as many words ("it trades media
+controls for bigger AA (assumes you'll just use the physical controls)") — so
+what is left on the page is what is *not* transport: the repeat mode, the
+overflow menu and the star, in a 40 px row under the status bar with the format
+line at its left end, and the title with the place in the queue on a black
+strip at the foot. That strip is the deck itself, made one line tall, so nothing
+above it is a panel: the sleeve reaches the strip's top edge and the blur behind
+the page shows only through the header row. The rows are worked out in
+`aamlayout.c`, which knows nothing about LVGL: the sleeve is decoded at the box
+it will be drawn in before anything has been laid out, so the arithmetic cannot
+be read back off the widgets and is a module of its own -- with the tests that
+hold it to the V1's numbers (`make -C sonix-player/tests aamlayout`). On the V1
+the sleeve comes back 240 x 235 in the flat shape and 228 x 235 in Leftie.
+
+It is also the one arrangement that **keeps the status bar**, which the player
+otherwise hides so that artwork can run to the bezel. With the transport off
+the panel, the bar's play/pause mark is the only thing saying which way the
+hardware key will go, and in the concept the bar is part of the drawing. The
+chevron moves with it: `back_btn_player_top_inset()` in `switcher.c`, which is
+the player's own top offset plus whatever the arrangement needs above it, so
+the way back sits centred in the header row rather than in the status bar.
+
+Progress is the concept's "very minimal scrub bar": a 6 px band along the foot
+of the picture, square-ended, the played part in the accent and a small round
+head, drawn over a 40% black wash so it reads on any sleeve
+(`aam_slider_style()`; the deck's own ringed, shadowed bar is put back by the
+other half of the same function). The band is 6 px and its reach is not: an
+`lv_obj_set_ext_click_area()` of 8 around it gives the thumb something to find
+without the band itself getting heavier -- and the block the band stands in is
+cut to that same reach, because a press is looked for among a parent's children
+only while it is inside the parent's own box, and a reach that hung outside the
+block would be a reach into nothing. The block takes no presses itself, so the
+8 px it borrows from the foot of the sleeve is borrowed only on the way past.
+
+The two clocks are not on the page at all. They come up in the middle of the
+artwork, large, **only while the track is being scrubbed** — the picture dropped
+to half its brightness behind them — and that is either a finger on the band
+(the slider's own press events) or a held skip key, which the playback side
+already reports through `device_state_scrub_active()`. Both ask the same
+function, `aam_scrub_apply()`, from the poll and from the slider's callback, so
+the veil is right whichever route a scrub takes.
+
+**Leftie**, the concept's second drawing, stands the band up along the left
+edge instead of laying it along the foot: the artwork gives up `AAM_RAIL_W`
+(12 px) of width and the thumb travels vertically, which is the whole of the
+argument for it. It is a setting of its own in the same Display options page
+(`screen/player_aam_leftie`), and because the picture is then a different
+shape, changing it re-measures the page and asks for the artwork again at the
+new box rather than letting LVGL resample it on every frame.
+
+The artist and the album sit in the sleeve's two top corners, upper-cased in
+the concept's small capitals (folded here, in ASCII only — a name in another
+script is left exactly as written), each with a hairline of black around the
+type: the one place in the player where text is read over whatever the
+photograph happens to be there, and a pale sleeve swallows a dim grey line.
+Everything else — the two corners, the band, the header — is reparented and
+re-styled rather than rebuilt, as in every other arrangement on this page, and
+`aam_take_back()` gives each widget back to the row it was built in.
+
+AAM is measured for the 240 × 320 V1 panel and offered only there
+(`bp_is_tempotec_v1()` builds the pill, and `update_layout()` falls back to the
+standard arrangement elsewhere); every number in it is one of the 24 px status
+bar, the 40 px header row and the strip's one line of 15 px type. The three keys
+it adds to the language files are `musicsettings_layout_aam` and
+`musicsettings_aam_leftie` with its note, in all eleven of them.
+
 The **screensaver** follows the same split. Dark and Light keep the arrangement
 they have always had: the artwork stops where the blurred strip begins, and the
 title, the artist and the time are read on the player's own blurred copy in
