@@ -6013,7 +6013,7 @@ void player_refresh_now_playing(void) {
 #define SHEET_ANIM_MS 220
 
 // Sideways movement past this is a drag, not a tap.
-#define DRAG_COMMIT_PX 10
+#define DRAG_COMMIT_PX 7
 
 static int sheet_width;
 static lv_obj_t *sheet_under; // the page the sheet first slid over
