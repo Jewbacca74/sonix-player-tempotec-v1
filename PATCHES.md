@@ -184,12 +184,16 @@ the player's own top offset plus whatever the arrangement needs above it, so
 the way back sits centred in the header row rather than in the status bar.
 
 The three marks of that row are laid out as a set and not three times by eye:
-three 36 px slots on one pitch (`AAM_HEAD_PITCH`, 26 px), the rightmost of them
+three 36 px slots on one pitch (`AAM_HEAD_PITCH`, 30 px), the rightmost of them
 keeping `AAM_HEAD_END_PAD` (10 px) between the star and the panel's edge, and
 all three glyphs drawn at the same `AAM_HEAD_GLYPH` (20 px) out of the canvases
 they were generated on -- the mode glyph is 30 px and the star 32, and at their
 native sizes inside equal slots the mode read as the heavier button, which is
-what it looked like on the device. The way back keeps the same air as the
+what it looked like on the device. The pitch is what puts air between them: at
+26 px each glyph had 6 px of black on either side and the row read as three
+marks crowding one another, so it is 30 px now -- half a glyph of air apiece --
+and the test holds the pitch to that rather than to the slot positions alone.
+The format line still has its 84 px beside the row (the marks begin at 142). The way back keeps the same air as the
 outermost of them, and measured the same way: the chevron is drawn in the middle
 third of its 36 px canvas, so padding its *button* to match the star's put the
 stroke visibly further in. `back_btn_player_ink_inset()` shifts the glyph by

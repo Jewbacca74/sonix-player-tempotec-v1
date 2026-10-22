@@ -128,12 +128,19 @@ static void test_the_header_marks_stand_on_a_pitch(void) {
 	CHECK(AAM_HEAD_GLYPH < 30);
 	CHECK(AAM_HEAD_GLYPH > 16);
 
+	// And they keep air between them. Six pixels of black between one glyph and
+	// the next looked like three marks crowding each other on the device; the
+	// pitch is what says how much of it the row is given, so it is the pitch
+	// that is held to it.
+	CHECK(AAM_HEAD_PITCH - AAM_HEAD_GLYPH >= 10);
+
 	// The format line still has room beside them. On the V1 the marks begin at
-	// 150 and the line starts at 46, which leaves better than a hundred pixels
-	// for "16/44.1FLAC" -- about what it needs at 14 px. This is the check
-	// that would have caught the row being laid out by eye.
-	CHECK(aam_head_marks_left(V1_W) == 150);
-	CHECK(aam_head_marks_left(V1_W) - AAM_FORMAT_X >= 96);
+	// 142 and the line starts at 46, which leaves 96 px for "16/44.1FLAC" --
+	// 84 px at the size it is drawn. This is the check that would have caught
+	// the row being laid out by eye, and the one that stops the air between the
+	// marks from being taken out of this line.
+	CHECK(aam_head_marks_left(V1_W) == 142);
+	CHECK(aam_head_marks_left(V1_W) - AAM_FORMAT_X >= 92);
 	(void)star_centre;
 }
 

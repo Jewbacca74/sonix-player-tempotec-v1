@@ -33,7 +33,12 @@
 #define AAM_HEAD_SLOT 36
 #define AAM_HEAD_GLYPH 20
 #define AAM_HEAD_END_PAD 10
-#define AAM_HEAD_PITCH 26
+// And the pitch is where the air between them comes from: 26 px left 6 px of
+// black between one glyph and the next, which on the device read as three marks
+// crowding each other rather than as a row. At 30 px each of them keeps 10 px --
+// half a glyph's width -- and the row is still short enough to leave the format
+// line its 84 px for "16/44.1FLAC".
+#define AAM_HEAD_PITCH 30
 
 // Where the format line begins: past the chevron's own slot on the left.
 #define AAM_FORMAT_X 46
