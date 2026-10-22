@@ -6295,7 +6295,7 @@ static void panel_edge_drag_cb(lv_event_t *e) {
 	if (code == LV_EVENT_PRESSING) {
 		if (!engaged) {
 			int adx = dx < 0 ? -dx : dx;
-			if (dy < 8 || dy <= adx) {
+			if (dy < 6 || dy <= adx) {
 				return; // still just a press, or a sideways one
 			}
 			engaged = true;
@@ -7339,7 +7339,10 @@ void player_init(gui_config_t *cfg) {
 	// status bar would be, owning the pull-down that opens the control centre.
 	lv_obj_t *panel_edge = lv_obj_create(player_screen);
 	lv_obj_remove_style_all(panel_edge);
-	lv_obj_set_size(panel_edge, cfg->screen_width, cfg->top_bar_height);
+	// With the status bar hidden, this strip is the only place to start a
+	// quick-panel pull-down. Extend it below the glass edge area so a case lip
+	// does not make the gesture needlessly finicky.
+	lv_obj_set_size(panel_edge, cfg->screen_width, bp_pick(cfg->top_bar_height + 20, cfg->top_bar_height + 12));
 	lv_obj_set_pos(panel_edge, 0, 0);
 	lv_obj_set_scrollable(panel_edge, false);
 	lv_obj_set_clickable(panel_edge, true);
