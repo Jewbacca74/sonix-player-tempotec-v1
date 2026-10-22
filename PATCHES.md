@@ -183,11 +183,28 @@ chevron moves with it: `back_btn_player_top_inset()` in `switcher.c`, which is
 the player's own top offset plus whatever the arrangement needs above it, so
 the way back sits centred in the header row rather than in the status bar.
 
-Progress is the concept's "very minimal scrub bar": a 6 px band along the foot
-of the picture, square-ended, the played part in the accent and a small round
-head, drawn over a 40% black wash so it reads on any sleeve
+The three marks of that row are laid out as a set and not three times by eye:
+three 36 px slots on one pitch (`AAM_HEAD_PITCH`, 26 px), the rightmost of them
+keeping `AAM_HEAD_END_PAD` (10 px) between the star and the panel's edge, and
+all three glyphs drawn at the same `AAM_HEAD_GLYPH` (20 px) out of the canvases
+they were generated on -- the mode glyph is 30 px and the star 32, and at their
+native sizes inside equal slots the mode read as the heavier button, which is
+what it looked like on the device. The menu's three lines are drawn to match:
+18 px wide, 3 px to a line, on a 6 px pitch. The format line's room is measured
+from the marks themselves (`aam_head_marks_left()`), so the line cannot run
+under them. Both numbers live in `aamlayout.c` with the rows, and the test that
+holds them also holds the row to the 6 px between glyphs it is drawn with.
+
+Progress is the concept's "very minimal scrub bar": an 8 px band along the foot
+of the picture, its foot on the picture's own edge, square-ended, and **a
+stretch of colour** rather than a line -- the played part starts a step lighter
+than the accent at the first second and deepens to it as it runs to the head
+(`paint_progress_tint()`, which is also where the theme's colour or the sleeve's
+is decided). The head is a tab, a block of the accent the height of the band and
+a little wider, not a disc. The unplayed part is the picture under half black,
+so the band reads on any sleeve without a track being drawn round it
 (`aam_slider_style()`; the deck's own ringed, shadowed bar is put back by the
-other half of the same function). The band is 6 px and its reach is not: an
+other half of the same function). The band is 8 px and its reach is not: an
 `lv_obj_set_ext_click_area()` of 8 around it gives the thumb something to find
 without the band itself getting heavier -- and the block the band stands in is
 cut to that same reach, because a press is looked for among a parent's children
@@ -211,14 +228,22 @@ argument for it. It is a setting of its own in the same Display options page
 shape, changing it re-measures the page and asks for the artwork again at the
 new box rather than letting LVGL resample it on every frame.
 
-The artist and the album sit in the sleeve's two top corners, upper-cased in
-the concept's small capitals (folded here, in ASCII only — a name in another
-script is left exactly as written), each with a hairline of black around the
-type: the one place in the player where text is read over whatever the
-photograph happens to be there, and a pale sleeve swallows a dim grey line.
-Everything else — the two corners, the band, the header — is reparented and
+The strip carries **the title and the artist in the record's colour**, the place
+in the queue against its right edge: `Motorcycle` in the theme's ink, `Big Ideas`
+in the accent, `3/13` dim. The concept draws exactly that, and the artist's
+colour is asked of `progress_tint()` rather than of the accent directly, so the
+name and the band under it are the same colour by construction -- the theme's,
+or the sleeve's with the cover tint on. Nothing is written over the photograph
+itself but the clocks: no names in its corners, and no album anywhere.
+
+The strip is a row of its own inside the deck rather than three children of the
+deck's column, so the artist follows a title of any length instead of standing
+at a position worked out from the last one; a one-pixel strut with flex-grow
+pushes the queue position to the right end. Everything is reparented and
 re-styled rather than rebuilt, as in every other arrangement on this page, and
-`aam_take_back()` gives each widget back to the row it was built in.
+`aam_take_back()` gives each widget back to the row it was built in -- the title
+and the artist to the column (or to the alternative arrangement's pills), the
+queue position under the bar, and the artist line's colour to its own style.
 
 AAM is measured for the 240 × 320 V1 panel and offered only there
 (`bp_is_tempotec_v1()` builds the pill, and `update_layout()` falls back to the

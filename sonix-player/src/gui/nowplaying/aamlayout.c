@@ -36,3 +36,21 @@ aam_box_t aam_layout_box(int screen_w, int screen_h, int status_h, int header_h,
 	}
 	return b;
 }
+
+// The three marks of the header row. The slot's centre has to sit half a glyph
+// plus the end padding in from the edge for the *glyph* to keep that padding,
+// and the slot is wider than the glyph, so the slot starts nearer the edge than
+// the padding suggests.
+void aam_head_slots(int screen_w, int out[3]) {
+	(void)screen_w; // the row is measured from its right end, whatever its width
+	int half = AAM_HEAD_SLOT / 2;
+	for (int i = 0; i < 3; i++) {
+		out[i] = AAM_HEAD_END_PAD + AAM_HEAD_GLYPH / 2 - half + i * AAM_HEAD_PITCH;
+	}
+}
+
+int aam_head_marks_left(int screen_w) {
+	int slots[3];
+	aam_head_slots(screen_w, slots);
+	return screen_w - (slots[2] + AAM_HEAD_SLOT);
+}

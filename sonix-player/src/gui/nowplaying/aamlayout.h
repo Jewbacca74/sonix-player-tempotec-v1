@@ -21,6 +21,23 @@
 // below it there is nothing left to look at, and the picture is the point.
 #define AAM_MIN_ART_H 64
 
+// The header row's three marks, measured in from the right edge.
+//
+// They are drawn in the corner buttons the deck already uses (AAM_HEAD_SLOT,
+// 36 px), and what decides where a mark *looks* like it sits is the glyph, not
+// the slot: AAM_HEAD_GLYPH is the size every one of the three is drawn at, so
+// that the star and the shuffle, which come from canvases of 32 and 30 px, read
+// as the same weight. The rightmost glyph then keeps AAM_HEAD_END_PAD off the
+// panel's edge and the three stand on one pitch, which is what makes the row a
+// row rather than three things pinned to the corner.
+#define AAM_HEAD_SLOT 36
+#define AAM_HEAD_GLYPH 20
+#define AAM_HEAD_END_PAD 10
+#define AAM_HEAD_PITCH 26
+
+// Where the format line begins: past the chevron's own slot on the left.
+#define AAM_FORMAT_X 46
+
 typedef struct {
 	int status_h; // the shell's status bar, where the page begins
 	int header_h; // the row of chrome under it
@@ -33,5 +50,15 @@ typedef struct {
 // and the line height of the face in force. `leftie` stands the scrub bar up
 // the left edge, which takes AAM_RAIL_W off the sleeve's width.
 aam_box_t aam_layout_box(int screen_w, int screen_h, int status_h, int header_h, int strip_h, bool leftie);
+
+// The alignment offsets of the three header buttons, as LV_ALIGN_RIGHT_MID sees
+// them: out[0] the star (rightmost), out[1] the menu, out[2] the mode -- the
+// order the concept draws them in. Negative when applied, as every alignment
+// offset is.
+void aam_head_slots(int screen_w, int out[3]);
+
+// The x where the marks' slots begin: what the format line has to its right,
+// and the number that says whether "16/44.1FLAC" still fits beside them.
+int aam_head_marks_left(int screen_w);
 
 #endif /* AAMLAYOUT_H */

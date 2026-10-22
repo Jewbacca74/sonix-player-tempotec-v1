@@ -107,7 +107,38 @@ static void test_the_taller_header_wins(void) {
 	CHECK(b.art_y + b.art_h + b.strip_h == V1_H);
 }
 
+static void test_the_header_marks_stand_on_a_pitch(void) {
+	int slots[3];
+	aam_head_slots(V1_W, slots);
+
+	// Star, menu, mode -- three 36 px slots on one pitch, so the eye reads a
+	// row and not three marks pushed about by their own widths.
+	CHECK(slots[1] - slots[0] == AAM_HEAD_PITCH);
+	CHECK(slots[2] - slots[1] == AAM_HEAD_PITCH);
+
+	// The rightmost glyph keeps the end padding off the panel's edge. It is
+	// the glyph that has to sit there, and the glyph is drawn smaller than the
+	// slot it lives in, so the slot's centre is what the padding is measured
+	// from: half a glyph and the padding in from the edge.
+	int star_centre = V1_W - (slots[0] + AAM_HEAD_SLOT / 2);
+	CHECK(V1_W - (star_centre + AAM_HEAD_GLYPH / 2) == AAM_HEAD_END_PAD);
+
+	// The three marks all draw at one size: the star's canvas is 32 px and the
+	// mode's 30, and at their native sizes the mode is the heavier of the two.
+	CHECK(AAM_HEAD_GLYPH < 30);
+	CHECK(AAM_HEAD_GLYPH > 16);
+
+	// The format line still has room beside them. On the V1 the marks begin at
+	// 150 and the line starts at 46, which leaves better than a hundred pixels
+	// for "16/44.1FLAC" -- about what it needs at 14 px. This is the check
+	// that would have caught the row being laid out by eye.
+	CHECK(aam_head_marks_left(V1_W) == 150);
+	CHECK(aam_head_marks_left(V1_W) - AAM_FORMAT_X >= 96);
+	(void)star_centre;
+}
+
 int main(void) {
+	test_the_header_marks_stand_on_a_pitch();
 	test_the_panel_is_shared_out();
 	test_leftie_takes_its_width_off_the_sleeve();
 	test_the_sleeve_has_a_floor();

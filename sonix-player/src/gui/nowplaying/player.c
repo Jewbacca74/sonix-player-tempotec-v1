@@ -79,6 +79,10 @@ static void update_repeat_button(void);
 // the shape of the track -- and a blue play button in the middle of it was the
 // one thing that still belonged to some other page.
 static lv_color_t chrome_accent(void);
+// The colour of the played stretch of the bar (and, in Album Art Max, of the
+// artist's name beside the title): the accent, or the sleeve's with the cover
+// tint on. Declared here for set_over_cover, which runs long before it.
+static lv_color_t progress_tint(void);
 static lv_obj_t *progress_slider;
 // The compact slider leaves room for its oversized endpoint knob and shadow.
 // Zero means use the original percentage width on the HiBy panels.
@@ -334,22 +338,27 @@ static int alt_pill_pad_v = ALT_PILL_PAD_V;
 // section: the words' page and the glyph tinting both ask for one of them, and
 // both are written long before that section is.
 #define AAM_HEADER_H 40	  // the row under the status bar: format, mode, menu, star
-#define AAM_BAR_H 6		  // the minimal band along the foot of the sleeve
-#define AAM_BAR_GAP 3	  // what the band leaves under the foot of the sleeve
+#define AAM_BAR_H 8		  // the minimal band along the foot of the sleeve
+#define AAM_BAR_GAP 0	  // it is the picture's last line, not something above it
 #define AAM_BAR_REACH 8	  // how far past the band a thumb may land and still be a drag
+#define AAM_BAR_LIGHTEN 70 // how much lighter the played band is where it starts
+#define AAM_BAR_TAB 9	  // the marker's width, across the band
 #define AAM_STRIP_PAD_H 8 // what the strip keeps at either end
 #define AAM_STRIP_PAD_V 2
-#define AAM_KICKER_INSET 6 // the artist and the album, in the sleeve's top corners
+#define AAM_STRIP_GAP 5	  // between the title and the artist beside it
 #define AAM_QUEUE_ROOM 44  // the strip reserves this much for "12/123"
 #define AAM_TIME_INSET 0   // the clocks, in the middle of the dimmed picture
-// The three header buttons, measured in from the right edge: the star first,
-// then the menu, then the repeat mode -- the order the concept draws them in.
-// Each slot is 36 px wide, which is the corner button the deck already uses.
-#define AAM_STAR_X 2
-#define AAM_MENU_X 38
-#define AAM_SHUFFLE_X 76
-// Where the format begins: past the chevron's 36 px slot and its padding.
-#define AAM_FORMAT_X 46
+// How each of the header's marks is scaled out of the canvas it was drawn on:
+// the mode glyph is 30 px and the star 32, and both are drawn at the row's own
+// size (AAM_HEAD_GLYPH) so that neither reads as the bigger button.
+#define AAM_MODE_SCALE (AAM_HEAD_GLYPH * 256 / 30)
+#define AAM_STAR_SCALE (AAM_HEAD_GLYPH * 256 / 32)
+// The menu's three lines: as wide as the marks are tall, so the glyph reads as
+// the third of a set rather than as a different kind of button.
+#define AAM_MENU_W 18
+#define AAM_MENU_BAR 3
+#define AAM_MENU_PITCH 6
+#define AAM_MENU_H (AAM_MENU_PITCH * 2 + AAM_MENU_BAR)
 
 // How far the picture drops while it is being scrubbed, and what the two clocks
 // are written in over it.
@@ -409,9 +418,13 @@ static lv_obj_t *aam_top;		 // the header row: format, mode, menu, star
 static lv_obj_t *aam_bar_host;	 // where the scrub bar stands, over the sleeve
 static lv_obj_t *aam_scrim;		 // the veil that drops while scrubbing
 static lv_obj_t *aam_time;		 // "1:16/2:46", in the middle of the veil
-static lv_obj_t *aam_artist;	 // the artist, in the sleeve's top-left corner
-static lv_obj_t *aam_album;		 // the album, in its top-right
-static lv_obj_t *aam_menu_glyph; // three lines, in place of the ellipsis
+// The strip at the foot: the title, the artist beside it in the record's
+// colour, and the place in the queue against the right edge. A row of its own
+// rather than the deck's column, so that the artist sits *after* a title of any
+// length instead of at a position worked out from the last one.
+static lv_obj_t *aam_strip;
+static lv_obj_t *aam_strip_space; // pushes the queue position to the right
+static lv_obj_t *aam_menu_glyph;  // three lines, in place of the ellipsis
 static lv_obj_t *aam_menu_bar[3];
 
 static uint32_t album_tone; // the sleeve's colour, 0 when there is no sleeve
@@ -1130,9 +1143,7 @@ static void set_over_cover(bool on) {
 	bool mono = theme_is_monochrome();
 	bool tokyo = theme_is_tokyo_night();
 	lv_obj_t *const text_objs[] = {song_title_label, elapsed_label, remaining_label};
-	// The two corners of Album Art Max are read over the photograph, so they
-	// follow the same rule as the artist line they repeat.
-	lv_obj_t *const dim_objs[] = {song_artist_label, format_label, queue_position_label, aam_artist, aam_album};
+	lv_obj_t *const dim_objs[] = {song_artist_label, format_label, queue_position_label};
 	lv_obj_t *const icon_objs[] = {prev_icon, next_icon};
 
 	for (size_t i = 0; i < sizeof(text_objs) / sizeof(text_objs[0]); i++) {
@@ -1169,6 +1180,15 @@ static void set_over_cover(bool on) {
 			lv_obj_remove_local_style_prop(dim_objs[i], LV_STYLE_TEXT_COLOR, 0);
 		}
 	}
+	// Album Art Max's strip carries the artist in the record's colour rather than
+	// in the deck's secondary ink -- the concept's title and artist are two inks
+	// on the one black strip -- and that colour is the band's own. Set here, at
+	// the end of the dimming above, so that every path which recolours the
+	// chrome (a new palette, a new sleeve) leaves it saying the same thing.
+	if (layout_aam_now && song_artist_label) {
+		lv_obj_set_style_text_color(song_artist_label, progress_tint(), 0);
+	}
+
 	for (size_t i = 0; i < sizeof(icon_objs) / sizeof(icon_objs[0]); i++) {
 		if (!icon_objs[i]) {
 			continue;
@@ -1320,6 +1340,16 @@ static void paint_progress_tint(void) {
 	lv_color_t tint = progress_tint();
 	lv_obj_set_style_bg_color(progress_slider, tint, LV_PART_INDICATOR);
 	lv_obj_set_style_bg_color(progress_slider, tint, LV_PART_KNOB);
+	if (layout_aam_now) {
+		// Album Art Max's band is read as a stretch of colour rather than as a
+		// line: the played part starts a step lighter at the first second and
+		// deepens to the accent at the head (the concept's peach into its
+		// pink). Written here because this is where the colour is decided --
+		// the theme's, or the sleeve's with the cover tint on.
+		lv_obj_set_style_bg_color(progress_slider, lv_color_lighten(tint, AAM_BAR_LIGHTEN), LV_PART_INDICATOR);
+		lv_obj_set_style_bg_grad_color(progress_slider, tint, LV_PART_INDICATOR);
+		lv_obj_set_style_bg_grad_dir(progress_slider, LV_GRAD_DIR_HOR, LV_PART_INDICATOR);
+	}
 }
 
 // The type on that surface. Worked out rather than fixed so that a change to
@@ -2246,7 +2276,7 @@ static void lyrics_layout(void) {
 	int pane_y = 0;
 	int x = 0, w = cover_box_w, h = cover_box_h - top;
 	if (layout_aam_now) {
-		h -= AAM_BAR_H + 4; // the band's own row, at the foot of the picture
+		h -= AAM_BAR_H; // the band's own row, at the foot of the picture
 	} else if (layout_immersive_now) {
 		// The whole screen is the picture and the controls stand on its foot,
 		// as in the standard arrangement: the words fill what is above them
@@ -3228,14 +3258,20 @@ static bool poster_take_back(void) {
 // back_btn_player_top_inset(), which puts the chevron under it rather than in
 // it.
 //
-// Progress is a minimal band along the foot of the picture -- a thin track, the
-// played part in the accent, a small round head -- with the title and the place
-// in the queue on a quiet strip under it. The two clocks are not on the page at
-// all: they appear in the middle of the artwork, large, while the track is
-// being scrubbed and only for as long as that lasts, with the picture dropped
-// in brightness behind them so the numbers read over any sleeve. Scrubbing is
-// the hardware keys' hold (device_state_scrub_active) or a drag on the band --
-// the same two routes the rest of the player seeks by.
+// Progress is a minimal band along the foot of the picture -- a stretch of the
+// accent that deepens towards a tab-shaped head -- with the title, the artist in
+// the record's colour and the place in the queue on a black strip under it. The
+// two clocks are not on the page at all: they appear in the middle of the
+// artwork, large, while the track is being scrubbed and only for as long as
+// that lasts, with the picture dropped in brightness behind them so the numbers
+// read over any sleeve. Scrubbing is the hardware keys' hold
+// (device_state_scrub_active) or a drag on the band -- the same two routes the
+// rest of the player seeks by.
+//
+// Nothing is written over the photograph itself. The concept puts the artist
+// and the album in its top corners; the artist belongs on the strip beside the
+// track's name where it can be read at a full line's width, and the album is
+// not on this page at all.
 //
 // "Leftie", the concept's second drawing, stands the band up along the left
 // edge: the artwork gives up AAM_RAIL_W pixels of width and the thumb travels
@@ -3289,15 +3325,27 @@ static void aam_slider_style(bool aam) {
 		return;
 	}
 	if (aam) {
+		// The band: square ends, no track round it, and a marker that is a
+		// tab across it rather than a knob on it -- the concept's playhead is
+		// a block of the accent standing the height of the band and a little
+		// wider, not a disc.
 		lv_obj_set_style_radius(progress_slider, 0, LV_PART_MAIN);
 		lv_obj_set_style_radius(progress_slider, 0, LV_PART_INDICATOR);
-		lv_obj_set_style_radius(progress_slider, LV_RADIUS_CIRCLE, LV_PART_KNOB);
+		lv_obj_set_style_radius(progress_slider, 2, LV_PART_KNOB);
 		lv_obj_set_style_bg_color(progress_slider, lv_color_black(), LV_PART_MAIN);
-		lv_obj_set_style_bg_opa(progress_slider, LV_OPA_40, LV_PART_MAIN);
+		lv_obj_set_style_bg_opa(progress_slider, LV_OPA_50, LV_PART_MAIN);
+		lv_obj_set_style_shadow_width(progress_slider, 0, LV_PART_MAIN);
 		lv_obj_set_style_border_width(progress_slider, 0, LV_PART_KNOB);
-		lv_obj_set_style_pad_all(progress_slider, 1, LV_PART_KNOB);
+		lv_obj_set_style_pad_all(progress_slider, 0, LV_PART_KNOB);
 		lv_obj_set_style_shadow_width(progress_slider, 0, LV_PART_KNOB);
+		lv_obj_set_style_width(progress_slider, AAM_BAR_TAB, LV_PART_KNOB);
+		lv_obj_set_style_height(progress_slider, AAM_BAR_H, LV_PART_KNOB);
 	} else {
+		// Back to the deck's own bar: a ringed disc on a rounded track, with
+		// the marker sized by its padding again rather than by a width.
+		lv_obj_set_style_width(progress_slider, LV_SIZE_CONTENT, LV_PART_KNOB);
+		lv_obj_set_style_height(progress_slider, LV_SIZE_CONTENT, LV_PART_KNOB);
+		lv_obj_set_style_bg_grad_dir(progress_slider, LV_GRAD_DIR_NONE, LV_PART_INDICATOR);
 		lv_obj_set_style_radius(progress_slider, LV_RADIUS_CIRCLE, LV_PART_MAIN);
 		lv_obj_set_style_radius(progress_slider, LV_RADIUS_CIRCLE, LV_PART_INDICATOR);
 		lv_obj_set_style_radius(progress_slider, LV_RADIUS_CIRCLE, LV_PART_KNOB);
@@ -3365,21 +3413,30 @@ static void aam_place(void) {
 		}
 	}
 
-	// The two corners of the sleeve share its width between them.
-	int room = (b.art_w - 2 * AAM_KICKER_INSET - 8) / 2;
-	if (room < 30) {
-		room = 30;
-	}
-	if (aam_artist) {
-		lv_obj_set_style_max_width(aam_artist, room, 0);
-	}
-	if (aam_album) {
-		lv_obj_set_style_max_width(aam_album, room, 0);
-	}
-	// The format has the header's left end, up to where the buttons begin.
-	int format_room = screen_w - AAM_SHUFFLE_X - COMPACT_CORNER_BTN - AAM_FORMAT_X - 2;
+	// The format has the header's left end, up to where the first of the three
+	// marks begins -- measured from the marks themselves (aam_head_slots), so a
+	// change to their size or spacing cannot leave the line running under them.
+	int format_room = aam_head_marks_left(screen_w) - AAM_FORMAT_X - 4;
 	if (format_label && format_room > 20) {
 		lv_obj_set_style_max_width(format_label, format_room, 0);
+	}
+
+	// The strip: the title, the artist beside it, the queue position at the
+	// right. The title takes the larger share of what is left, because it is
+	// the name of the thing; the artist keeps enough to be read and to scroll
+	// if it has to.
+	if (aam_strip) {
+		lv_obj_set_size(aam_strip, screen_w, lv_pct(100));
+		int room = screen_w - 2 * AAM_STRIP_PAD_H - AAM_QUEUE_ROOM - 2 * AAM_STRIP_GAP;
+		if (room < 60) {
+			room = 60;
+		}
+		if (song_title_label) {
+			lv_obj_set_style_max_width(song_title_label, room - room / 3, 0);
+		}
+		if (song_artist_label) {
+			lv_obj_set_style_max_width(song_artist_label, room / 3, 0);
+		}
 	}
 }
 
@@ -3419,45 +3476,6 @@ static void aam_scrub_apply(bool on) {
 	}
 }
 
-// The artist and the album in the corners of the sleeve, in the concept's
-// small capitals: the names are upper-cased here rather than in the labels'
-// styles, because LVGL has no case transform and the rest of the page keeps
-// whatever the tags say. Only ASCII is folded -- a name in any other script is
-// left exactly as written.
-static void aam_set_kicker(lv_obj_t *label, const char *text) {
-	if (!label) {
-		return;
-	}
-	char buf[192];
-	size_t n = 0;
-	const char *start = text ? text : "";
-	while (*start == ' ') {
-		start++;
-	}
-	for (const char *p = start; *p && n < sizeof(buf) - 1; p++) {
-		unsigned char c = (unsigned char)*p;
-		buf[n++] = (c >= 'a' && c <= 'z') ? (char)(c - 'a' + 'A') : (char)c;
-	}
-	while (n > 0 && (buf[n - 1] == ' ' || buf[n - 1] == '\n' || buf[n - 1] == '\r')) {
-		n--;
-	}
-	buf[n] = '\0';
-	scrolltext_set(label, buf);
-	lv_obj_set_hidden(label, buf[0] == '\0');
-}
-
-// Fills the two corners from what is playing. Called on every track change, in
-// every arrangement: the labels are hidden outside AAM (aam_put shows them
-// again), and keeping them current costs two string compares.
-static void aam_set_texts(const device_state_t *state) {
-	if (!aam_artist && !aam_album) {
-		return;
-	}
-	const char *artist = state->live ? state->metadata.artist : metadata_shown_artist(&state->metadata);
-	aam_set_kicker(aam_artist, artist);
-	aam_set_kicker(aam_album, state->metadata.album);
-}
-
 // Puts the arrangement up. Reparenting and not rebuilding, as everywhere else
 // on this page: the title carries its scrolling, the buttons carry what they do
 // when pressed, and the slider carries the seeking.
@@ -3466,9 +3484,6 @@ static void aam_put(void) {
 		return;
 	}
 	aam_up = true;
-	device_state_t state;
-	device_state_get(&state);
-	aam_set_texts(&state);
 
 	// The deck, reduced to the strip under the sleeve. Its ground is the
 	// photograph's own foot rather than the theme's panel -- black, because
@@ -3478,23 +3493,39 @@ static void aam_put(void) {
 		lv_obj_set_style_bg_color(player_menu, lv_color_black(), 0);
 		lv_obj_set_style_bg_opa(player_menu, LV_OPA_COVER, 0);
 		lv_obj_set_style_bg_image_opa(player_menu, LV_OPA_TRANSP, 0);
-		// The deck keeps its rows in from the panel's edges; the strip is one
-		// row of its own and measures itself from the edge it is aligned to.
+		// The deck keeps its rows in from the panel's edges and off its own top
+		// and bottom; the strip fills the deck it now *is*, so both of those are
+		// taken off and given back in aam_take_back().
 		lv_obj_set_style_pad_hor(player_menu, 0, 0);
+		lv_obj_set_style_pad_ver(player_menu, 0, 0);
 	}
-	if (song_title_label) {
-		lv_obj_set_parent(song_title_label, player_menu);
-		lv_obj_set_ignore_layout(song_title_label, true);
-		lv_obj_set_style_translate_y(song_title_label, 0, 0);
-		lv_obj_set_width(song_title_label, LV_SIZE_CONTENT);
-		lv_obj_set_style_max_width(song_title_label,
-								   (int)lv_obj_get_width(player_screen) - 2 * AAM_STRIP_PAD_H - AAM_QUEUE_ROOM, 0);
-		lv_obj_align(song_title_label, LV_ALIGN_LEFT_MID, AAM_STRIP_PAD_H, 0);
-	}
-	if (queue_position_label) {
-		lv_obj_set_parent(queue_position_label, player_menu);
-		lv_obj_set_ignore_layout(queue_position_label, true);
-		lv_obj_align(queue_position_label, LV_ALIGN_RIGHT_MID, -AAM_STRIP_PAD_H, 0);
+	// The strip: title, then the artist in the record's colour, then the place
+	// in the queue pushed out to the right. The three are reparented in that
+	// order and then put in it, because flex lays a row out in the order its
+	// children were made and not in the order they were handed over.
+	if (aam_strip) {
+		if (song_title_label) {
+			lv_obj_set_parent(song_title_label, aam_strip);
+			lv_obj_set_ignore_layout(song_title_label, false); // the row places it
+			lv_obj_set_style_translate_y(song_title_label, 0, 0);
+			lv_obj_set_width(song_title_label, LV_SIZE_CONTENT);
+			lv_obj_move_to_index(song_title_label, 0);
+		}
+		if (song_artist_label) {
+			lv_obj_set_parent(song_artist_label, aam_strip);
+			lv_obj_set_ignore_layout(song_artist_label, false);
+			lv_obj_set_width(song_artist_label, LV_SIZE_CONTENT);
+			lv_obj_move_to_index(song_artist_label, 1);
+		}
+		if (aam_strip_space) {
+			lv_obj_move_to_index(aam_strip_space, 2);
+		}
+		if (queue_position_label) {
+			lv_obj_set_parent(queue_position_label, aam_strip);
+			lv_obj_set_ignore_layout(queue_position_label, false);
+			lv_obj_move_to_index(queue_position_label, 3);
+		}
+		lv_obj_set_hidden(aam_strip, false);
 	}
 	// What the deck used to carry and this arrangement does not.
 	lv_obj_t *const gone[] = {song_text_obj, song_side_obj, wave_box, below_slider_obj, controls_row};
@@ -3513,15 +3544,19 @@ static void aam_put(void) {
 		lv_obj_align(format_label, LV_ALIGN_LEFT_MID, AAM_FORMAT_X, 0);
 		lv_obj_set_hidden(format_label, false);
 	}
+	// Three slots on one pitch, measured in from the right edge by the layout
+	// (aam_head_slots): the star, the menu, then the mode.
+	int slots[3];
+	aam_head_slots((int)lv_obj_get_width(player_screen), slots);
 	if (fav_btn_obj && aam_top) {
 		lv_obj_set_parent(fav_btn_obj, aam_top);
 		lv_obj_set_ignore_layout(fav_btn_obj, true);
-		lv_obj_align(fav_btn_obj, LV_ALIGN_RIGHT_MID, -AAM_STAR_X, 0);
+		lv_obj_align(fav_btn_obj, LV_ALIGN_RIGHT_MID, -slots[0], 0);
 	}
 	if (more_btn_obj && aam_top) {
 		lv_obj_set_parent(more_btn_obj, aam_top);
 		lv_obj_set_ignore_layout(more_btn_obj, true);
-		lv_obj_align(more_btn_obj, LV_ALIGN_RIGHT_MID, -AAM_MENU_X, 0);
+		lv_obj_align(more_btn_obj, LV_ALIGN_RIGHT_MID, -slots[1], 0);
 	}
 	// The repeat mode and, on a book, the speed gauge stand in the same place.
 	lv_obj_t *const modes[] = {repeat_btn_obj, speed_btn_obj};
@@ -3529,8 +3564,17 @@ static void aam_put(void) {
 		if (modes[i] && aam_top) {
 			lv_obj_set_parent(modes[i], aam_top);
 			lv_obj_set_ignore_layout(modes[i], true);
-			lv_obj_align(modes[i], LV_ALIGN_RIGHT_MID, -AAM_SHUFFLE_X, 0);
+			lv_obj_align(modes[i], LV_ALIGN_RIGHT_MID, -slots[2], 0);
 		}
+	}
+	// The three marks at one weight. The mode glyph is drawn from a 30 px
+	// canvas and the star from a 32, and left at their native sizes inside
+	// equal slots the mode reads as the bigger button -- which is what it did.
+	if (repeat_btn_icon) {
+		lv_image_set_scale(repeat_btn_icon, AAM_MODE_SCALE);
+	}
+	if (fav_btn_icon) {
+		lv_image_set_scale(fav_btn_icon, AAM_STAR_SCALE);
 	}
 
 	// The menu: three lines here, the ellipsis everywhere else (see aam_build).
@@ -3600,11 +3644,20 @@ static bool aam_take_back(void) {
 	if (aam_bar_host) {
 		lv_obj_set_hidden(aam_bar_host, true);
 	}
-	if (aam_artist) {
-		lv_obj_set_hidden(aam_artist, true);
+	if (aam_strip) {
+		lv_obj_set_hidden(aam_strip, true);
 	}
-	if (aam_album) {
-		lv_obj_set_hidden(aam_album, true);
+	// The artist line goes back to the colour its own style gives it, and the
+	// three marks back to the sizes the deck draws them at.
+	if (song_artist_label) {
+		lv_obj_remove_local_style_prop(song_artist_label, LV_STYLE_TEXT_COLOR, 0);
+		lv_obj_set_style_max_width(song_artist_label, LV_COORD_MAX, 0);
+	}
+	if (song_title_label) {
+		lv_obj_set_style_max_width(song_title_label, LV_COORD_MAX, 0);
+	}
+	if (repeat_btn_icon) {
+		lv_image_set_scale(repeat_btn_icon, 256);
 	}
 
 	if (format_label && song_side_obj) {
@@ -3656,6 +3709,9 @@ static bool aam_take_back(void) {
 		lv_obj_set_ignore_layout(queue_position_label, false);
 		lv_obj_align(queue_position_label, LV_ALIGN_CENTER, 0, 0);
 	}
+	// The two labels are put back by the branch of apply_layout that follows:
+	// the column under the title, or the alternative arrangement's pills. All
+	// that is left to undo here is the room this arrangement gave them.
 	if (song_title_label) {
 		lv_obj_set_ignore_layout(song_title_label, false);
 	}
@@ -3672,6 +3728,10 @@ static bool aam_take_back(void) {
 					   ? ((int)lv_obj_get_width(player_screen) - compact_progress_width) / 2
 					   : bp_padding();
 		lv_obj_set_style_pad_hor(player_menu, side, 0);
+		// The rows' own top and bottom, as player_init worked them out for the
+		// board in force (AAM is only ever offered on the compact one).
+		lv_obj_set_style_pad_ver(player_menu, menu_pad_ver, 0);
+		lv_obj_set_style_pad_bottom(player_menu, COMPACT_DECK_PAD_BOTTOM, 0);
 	}
 	if (below_slider_obj) {
 		lv_obj_set_hidden(below_slider_obj, live_mode && !live_custom_nav);
@@ -3725,13 +3785,13 @@ static void aam_build(void) {
 
 	aam_bar_host = lv_obj_create(player_screen);
 	lv_obj_remove_style_all(aam_bar_host);
-	lv_obj_set_size(aam_bar_host, screen_w, AAM_BAR_H + 4);
+	lv_obj_set_size(aam_bar_host, screen_w, AAM_BAR_H + 2 * AAM_BAR_REACH);
 	lv_obj_set_scrollable(aam_bar_host, false);
 	lv_obj_set_clickable(aam_bar_host, false);
 	lv_obj_set_hidden(aam_bar_host, true);
 
-	// Over the picture and under the two corners: created before them, so the
-	// labels stay legible while the sleeve is dimmed.
+	// Over the picture, and under the clocks: the veil dims the sleeve while a
+	// scrub runs, and what has to stay legible over it is the time.
 	aam_scrim = lv_obj_create(cover_art_group);
 	lv_obj_remove_style_all(aam_scrim);
 	lv_obj_set_size(aam_scrim, lv_pct(100), lv_pct(100));
@@ -3741,35 +3801,31 @@ static void aam_build(void) {
 	lv_obj_set_clickable(aam_scrim, false);
 	lv_obj_set_hidden(aam_scrim, true);
 
-	// The two corners are read over whatever the sleeve happens to be there --
-	// on a pale photograph the dim grey the artist line wears elsewhere
-	// disappears into it -- so they are the one type on this page with a
-	// hairline of black round it. One pixel, which is what makes white or grey
-	// legible on any picture without putting a slab behind it.
-	aam_artist = lv_label_create(cover_art_group);
-	lv_obj_add_style(aam_artist, &theme_style_text_dim, 0);
-	lv_obj_set_style_text_font(aam_artist, bp_artist_font(), 0);
-	lv_obj_set_style_text_letter_space(aam_artist, 1, 0);
-	lv_obj_set_style_text_outline_stroke_color(aam_artist, lv_color_black(), 0);
-	lv_obj_set_style_text_outline_stroke_width(aam_artist, 2, 0);
-	lv_obj_set_width(aam_artist, LV_SIZE_CONTENT);
-	lv_obj_align(aam_artist, LV_ALIGN_TOP_LEFT, AAM_KICKER_INSET, AAM_KICKER_INSET);
-	lv_obj_set_clickable(aam_artist, false);
-	scrolltext_apply(aam_artist);
-	lv_obj_set_hidden(aam_artist, true);
+	// The strip at the foot: the title, the artist beside it and the place in
+	// the queue against the right edge, in a row of its own. It lives in the
+	// deck (which is the strip's own height in this arrangement) but lays its
+	// children out itself, so that the artist follows a title of any length
+	// instead of standing at a position worked out from the last one.
+	aam_strip = lv_obj_create(player_menu);
+	lv_obj_remove_style_all(aam_strip);
+	lv_obj_set_size(aam_strip, screen_w, lv_pct(100));
+	lv_obj_set_ignore_layout(aam_strip, true); // the deck's column does not place it
+	lv_obj_align(aam_strip, LV_ALIGN_CENTER, 0, 0);
+	lv_obj_set_style_pad_hor(aam_strip, AAM_STRIP_PAD_H, 0);
+	lv_obj_set_style_pad_column(aam_strip, AAM_STRIP_GAP, 0);
+	lv_obj_set_style_pad_ver(aam_strip, 0, 0);
+	lv_obj_set_scrollable(aam_strip, false);
+	lv_obj_set_clickable(aam_strip, false);
+	lv_obj_set_flex_flow(aam_strip, LV_FLEX_FLOW_ROW);
+	lv_obj_set_flex_align(aam_strip, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	lv_obj_set_hidden(aam_strip, true);
 
-	aam_album = lv_label_create(cover_art_group);
-	lv_obj_add_style(aam_album, &theme_style_text_dim, 0);
-	lv_obj_set_style_text_font(aam_album, bp_artist_font(), 0);
-	lv_obj_set_style_text_letter_space(aam_album, 1, 0);
-	lv_obj_set_style_text_align(aam_album, LV_TEXT_ALIGN_RIGHT, 0);
-	lv_obj_set_style_text_outline_stroke_color(aam_album, lv_color_black(), 0);
-	lv_obj_set_style_text_outline_stroke_width(aam_album, 2, 0);
-	lv_obj_set_width(aam_album, LV_SIZE_CONTENT);
-	lv_obj_align(aam_album, LV_ALIGN_TOP_RIGHT, -AAM_KICKER_INSET, AAM_KICKER_INSET);
-	lv_obj_set_clickable(aam_album, false);
-	scrolltext_apply(aam_album);
-	lv_obj_set_hidden(aam_album, true);
+	// What pushes the queue position out to the right end of the row.
+	aam_strip_space = lv_obj_create(aam_strip);
+	lv_obj_remove_style_all(aam_strip_space);
+	lv_obj_set_size(aam_strip_space, 1, 1);
+	lv_obj_set_flex_grow(aam_strip_space, 1);
+	lv_obj_set_clickable(aam_strip_space, false);
 
 	aam_time = lv_label_create(cover_art_group);
 	lv_label_set_text(aam_time, "");
@@ -3782,15 +3838,15 @@ static void aam_build(void) {
 	// The menu's three lines, inside the button the ellipsis already lives in.
 	aam_menu_glyph = lv_obj_create(more_btn_obj);
 	lv_obj_remove_style_all(aam_menu_glyph);
-	lv_obj_set_size(aam_menu_glyph, 16, 15);
+	lv_obj_set_size(aam_menu_glyph, AAM_MENU_W, AAM_MENU_H);
 	lv_obj_center(aam_menu_glyph);
 	lv_obj_set_clickable(aam_menu_glyph, false);
 	lv_obj_set_hidden(aam_menu_glyph, true);
 	for (int i = 0; i < 3; i++) {
 		lv_obj_t *bar = lv_obj_create(aam_menu_glyph);
 		lv_obj_remove_style_all(bar);
-		lv_obj_set_size(bar, 16, 3);
-		lv_obj_set_pos(bar, 0, i * 6);
+		lv_obj_set_size(bar, AAM_MENU_W, AAM_MENU_BAR);
+		lv_obj_set_pos(bar, 0, i * AAM_MENU_PITCH);
 		lv_obj_set_style_radius(bar, LV_RADIUS_CIRCLE, 0);
 		lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
 		lv_obj_set_style_bg_color(bar, lv_color_white(), 0);
@@ -4555,11 +4611,6 @@ static void refresh_now_playing(void) {
 	// a song.
 	apply_audiobook_mode(!state.live && audiobook_is_playing(),
 						 !state.live && podcastcache_is_episode(state.current_file));
-	// The artist and the album in the corners of the sleeve, for the
-	// arrangement that keeps them there; cheap in every other one, where the
-	// two labels are hidden.
-	aam_set_texts(&state);
-
 	if (state.live) {
 		// The station on top, what it says is on air underneath -- the same
 		// two lines as a track, carrying the two things a radio knows.
@@ -4605,7 +4656,6 @@ static void refresh_now_playing(void) {
 static void refresh_live_texts(const device_state_t *state) {
 	scrolltext_set(song_title_label, state->metadata.title);
 	scrolltext_set(song_artist_label, state->metadata.artist);
-	aam_set_texts(state); // what the station says is on air, in the sleeve's corner
 	lyrics_head_sync();
 	alt_pills_sync();
 	update_fav_button();
@@ -4807,8 +4857,13 @@ static void update_fav_button(void) {
 	// the row without leading it. Immersive keeps the star's size -- over
 	// the photograph the heart is the one mark on it, and a small one is a
 	// lost one. Leaving Poster puts the star's size back.
-	lv_image_set_scale(fav_btn_icon, layout_poster_now ? bp_pick(POSTER_HEART_SCALE, POSTER_HEART_SCALE_WIDE)
-														: bp_pick(FAV_STAR_SCALE, FAV_STAR_SCALE_WIDE));
+	// Album Art Max draws the star as one of three marks in a row of its own,
+	// all of them AAM_HEAD_GLYPH px, so it takes that size rather than the
+	// deck's here.
+	lv_image_set_scale(fav_btn_icon, layout_aam_now ? AAM_STAR_SCALE
+											: layout_poster_now
+												? bp_pick(POSTER_HEART_SCALE, POSTER_HEART_SCALE_WIDE)
+												: bp_pick(FAV_STAR_SCALE, FAV_STAR_SCALE_WIDE));
 	lv_obj_set_style_image_recolor(fav_btn_icon, favorite_color, 0);
 	lv_obj_set_style_image_recolor_opa(fav_btn_icon, LV_OPA_COVER, 0);
 }
@@ -5124,6 +5179,9 @@ static void update_repeat_button(void) {
 	}
 
 	lv_image_set_src(repeat_btn_icon, icon);
+	// And at the deck's size everywhere but in Album Art Max, whose header row
+	// carries it beside the star and the menu at one weight.
+	lv_image_set_scale(repeat_btn_icon, layout_aam_now ? AAM_MODE_SCALE : 256);
 	lv_obj_set_style_image_recolor(repeat_btn_icon, color, 0);
 	lv_obj_set_style_image_recolor_opa(repeat_btn_icon, LV_OPA_COVER, 0);
 }
@@ -5776,7 +5834,6 @@ void player_refresh_artist(void) {
 		return;
 	}
 	scrolltext_set(song_artist_label, metadata_shown_artist(&state.metadata));
-	aam_set_texts(&state);
 	lyrics_head_sync();
 	alt_pills_sync();
 }
