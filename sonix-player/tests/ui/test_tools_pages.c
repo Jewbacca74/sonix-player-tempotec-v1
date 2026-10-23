@@ -91,6 +91,7 @@ int fonts_choices(const char **ids, const char **labels, int max) {
 }
 
 void bootlogo_set(int choice, bool dark) { (void)choice; (void)dark; }
+bool bootpic_present(void) { return false; }
 void device_state_get(device_state_t *out) { memset(out, 0, sizeof(*out)); }
 bool gui_card_available(void) { return true; }
 void gui_notify_no_card(void) { assert(!"the card is there in this test"); }
