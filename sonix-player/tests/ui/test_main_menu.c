@@ -16,6 +16,7 @@
 #include "src/gui/library/playlistpage.h"
 #include "src/gui/library/search.h"
 #include "src/gui/nowplaying/coverflow.h"
+#include "src/gui/shell/gestures.h"
 #include "src/gui/nowplaying/player.h"
 #include "src/gui/settings/appearance.h"
 #include "src/gui/settings/bootpicpage.h"
@@ -178,6 +179,13 @@ void switcher_attach_back_gesture(lv_obj_t *obj) { (void)obj; }
 bool switcher_back_drag_active(void) { return false; }
 void player_sheet_attach_drag(lv_obj_t *obj, bool opening) { (void)obj; (void)opening; }
 bool player_sheet_drag_active(void) { return false; }
+
+/* The carousel's own hooks. The pages here never open it: what they are checked
+ * for is that they leave the pull alone (see the tap guards in gridpage.c). */
+void coverflow_attach_edge(lv_obj_t *obj, gui_config_t *cfg) { (void)obj; (void)cfg; }
+bool coverflow_drag_active(void) { return false; }
+bool coverflow_is_open(void) { return false; }
+
 void player_refresh_now_playing(void) {}
 void player_sheet_open(bool animated) { (void)animated; }
 void medialist_open(const char *title, library_list_t kind, library_filter_t filter, const char *value) {
@@ -466,6 +474,14 @@ int main(int argc, char **argv) {
 
 	assert(!main_menu_books());
 	assert(find_label(lv_obj_get_child(grid, 3), tr("audiobooks")));
+	// Which edge each sheet is pulled from is a choice, and the old arrangement is
+	// the default: nothing moves under anyone's thumb because of an update.
+	assert(!gestures_stock());
+	lv_obj_t *gesture_label = find_label(appearance_screen, tr("appearance_stock_gestures"));
+	assert(gesture_label);
+	lv_obj_t *gesture_toggle = child_of_type(lv_obj_get_parent(gesture_label), &lv_switch_class);
+	assert(gesture_toggle && !lv_obj_has_state(gesture_toggle, LV_STATE_CHECKED));
+
 	lv_obj_t *books_label = find_label(appearance_screen, tr("appearance_home_books"));
 	assert(books_label);
 	lv_obj_t *books_toggle = child_of_type(lv_obj_get_parent(books_label), &lv_switch_class);

@@ -1070,3 +1070,56 @@ Left alone on purpose: the Russian keyboard layout (a way to type Cyrillic in
 the search box, unrelated to the interface language), the sort collation for
 kana and CJK titles, the metadata reader's Chinese code pages, and the
 `ru`/`ja`/`zh` regional tags a podcast feed may still declare.
+
+## The gestures, as a choice rather than a replacement
+
+The two sheets this interface pulls from the edge of the screen are the control
+centre and Cover Flow. The fork has always put the control centre under the
+status bar — pull down to open it — and Cover Flow at the foot of the main menu,
+pulled up from the bottom band. The original TempoTec firmware has them the
+other way round: Cover Flow comes down from the top edge of any page, and the
+control centre rises from the bottom.
+
+That arrangement was built, and it is the one the stock firmware has, but it
+does not get to be the default. A player that has been updated should keep the
+gesture it already knows; moving both sheets to the opposite edges in a software
+update is how a device goes back to its box. So both arrangements are in the
+build and **Settings → Appearance → Stock gestures** picks between them, off by
+default, which is the fork's own.
+
+`src/gui/shell/gestures.c` is the whole of the setting: `gestures_stock()` and
+`gestures_set_stock()`, over `[ui] stock_gestures` in the device config, read
+once and kept because the answer is asked for on every press that lands on the
+status bar or the bottom edge of the screen. Nothing is rebuilt when it changes.
+Both sheets ask it as they open, place their grip and their cards for the answer
+and park a screen away from that edge, so the next pull uses the new edges and
+the one after that would use them back again:
+
+* the control centre parks below the bottom edge in the stock arrangement and
+  above the top edge in the classic one, keeps its grabber under the status bar
+  in the first and at the foot of the sheet in the second, and gives the drag the
+  one free direction it has — the extra button rows are stretched out by a drag
+  in the classic arrangement, where downwards is free, and by a tap on the handle
+  under the brightness slider in the stock one, where downwards is the way out;
+* Cover Flow parks above the top edge in the stock arrangement and below the
+  bottom edge in the classic one, with its grip at the foot of the sheet in the
+  first and under the status bar in the second, and the row is laid out around
+  the viewport that moves with it.
+
+The pull that starts each one moves with the sheet. In the classic arrangement
+the status bar pulls the control centre down and the bottom band of the main menu
+pulls Cover Flow up; the band is the grid and the visible mini-player rather than
+a strip of their own, because a strip pinned over the last pixels of the home
+cards would eat their taps, and the flag `coverflow_drag_active()` is what keeps
+the tap that ends that pull from opening the card underneath. In the stock
+arrangement the status bar pulls Cover Flow down and the bottom edge of the
+screen pulls the control centre up, watched at the input device so that the same
+last pixels still take their taps.
+
+The pages that hide the status bar keep the top pull they have always had where
+it belongs to them. The now-playing page hides it so the artwork can run to the
+top edge, and a strip of that artwork where the bar would be pulls whichever
+sheet the arrangement puts at the top — the control centre in the classic one,
+Cover Flow in the stock one — because hiding the bar must not take the gesture
+away with it. The reader and the two games hide it behind a full-screen picture
+instead, and they keep their own presses.
