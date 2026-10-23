@@ -858,6 +858,15 @@ static bool set_bool_property(const char *path, const char *interface, const cha
 	return set_bool_property_ms(path, interface, name, value, CALL_MS, true);
 }
 
+// Whether there is a connection to ask anything on. Only used to word a
+// failure: "no reply" from a call nobody sent would be a lie.
+static bool have_conn(void) {
+	pthread_mutex_lock(&lock);
+	bool open = conn != NULL;
+	pthread_mutex_unlock(&lock);
+	return open;
+}
+
 static bool set_u32_property_ms(const char *path, const char *interface, const char *name, uint32_t value, int timeout_ms,
 								bool complain) {
 	pthread_mutex_lock(&lock);
@@ -945,7 +954,9 @@ bool btstack_set_discoverable(bool on) {
 	if (set_bool_property_ms(BLUEZ_ADAPTER_PATH, BLUEZ_ADAPTER_IFACE, "Discoverable", on, PROPERTY_SET_MS, false)) {
 		return true;
 	}
-	fprintf(stderr, "btstack: Discoverable = %s refused: no reply, twice\n", on ? "true" : "false");
+	if (have_conn()) {
+		fprintf(stderr, "btstack: Discoverable = %s refused: no reply, twice\n", on ? "true" : "false");
+	}
 	return false;
 }
 
@@ -964,7 +975,7 @@ bool btstack_set_discoverable_timeout(unsigned seconds) {
 	sleep_ms(200);
 	bool ok = set_u32_property_ms(BLUEZ_ADAPTER_PATH, BLUEZ_ADAPTER_IFACE, "DiscoverableTimeout", seconds, PROPERTY_SET_MS,
 								  false);
-	if (!ok) {
+	if (!ok && have_conn()) {
 		fprintf(stderr, "btstack: DiscoverableTimeout = %u refused: no reply, twice\n", seconds);
 	}
 	return ok;
@@ -1004,7 +1015,11 @@ bool btstack_discovery(bool on) {
 	// Already discovering, or already stopped. Both mean the caller has what it
 	// asked for, and treating them as failures is how a scan button that works
 	// reports an error.
-	if (strstr(err, "InProgress") || strstr(err, "NotAuthorized") || strstr(err, "Failed")) {
+	// NotReady counts for stopping only: stopping a discovery on an adapter
+	// that is already down is what was asked for, while starting one on an
+	// adapter that is not up yet is exactly the failure the caller has to retry.
+	if (strstr(err, "InProgress") || strstr(err, "NotAuthorized") || strstr(err, "Failed") ||
+		(!on && strstr(err, "NotReady"))) {
 		// Not an error, and not worth the alarming channel: the log had this
 		// line at every scan stop on a healthy device.
 		printf("btstack: discovery %s: %s (already in the wanted state)\n", on ? "on" : "off", err);

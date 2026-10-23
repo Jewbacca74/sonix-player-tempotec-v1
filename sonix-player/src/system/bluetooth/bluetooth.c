@@ -1787,8 +1787,33 @@ static void refresh_devices(void) {
 // rather than all at once at the end.
 #define SCAN_SECONDS 10
 
+// How many times a refused discovery is asked for again, and how long between.
+// NotReady is what bluez answers while the controller is coming back from a
+// reset, and the log has three of them inside a second at 23:13:49 with the
+// chip down under bluealsa at the same moment ("Couldn't get HCI version:
+// Network is down"). Retried, the search starts a little late instead of
+// failing under the user's finger.
+#define SCAN_START_TRIES 3
+#define SCAN_START_WAIT_MS 400
+
 static void do_scan(void) {
-	if (!btstack_discovery(true)) {
+	bool started = false;
+	for (int attempt = 0; attempt < SCAN_START_TRIES && !started; attempt++) {
+		if (attempt) {
+			sleep_ms(SCAN_START_WAIT_MS);
+			pthread_mutex_lock(&lock);
+			bool abandon = !g_enabled;
+			if (abandon) {
+				g_scanning = false;
+			}
+			pthread_mutex_unlock(&lock);
+			if (abandon) {
+				return;
+			}
+		}
+		started = btstack_discovery(true);
+	}
+	if (!started) {
 		// Said here as well as at the end, because this is the branch a user with
 		// no radio takes: with no line here their log carries nothing about the
 		// search, which reads as a search that ran and found nothing.
@@ -3798,11 +3823,24 @@ int bluetooth_get_found(bt_device_t *out, int max) {
 	return count;
 }
 
+// A start that failed leaves g_scanning false, and the list page's own tick
+// asks again on the next half second: while the controller is down, bluez got
+// three StartDiscovery calls inside a second (23:13:49) and would have got them
+// for as long as the page stayed open. One attempt per this many milliseconds
+// is enough for the page to look alive without that.
+#define SCAN_RESTART_MS 2000
+
 void bluetooth_scan_start(void) {
+	static uint32_t last_start_ms;
+
 	pthread_mutex_lock(&lock);
 	bool skip = g_scanning || !g_enabled || g_busy;
+	if (!skip && last_start_ms != 0 && (int32_t)(now_ms() - last_start_ms) < SCAN_RESTART_MS) {
+		skip = true;
+	}
 	if (!skip) {
 		g_scanning = true;
+		last_start_ms = now_ms();
 	}
 	pthread_mutex_unlock(&lock);
 
