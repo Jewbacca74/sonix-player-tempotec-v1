@@ -337,7 +337,7 @@ static void build_sysinfo_page(gui_config_t *cfg) {
 	lv_label_set_text(dac_value, dac[0] ? dac : "\xE2\x80\x94");
 
 	// The serial number, from the SoC efuse: the same one printed on the box
-	// ("R3PII" plus the first eight hex digits of the chip id). Not translated,
+	// ("V1" plus the first eight hex digits of the chip id). Not translated,
 	// being an identifier.
 	lv_obj_t *serial_value = NULL;
 	info_row(container, "system_serial_number", &serial_value);

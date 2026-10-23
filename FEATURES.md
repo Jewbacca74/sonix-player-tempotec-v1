@@ -180,8 +180,8 @@ a self-signed certificate), and HLS.
 - **Calculator** - a display and the twenty keys of an ordinary pocket
   calculator: the four operations, sign, percent, backspace and clear. The sum
   in progress is kept while you leave the page and come back. The keys are
-  laid out from the panel's own measurements, so the same page fills a V1 and a
-  480-pixel HiBy player. The operator keys are drawn a size up and in bold: a
+  laid out from the panel's own measurements, so the page fills the V1's 240×320
+  screen. The operator keys are drawn a size up and in bold: a
   face sets a multiplication sign a little over half the height of the digits
   it sits beside and a hyphen a tenth of it, so at the digits' own size the
   operator column reads as specks next to the numbers it works on.
@@ -232,13 +232,13 @@ a self-signed certificate), and HLS.
   nearest-neighbour scaling, leaving a compact touch D-pad and A/B buttons
   below. The physical Play/Pause button acts as Game Boy Start, and the skip
   buttons act as Select, so neither needs an on-screen button. The shader
-  overlays (the pixel grid of the real LCD panels) are drawn inside the 3x
-  upscale the 480-px HiBy panels use and are not offered on the V1; palettes
-  and GBC color correction apply on every board.
+  overlays (the pixel grid of the real LCD panels) live inside a 3x upscale
+  sized for a 480-pixel panel and are not offered on the V1; palettes and GBC
+  color correction do apply.
 
 ## Settings
 
-- **Appearance** - dark and light, plus the V1 palettes Tokyo Night, Amber on Black and OLED (true black with no grey cards, white as its accent, and a main menu without the title and tagline); twelve accent colors, clock position, a dynamic tint that borrows the accent's hue for backgrounds and cards, a toggle to show/hide the battery percentage, and **rounded screen corners** (off by default). On the V1 the arc is 16 px, sized to the 2" 240×320 panel's glass rather than scaled down from the 28 px HiBy mask.
+- **Appearance** - dark and light, plus the V1 palettes Tokyo Night, Amber on Black and OLED (true black with no grey cards, white as its accent, and a main menu without the title and tagline); twelve accent colors, clock position, a dynamic tint that borrows the accent's hue for backgrounds and cards, a toggle to show/hide the battery percentage, and **rounded screen corners** (off by default). The arc is 16 px, sized to the 2" 240×320 panel's glass.
 - **Appearance → Browse on home screen** - replaces the Music tile with Browse, opening the card’s file browser in the card’s `Music` folder directly; a card without that folder still opens at its root. The chevron and the root button still walk up to the rest of the card. Off by default; Music remains available when switched off.
 - **Appearance → Show Books on home screen** - replaces the Audiobooks tile with Books, opening the EPUB shelf directly from home. Off by default; Audiobooks remain available when switched off. Switched on, the two swap places in **More** as well: its Books row becomes Audiobooks, so both libraries stay one tap away and neither is listed twice.
 - **Appearance → Main menu icons only** - optionally hide the six main-menu tile labels and show larger, centered icons. Dedicated native-pixel art avoids stretching small toolbar glyphs or repeatedly filtering the colored illustrations. Applies immediately in every theme and is saved across restarts; other menus, the status bar and the now-playing strip are unchanged. Off by default.
@@ -259,7 +259,7 @@ a self-signed certificate), and HLS.
   lives in a pocket, where the hand holding it wants to know the music has
   stopped without looking at it. The menu is the only place the interface offers
   a reboot, so that comes back with the option.
-- **LED effects** - on the V1 and the R3 Pro II the status light is driven
+- **LED effects** - the status light is driven
   directly rather than through the firmware's preset patterns: it fades in on
   power-on, cross-fades between colours, breathes red while charging, turns
   green when the charge is done and fades out on the way down. Brightness (1-5)
@@ -268,9 +268,12 @@ a self-signed certificate), and HLS.
   the clock automatically (including the time zone, estimated from the internet
   connection, and daylight-saving rules) or lets you set it by hand; the clock
   is written through to the RTC, with a 24-hour clock option.
-- **Language** - English, Italiano, Deutsch, Español, Français, Russian, Chinese,
-  Japanese. Titles and tags in Korean, Thai and Arabic are shown too, Arabic
-  right to left.
+- **Language** - English, Italiano, Deutsch, Español, Français, Nederlands,
+  Polski, Português BR. The eight language files are read from the resource
+  folder, so dropping another `.ini` in beside them adds a language. Titles and
+  tags come out in whatever script the interface font covers too - Cyrillic,
+  Greek, kana, kanji, Hangul, Thai and Arabic, Arabic right to left - so a
+  Russian or Japanese album title still reads.
 - **Remap buttons** - the three media buttons and the two volume buttons, each
   assignable to nothing, play/pause, previous, next, volume up or volume down.
 - **Keyboard layout** - six layouts: English, Italian, German, Spanish, French

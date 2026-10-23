@@ -34,8 +34,8 @@ More, including how to take a full diagnostic bundle over ADB (`sonix-player/too
 If applicable, add screenshots to help explain your problem.
 
 **Sonix Player info**
- - Operating system version: [e.g. 1.1.0]
- - Device: [TempoTec Variations V1 / R1 / R3 Pro II]
+ - Operating system version: [e.g. beta]
+ - Device: [TempoTec Variations V1]
 
 **Additional context**
 Add any other context about the problem here.

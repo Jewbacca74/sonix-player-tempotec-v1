@@ -8,13 +8,13 @@
 
 ## TempoTec V1 240×320 interface profile
 
-The target build of this fork defaults to the TempoTec V1 profile. At runtime,
-`BOARD=tempotec_v1` (also `tempotec-v1` or `tv1`) selects it explicitly, while
-`BOARD=hiby_r1` or `BOARD=hiby_r3proii` forces the regular layout. For the host
-simulator, this is enough to exercise the V1 path:
+The build of this fork is the TempoTec V1 profile. There is no runtime choice
+left to make: `src/gui/board_profile.c` answers from what was compiled, host
+builds included, and the HiBy R1 and R3 Pro II builds the profile was written
+beside are not part of this tree. The host simulator opens at the same 240×320:
 
 ```bash
-SONIX_PANEL=240x320 ./sonix_player_host
+./sonix_player_host
 ```
 
 The profile is more than a font substitution. It makes `gui_config_t` use the
@@ -24,9 +24,9 @@ grids and status icons compact geometry.
 
 Rounded screen corners, the optional black quarter-circles on the system layer
 in Settings → Appearance, use **16 px** on this board (`bp_screen_corner_radius()`).
-The original mask is 28 px on the 480-wide HiBy panels; 28 px here would swallow
-the 24 px status bar, and 14 px (half of 28 by pixel count) undershoots the 2"
-IPS, whose visible corner is about 2 mm. The masks are A8, built the first time
+The mask the helpers were originally written beside is 28 px on a 480-wide
+panel; 28 px here would swallow the 24 px status bar, and 14 px (half of 28 by
+pixel count) undershoots the 2" IPS, whose visible corner is about 2 mm. The masks are A8, built the first time
 the option is turned on, and stay above busy veils and the screensaver.
 
 The face those sizes are drawn from is not part of the profile any more. The V1
@@ -365,12 +365,11 @@ which is every arrangement but Immersive. The palettes use their own page
 colour and their own ink.
 
 **Pictures from the card.** The Screensaver folder only accepts pictures no
-larger than the panel. That rule was written for the HiBy players, where the
-panel is also the size the note promises: 480x800 on the R1, 480x720 on the R3
-Pro II. The V1 ships the R1's resource tree, texts included. So its note
-promised pictures up to 480x800, while its 240x320 panel let nothing that
-large through, and "No pictures to show" came up over a folder of pictures
-made exactly to the note.
+larger than the panel. That rule came from the HiBy builds, where the panel is
+also the size the note promises. The V1's language files are the ones the
+upstream tree shipped, so its note promised pictures up to 480x800, while its
+240x320 panel let nothing that large through, and "No pictures to show" came up
+over a folder of pictures made exactly to the note.
 
 On the V1 the limit is now the note's 480x800. The cover loader crops and
 scales each picture to fill the panel, through the same scaled decode album
@@ -427,9 +426,10 @@ line and keeps its white.
 
 Two board matters that are not layout live beside the profile. The V1 kernel
 has one switch node, `/sys/class/switch/headset`, and no `balance` node; with
-nothing in either socket the headset node reads `1`, which the HiBy logic took
-for a plug. `sysinfo_model_t` therefore carries `headset_switch_idle_one`, set
-for the V1, and `headphone_jack_state_raw()` on such a model treats `1` as no
+nothing in either socket the headset node reads `1`, which the logic written for
+the HiBy nodes took for a plug. `sysinfo_model_t` therefore carries
+`headset_switch_idle_one`, set for the V1, and `headphone_jack_state_raw()` on
+such a model treats `1` as no
 plug and any other value as a 3.5 mm headset (never balanced: that route has
 not been exercised on this board), logging the raw value to stderr whenever it
 changes so the 4.4 mm socket's encoding can be read off a real plug later.
@@ -781,11 +781,10 @@ python3 tools/cst8xx_multitouch_patch.py
 python3 tools/cst8xx_multitouch_patch.py --revert
 ```
 
-and a directory can be named instead, to work straight on an unpacked rootfs or
-on the packer's assets:
+and a directory can be named instead, to work straight on an unpacked rootfs:
 
 ```bash
-python3 tools/cst8xx_multitouch_patch.py assets/R1/module_driver
+python3 tools/cst8xx_multitouch_patch.py <unpacked-rootfs>/module_driver
 ```
 
 Both files are copied to `*.orig` beside themselves before the first write, and
@@ -945,7 +944,7 @@ same menu, since either is an explicit statement about what follows.
 | the queue page | `trackmenu_remove_from_queue`, `trackmenu_move_failed` |
 
 The eleven new strings are appended to all eleven `.ini` files in
-`sonix-packer/assets/{R1,R3PII}/usr/resource/sonix/language/`, under a comment
+`sonix-packer/assets/V1/usr/resource/sonix/language/`, under a comment
 naming the three features. Everything else the three features say -- `delete`,
 `remove`, `cancel`, `selection_one_track`, `selection_tracks_count` -- was
 already translated.
@@ -1008,9 +1007,66 @@ holds everything on the card now.
 | its empty message | `podcast_on_card_empty` |
 
 The two strings are appended to all eleven `.ini` files in
-`sonix-packer/assets/{R1,R3PII}/usr/resource/sonix/language/`, under a
+`sonix-packer/assets/V1/usr/resource/sonix/language/`, under a
 `; --- podcasts on the card` comment, and the two they replace
 (`podcast_downloaded`, `podcast_no_downloads`) are removed from the same
 block. Everything else this screen says -- `podcast_one_episode`,
 `podcast_episodes_2`, `podcast_delete_download`, the month names -- was
 already translated.
+
+## Eight languages
+
+The image carries eight language files instead of eleven: English, Italiano,
+Deutsch, Español, Français, Nederlands, Polski and Português BR. `Chinese.ini`,
+`Japanese.ini` and `Russian.ini` are out of
+`sonix-packer/assets/V1/usr/resource/sonix/language/` (4131 lines of text), and
+nothing anywhere kept a second list of them.
+
+That is the whole of what the picker needed. It has always been the folder:
+`lang_list()` scans it for `*.ini` and reads each file's own `[Language: …]`
+header for the name it shows, so a language that is not there is not offered,
+and a ninth dropped in beside them would be. The first-boot panel sizes itself
+from the same call.
+
+What did need changing is the other end of a choice. A device updated from a
+build that had one of the three selected keeps that name in `[ui] language`,
+with no file behind it. `lang_init()` used to fall back to Italiano on any
+unreadable file; it now tries English -- the first-boot language -- and then
+Italiano, and writes the name it settled on back to the settings, so the
+choice is corrected once instead of on every boot and the settings page stops
+offering a row that cannot be honoured. The fallback to tags is kept for what
+it was for: a folder with no language files at all is a broken install, not a
+dropped language, and bare tags are the honest sign of it.
+
+The Japanese faces follow. `japanese.otf` was chained in front of the main
+face only while the interface was in Japanese, gated on
+`lang_current() == "Japanese"`; with no Japanese file that chain could never be
+built, so the face, the CJK letter test it turned on and the glyph callbacks
+around it are gone from `src/gui/fonts/fonts.c`, and MiSans answers kana and
+kanji again as it does for every other language. The two files stay in the
+image for one reason: the ebook reader sets a book whose `dc:language` is `ja`
+in them, because Bookerly has no kana or kanji at all and the reader's faces
+carry no fallback chain. Removing them is a 5.4 MB saving and a Japanese book
+set in MiSans -- a change to make deliberately, not as a side effect of this
+one.
+
+The rest is the collateral that was keyed off the three names:
+
+* the Ko-fi/Boosty choice in the easter egg, which read
+  `lang_current() == "Russian"`. One code now, and
+  `usr/resource/sonix/gui/boosty-qr-code.png` (85 KB) is gone with it;
+* the ten greetings the first-boot panel cycles through, trimmed to the eight
+  that are still languages here;
+* the interface-language to ISO-code table the podcast directory is asked in,
+  which had `ja`, `ru` and `zh` rows nothing can reach;
+* `fonts_set_language()`, whose only job was rebuilding the chain when the
+  interface became Japanese, and its two calls in the language page.
+
+The three UI tests that walk the language folder asserted eleven files, which
+was a tripwire rather than an accident: they now assert eight, and a ninth
+language is meant to fail them until its texts are checked the same way.
+
+Left alone on purpose: the Russian keyboard layout (a way to type Cyrillic in
+the search box, unrelated to the interface language), the sort collation for
+kana and CJK titles, the metadata reader's Chinese code pages, and the
+`ru`/`ja`/`zh` regional tags a podcast feed may still declare.
