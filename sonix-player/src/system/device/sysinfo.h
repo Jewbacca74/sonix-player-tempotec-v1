@@ -16,11 +16,11 @@
 // text file next to the language directory:
 //
 //     {
-//         "device-name": "HiBy R3 Pro II",
-//         "dac-info": "Dual Cirrus Logic CS43198",
-//         "OS_version": "1.0",
+//         "device-name": "TempoTec V1",
+//         "dac-info": "Dual Cirrus Logic CS43131",
+//         "OS_version": "beta",
 //         "Build_version": "182",
-//         "ota-repo": "Jepl4r/sonix-player"
+//         "ota-repo": "mr-f0xx/sonix-player-tempotec-v1"
 //     }
 //
 // This way updating the build number does not mean rebuilding, and whoever
@@ -39,8 +39,8 @@ void sysinfo_load(void);
 const char *sysinfo_os_version(void);
 const char *sysinfo_build_version(void);
 
-// The name of the player, verbatim from the file: "HiBy R3 Pro II", "HiBy R1"
-// or "TempoTec V1". "" when the file does not say.
+// The name of the player, verbatim from the file: "TempoTec V1". "" when the
+// file does not say.
 const char *sysinfo_device_name(void);
 
 // The converter, verbatim from the file, for the information page to print.
@@ -55,7 +55,8 @@ const char *sysinfo_ota_repo(void);
 // the models, and what differs between them
 // ---------------------------------------------------------------------------
 //
-// One table, keyed on device-name.
+// One table, keyed on device-name. It holds one row: this fork is the
+// TempoTec V1's and has no other board to select.
 //
 // The panel is written here rather than read from the framebuffer: the pages
 // subtract from screen_height in unsigned arithmetic, and LVGL's fbdev driver
@@ -89,10 +90,10 @@ const sysinfo_model_t *sysinfo_model_by_panel(int width, int height);
 
 // The device serial number: the model's prefix plus the first eight hex digits
 // (upper case) of the SoC efuse chip id (/proc/jz/efuse/efuse_chip_id, line
-// "CHIP_ID: <32 hex>"). It is exactly the number printed on the box of either
-// model (chip id 90a70a42... -> box R3PII90A70A42). "" when the node
-// is absent (the host build, or a firmware without the efuse module) or the
-// model is unknown. Read once and kept: efuses do not change.
+// "CHIP_ID: <32 hex>"). It is exactly the number printed on the box
+// (chip id 90a70a42... -> box V190A70A42). "" when the node is absent (the host
+// build, or a firmware without the efuse module) or the model is unknown. Read
+// once and kept: efuses do not change.
 const char *sysinfo_serial_number(void);
 
 // ---------------------------------------------------------------------------

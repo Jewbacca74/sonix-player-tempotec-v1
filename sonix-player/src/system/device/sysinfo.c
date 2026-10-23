@@ -18,42 +18,14 @@ static char device_name[64];
 static char dac_info[96];
 static char ota_repo[128];
 
-// Every player this binary knows how to be. Both serial prefixes are the ones
-// printed on the box.
+// The one player this binary knows how to be. This fork builds for the
+// TempoTec Variations V1 and for nothing else: the HiBy R1 and R3 Pro II rows
+// the upstream table carries are gone, and a system-info.json naming another
+// player finds no entry. The flags below are the V1's own measured behaviour,
+// kept named so the code that reads them still says which board it was written
+// for.
 static const sysinfo_model_t MODELS[] = {
 	{
-		.name = "HiBy R3 Pro II",
-		.panel_width = 480,
-		.panel_height = 720,
-		.update_stem = "r3proii",
-		.serial_prefix = "R3PII",
-		.pmic_charger = false,
-		.sgm31324_led = true,
-		.cs43131 = false,
-		.tap_wake = true,
-		.one_flank = false,
-		.media_keys_swapped = true,
-		.headset_switch_idle_one = false,
-	},
-	{
-		.name = "HiBy R1",
-		.panel_width = 480,
-		.panel_height = 800,
-		.update_stem = "r1",
-		.serial_prefix = "R1",
-		.pmic_charger = true,
-		.sgm31324_led = false,
-		.cs43131 = true,
-		.tap_wake = false,
-		.one_flank = true,
-		.media_keys_swapped = false,
-		.headset_switch_idle_one = false,
-	},
-	{
-		// The Variations V1 has two CS43131s and both 3.5 mm and 4.4 mm
-		// outputs. It must not take the R1's single-DAC shortcut even though
-		// the converter model matches: the regular route logic is the only
-		// path that can select its balanced socket.
 		.name = "TempoTec V1",
 		.panel_width = 240,
 		.panel_height = 320,
@@ -61,18 +33,18 @@ static const sysinfo_model_t MODELS[] = {
 		.serial_prefix = "V1",
 		.pmic_charger = true,
 		.sgm31324_led = true,
-		.cs43131 = false,
+		.cs43131 = false, // two CS43131s: the balanced socket needs the regular route logic
 		.tap_wake = false,
 		.one_flank = true,
 		// The V1 kernel labels the physical next and previous keys in the
-		// opposite order, like the R3 Pro II. Without this correction the
-		// physical next key is dispatched through the previous-key handler;
-		// after the restart threshold that handler seeks back to zero instead
-		// of advancing the queue.
+		// opposite order. Without this correction the physical next key is
+		// dispatched through the previous-key handler; after the restart
+		// threshold that handler seeks back to zero instead of advancing the
+		// queue.
 		.media_keys_swapped = true,
 		// Measured on the device: /sys/class/switch holds only `headset`, no
 		// `balance`, and its state reads 1 with both sockets empty. Read as
-		// the HiBy nodes are, that is a 3.5 mm plug that is never pulled out.
+		// a 0-when-empty node, that is a 3.5 mm plug that is never pulled out.
 		.headset_switch_idle_one = true,
 	},
 };
@@ -191,9 +163,8 @@ const char *sysinfo_device_name(void) { return device_name; }
 const char *sysinfo_dac_info(void) { return dac_info; }
 const char *sysinfo_ota_repo(void) { return ota_repo; }
 
-// Matched without regard to case or to the spelling of "HiBy": the name is
-// typed by hand into a text file, and "Hiby R1" is the same player as
-// "HiBy R1".
+// Matched without regard to case: the name is typed by hand into a text file,
+// and "tempotec v1" is the same player as "TempoTec V1".
 const sysinfo_model_t *sysinfo_model(void) {
 	if (!device_name[0]) {
 		return NULL;
@@ -310,8 +281,8 @@ const char *sysinfo_serial_number(void) {
 	fclose(f);
 
 	// "CHIP_ID: 90a70a428496c4012f146c0404000001" -- the serial printed on the
-	// box is the model's prefix plus the first eight hex digits, uppercased
-	// (verified on a real R3 Pro II).
+	// box is the model's prefix plus the first eight hex digits, uppercased,
+	// which on this board is "V1".
 	const char *hex = strchr(line, ':');
 	hex = hex ? hex + 1 : line;
 	while (*hex == ' ' || *hex == '\t') {
