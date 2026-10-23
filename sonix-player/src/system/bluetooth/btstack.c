@@ -1201,7 +1201,10 @@ bool btstack_connect_a2dp(const char *address, int timeout_ms) {
 	return ok;
 }
 
-bool btstack_connect_a2dp_source(const char *address, int timeout_ms) {
+bool btstack_connect_a2dp_source_why(const char *address, int timeout_ms, char *err_out, size_t err_size) {
+	if (err_out && err_size) {
+		err_out[0] = '\0';
+	}
 	char path[OBJECT_PATH_MAX];
 	if (!device_path(address, path, sizeof(path))) {
 		return false;
@@ -1218,8 +1221,15 @@ bool btstack_connect_a2dp_source(const char *address, int timeout_ms) {
 	bool ok = dbus_call_send(c, timeout_ms, err, sizeof(err));
 	if (!ok) {
 		fprintf(stderr, "btstack: ConnectProfile(A2DP source) on %s -> %s\n", address, err[0] ? err : "no reply");
+		if (err_out && err_size) {
+			snprintf(err_out, err_size, "%s", err);
+		}
 	}
 	return ok;
+}
+
+bool btstack_connect_a2dp_source(const char *address, int timeout_ms) {
+	return btstack_connect_a2dp_source_why(address, timeout_ms, NULL, 0);
 }
 
 bool btstack_trust(const char *address, bool on) {

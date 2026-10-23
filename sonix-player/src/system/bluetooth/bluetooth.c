@@ -3274,7 +3274,18 @@ static void invite_sources(void) {
 		}
 		fprintf(stderr, "bluetooth: asking %s to stream here%s\n", devices[i].address,
 				devices[i].connected ? "" : " (reconnecting paired source)");
-		if (!btstack_connect_a2dp_source(devices[i].address, CONNECT_TIMEOUT_MS)) {
+		char why[160] = "";
+		bool asked = btstack_connect_a2dp_source_why(devices[i].address, CONNECT_TIMEOUT_MS, why, sizeof(why));
+		if (!asked && strstr(why, "NotReady")) {
+			// This side, not that device: bluez has not finished registering
+			// the endpoints the new bluealsa put up, and answers at once. One
+			// more try a moment later is what turns the log's
+			// "ConnectProfile(A2DP source) -> NotReady" a second after
+			// "bluealsa on the bus" into a connection.
+			sleep_ms(1500);
+			asked = btstack_connect_a2dp_source_why(devices[i].address, CONNECT_TIMEOUT_MS, why, sizeof(why));
+		}
+		if (!asked) {
 			// One unavailable old phone must not keep the worker from servicing
 			// other Bluetooth events for every paired source on the device --
 			// and must not be asked again on the next visit to the page either.

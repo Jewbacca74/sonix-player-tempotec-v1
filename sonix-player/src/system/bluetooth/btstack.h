@@ -142,6 +142,9 @@ bool btstack_connect_a2dp(const char *address, int timeout_ms);
 // The other direction: request a phone or computer's A2DP source profile so it
 // can stream to this device. BlueZ establishes the link if it is not up yet.
 bool btstack_connect_a2dp_source(const char *address, int timeout_ms);
+// The same, with bluez's error name and text when it answered one, so a caller
+// can tell "this side is not ready" from "that device is not there".
+bool btstack_connect_a2dp_source_why(const char *address, int timeout_ms, char *err_out, size_t err_size);
 
 bool btstack_disconnect(const char *address);
 bool btstack_trust(const char *address, bool on);
