@@ -426,6 +426,11 @@ void main_menu_init(gui_config_t *cfg) {
 	};
 
 	menu_grid = gridpage_build(main_menu_screen, cfg, entries, (int)(sizeof(entries) / sizeof(entries[0])), 2, 3, false);
+	// Cover Flow, in the classic arrangement: pull up from the bottom edge, just
+	// as the music grid used to, without entering Music first. With the stock
+	// arrangement chosen the handler stands down by itself (see gestures.h), so
+	// it can be attached either way and needs no rebuild when the setting moves.
+	coverflow_attach_edge(menu_grid, cfg);
 
 	// Tokyo Night's compact home chrome: the header, note and live mini-player
 	// are ordinary LVGL objects, and remain hidden in the unchanged Dark/Light
@@ -475,6 +480,9 @@ void main_menu_init(gui_config_t *cfg) {
 	lv_obj_set_flex_align(mini_player, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_add_event_cb(mini_player, switch_screen_cb, LV_EVENT_CLICKED, player_screen);
 	lv_obj_set_event_bubble(mini_player, true);
+	// Compact Amber/Tokyo home menus reserve the bottom band for this footer, so
+	// the same upward pull is available here as it is over the card grid.
+	coverflow_attach_edge(mini_player, cfg);
 
 	mini_player_halo = lv_image_create(mini_player);
 	lv_image_set_src(mini_player_halo, &icon_music2);
