@@ -268,9 +268,12 @@ a self-signed certificate), and HLS.
   the clock automatically (including the time zone, estimated from the internet
   connection, and daylight-saving rules) or lets you set it by hand; the clock
   is written through to the RTC, with a 24-hour clock option.
-- **Language** - English, Italiano, Deutsch, Español, Français, Russian, Chinese,
-  Japanese. Titles and tags in Korean, Thai and Arabic are shown too, Arabic
-  right to left.
+- **Language** - English, Italiano, Deutsch, Español, Français, Nederlands,
+  Polski, Português BR. The eight language files are read from the resource
+  folder, so dropping another `.ini` in beside them adds a language. Titles and
+  tags come out in whatever script the interface font covers too - Cyrillic,
+  Greek, kana, kanji, Hangul, Thai and Arabic, Arabic right to left - so a
+  Russian or Japanese album title still reads.
 - **Remap buttons** - the three media buttons and the two volume buttons, each
   assignable to nothing, play/pause, previous, next, volume up or volume down.
 - **Keyboard layout** - six layouts: English, Italian, German, Spanish, French

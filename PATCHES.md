@@ -1013,3 +1013,60 @@ The two strings are appended to all eleven `.ini` files in
 block. Everything else this screen says -- `podcast_one_episode`,
 `podcast_episodes_2`, `podcast_delete_download`, the month names -- was
 already translated.
+
+## Eight languages
+
+The image carries eight language files instead of eleven: English, Italiano,
+Deutsch, Español, Français, Nederlands, Polski and Português BR. `Chinese.ini`,
+`Japanese.ini` and `Russian.ini` are out of
+`sonix-packer/assets/V1/usr/resource/sonix/language/` (4131 lines of text), and
+nothing anywhere kept a second list of them.
+
+That is the whole of what the picker needed. It has always been the folder:
+`lang_list()` scans it for `*.ini` and reads each file's own `[Language: …]`
+header for the name it shows, so a language that is not there is not offered,
+and a ninth dropped in beside them would be. The first-boot panel sizes itself
+from the same call.
+
+What did need changing is the other end of a choice. A device updated from a
+build that had one of the three selected keeps that name in `[ui] language`,
+with no file behind it. `lang_init()` used to fall back to Italiano on any
+unreadable file; it now tries English -- the first-boot language -- and then
+Italiano, and writes the name it settled on back to the settings, so the
+choice is corrected once instead of on every boot and the settings page stops
+offering a row that cannot be honoured. The fallback to tags is kept for what
+it was for: a folder with no language files at all is a broken install, not a
+dropped language, and bare tags are the honest sign of it.
+
+The Japanese faces follow. `japanese.otf` was chained in front of the main
+face only while the interface was in Japanese, gated on
+`lang_current() == "Japanese"`; with no Japanese file that chain could never be
+built, so the face, the CJK letter test it turned on and the glyph callbacks
+around it are gone from `src/gui/fonts/fonts.c`, and MiSans answers kana and
+kanji again as it does for every other language. The two files stay in the
+image for one reason: the ebook reader sets a book whose `dc:language` is `ja`
+in them, because Bookerly has no kana or kanji at all and the reader's faces
+carry no fallback chain. Removing them is a 5.4 MB saving and a Japanese book
+set in MiSans -- a change to make deliberately, not as a side effect of this
+one.
+
+The rest is the collateral that was keyed off the three names:
+
+* the Ko-fi/Boosty choice in the easter egg, which read
+  `lang_current() == "Russian"`. One code now, and
+  `usr/resource/sonix/gui/boosty-qr-code.png` (85 KB) is gone with it;
+* the ten greetings the first-boot panel cycles through, trimmed to the eight
+  that are still languages here;
+* the interface-language to ISO-code table the podcast directory is asked in,
+  which had `ja`, `ru` and `zh` rows nothing can reach;
+* `fonts_set_language()`, whose only job was rebuilding the chain when the
+  interface became Japanese, and its two calls in the language page.
+
+The three UI tests that walk the language folder asserted eleven files, which
+was a tripwire rather than an accident: they now assert eight, and a ninth
+language is meant to fail them until its texts are checked the same way.
+
+Left alone on purpose: the Russian keyboard layout (a way to type Cyrillic in
+the search box, unrelated to the interface language), the sort collation for
+kana and CJK titles, the metadata reader's Chinese code pages, and the
+`ru`/`ja`/`zh` regional tags a podcast feed may still declare.
