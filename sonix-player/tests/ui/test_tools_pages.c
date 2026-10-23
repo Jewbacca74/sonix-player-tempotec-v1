@@ -128,8 +128,6 @@ void player_sheet_attach_drag(lv_obj_t *obj, bool opening) {
 	player_drag_attaches++;
 }
 bool player_sheet_drag_active(void) { return false; }
-void coverflow_attach_edge(lv_obj_t *obj, gui_config_t *cfg) { (void)obj; (void)cfg; }
-bool coverflow_drag_active(void) { return false; }
 
 bool cover_load_image_file(const char *path, int box_w, int box_h, cover_fit_t fit, cover_image_t *out) {
 	(void)fit;
