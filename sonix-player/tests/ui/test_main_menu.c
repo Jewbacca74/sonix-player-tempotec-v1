@@ -106,8 +106,6 @@ void player_sheet_attach_drag(lv_obj_t *obj, bool opening) { (void)obj; (void)op
 bool player_sheet_drag_active(void) { return false; }
 void player_refresh_now_playing(void) {}
 void player_sheet_open(bool animated) { (void)animated; }
-void coverflow_attach_edge(lv_obj_t *obj, gui_config_t *cfg) { (void)obj; (void)cfg; }
-bool coverflow_drag_active(void) { return false; }
 void medialist_open(const char *title, library_list_t kind, library_filter_t filter, const char *value) {
 	(void)title; (void)kind; (void)filter; (void)value;
 }
