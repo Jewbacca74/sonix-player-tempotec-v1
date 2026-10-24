@@ -64,7 +64,7 @@ static lv_obj_t *play_btn;
 static lv_obj_t *play_btn_icon;
 static lv_obj_t *song_title_label;
 static lv_obj_t *song_artist_label;
-static lv_obj_t *format_label; // "16/44.1 FLAC", right of the artist line
+static lv_obj_t *format_label; // "16/44.1 FLAC", between the two clocks under the bar
 static lv_obj_t *fav_btn_obj;  // the button it sits on, hidden on a book
 static lv_obj_t *controls_row; // transport row: where the ellipsis lives, and the favourite button in Studio
 static lv_obj_t *fav_btn_icon; // the star, or the heart in Immersive and Poster
@@ -72,6 +72,7 @@ static lv_obj_t *fav_btn_icon; // the star, or the heart in Immersive and Poster
 static void update_fav_button(void);
 static void update_speed_button(void);
 static void update_format_label(const device_state_t *state);
+static void update_format_label_now(const device_state_t *state);
 static void update_repeat_button(void);
 
 // The colour the chrome on this page is drawn in: the theme's accent normally,
@@ -91,15 +92,20 @@ static lv_color_t aam_accent(void);
 // The strip's two names share their row by what they say: called from the track
 // change and from the queue position, both of which sit above its definition.
 static void aam_strip_fit(void);
+// How wide a label's words are in its own font. Also asked, far above its
+// definition, by the dot between the count and the format under the bar.
+static int aam_text_width(lv_obj_t *label);
 static lv_obj_t *progress_slider;
 // The compact slider leaves room for its oversized endpoint knob and shadow.
 // Zero means use the original percentage width on the HiBy panels.
 static int compact_progress_width;
 static lv_obj_t *elapsed_label; // start of the track, under the left end of the bar
 static lv_obj_t *remaining_label; // end of the track, under the right end
-// Where this track sits in the queue, between the two clocks: the row under the
-// bar had an empty middle and the question -- how much of this is left -- is the
-// same one the clocks answer.
+// Where this track sits in the queue: the middle of the row under the bar,
+// beside the format line, between the two clocks -- where it has always stood
+// on this deck. Album Art Max is the one arrangement that moves it, into its
+// strip (see aam_put). Dim, and a step below the clocks: it is a bearing, and
+// they are the reading.
 static lv_obj_t *queue_position_label;
 static lv_obj_t *repeat_btn_icon;
 static lv_obj_t *prev_icon; // static so the over-cover recolor can reach them
@@ -200,6 +206,12 @@ static int polls_since_stop = POLLS_FAST_AFTER_STOP;
 // 6 px inside the transport's own box and its glyph would touch the skip
 // glyph beside it. 36 keeps each corner at its edge, clear of the group.
 #define COMPACT_CORNER_BTN 36
+// The gap kept either side of the middle of the row under the bar, between it
+// and the two clocks. What the middle is allowed to be is worked out from the
+// clocks themselves, as they are written (see below_center_fit): a track's
+// "2:41" is twenty-five pixels and a book's "1:23:45" is fifty, and a constant
+// wide enough for the second would take a title's width off the first.
+#define BELOW_CENTER_GAP 5
 #define COMPACT_SLEEVE_MARGIN 2
 #define COMPACT_STANDARD_SLEEVE_MARGIN 14
 // The visible stroke begins 8 px below the top of its 36 px touch slot.
@@ -249,7 +261,14 @@ static lv_obj_t *more_btn_icon; // ellipsis on a track, chapters on a book
 static lv_obj_t *repeat_btn_obj;
 static lv_obj_t *speed_btn_obj;	 // stands in the repeat button's place on a book
 static lv_obj_t *speed_btn_label;
-static lv_obj_t *below_slider_obj; // the two clocks under the bar
+static lv_obj_t *below_slider_obj; // the two clocks and the format line under the bar
+// The middle of that row, between the clocks: the place in the queue, the dot
+// after it, and the format line. One object, so that the pair is centred as a
+// pair; two labels each centred on the row's own middle would sit on top of one
+// another, the count being a fifth of the format's width.
+static lv_obj_t *below_center_obj;
+static lv_obj_t *below_center_dot;
+static void below_center_fit(void);
 // How far the four source marks keep from the corner of the artwork they
 // share. One number, because they replace each other in that corner and a
 // difference between them would read as the mark jumping.
@@ -448,7 +467,7 @@ static uint32_t album_tone; // the sleeve's colour, 0 when there is no sleeve
 static bool cover_tint;
 
 static lv_obj_t *song_text_obj; // the title and artist, wherever they live now
-static lv_obj_t *song_side_obj; // the star and the format, likewise
+static lv_obj_t *song_side_obj; // the star, in every arrangement that has one
 static void align_title_with_star(void);
 // Two pieces of the Immersive arrangement that other code asks for by name:
 // the block of controls made clear, and the frosted band at the foot of the
@@ -600,14 +619,11 @@ static void apply_live_mode(bool live) {
 			lv_obj_set_hidden(hidden_when_live[i], false);
 		}
 	}
-	// The row under the bar stays for a station from a list, for its place in
-	// the list and nothing else.
+	// The row under the bar stays up on a stream. Its two clocks go with the
+	// bar -- there is no length to read -- but the format line lives there now,
+	// and a station's bitrate is the one thing it can say about itself.
 	if (below_slider_obj) {
-		if (live && !custom_nav) {
-			lv_obj_set_hidden(below_slider_obj, true);
-		} else {
-			lv_obj_set_hidden(below_slider_obj, false);
-		}
+		lv_obj_set_hidden(below_slider_obj, false);
 	}
 
 	// Album Art Max keeps none of that deck: its row under the bar is outside
@@ -993,21 +1009,83 @@ static void update_queue_position(void) {
 		} else {
 			lv_label_set_text(queue_position_label, "");
 		}
-		aam_strip_fit();
-		return;
+	} else {
+		int count = playlist_count();
+		int index = playlist_current_index();
+		bool worth_saying = count > 1 && index >= 0 && !audiobook_mode && !dlna_owns_playback();
+		if (worth_saying) {
+			lv_label_set_text_fmt(queue_position_label, "%d/%d", (int)playlist_current_entry() + 1, count);
+		} else {
+			lv_label_set_text(queue_position_label, "");
+		}
 	}
-
-	int count = playlist_count();
-	int index = playlist_current_index();
-	bool worth_saying = count > 1 && index >= 0 && !audiobook_mode && !dlna_owns_playback();
-
-	if (!worth_saying) {
-		lv_label_set_text(queue_position_label, "");
-		aam_strip_fit(); // the room it has given back is the names' again
-		return;
-	}
-	lv_label_set_text_fmt(queue_position_label, "%d/%d", (int)playlist_current_entry() + 1, count);
+	// The two rows that share their width by what they say, in turn: Album Art
+	// Max's strip when the count stands in it -- the room it gives back there is
+	// the names' again -- and the deck's row under the bar for the dot between
+	// the count and the format line.
 	aam_strip_fit();
+	below_center_fit();
+}
+
+// The dot between the count and the format line in the middle of the row under
+// the bar: there while both are saying something, and gone while one of them is
+// not.
+//
+// It is not decoration. Both halves are short, dim and about the track -- "2/3"
+// and "24/44.1 FLAC" -- and with nothing between them the bar reads "2/3 24/44.1
+// FLAC", two figures separated by nothing at all. The dot is the punctuation.
+// But a dot with nothing on one side of it is worse than no dot: a player with a
+// single file open has no count to show, and a podcast has no format line to
+// show, and in both the mark would stand on its own in the middle of the row.
+//
+// It is also not this row's to keep: the count leaves it for Album Art Max's
+// strip, and the format leaves it for Studio's line under the sleeve, so the
+// question is asked of where the two are now, not of the words they hold.
+//
+// And this is where the row's arithmetic is done, because it is the one place
+// that knows what stands in the middle: the two clocks are measured as they are
+// written now -- a track's "2:41" is twenty-five pixels, a book's "1:23:45"
+// fifty -- and whatever they do not need is the format line's. Measured rather
+// than kept as a constant, because the row holds two things whose length is not
+// known until they are on screen, and a chapter clock is twice a track's.
+static void below_center_fit(void) {
+	if (!below_center_obj || !below_center_dot || !format_label || !queue_position_label) {
+		return;
+	}
+	bool format_here = lv_obj_get_parent(format_label) == below_center_obj;
+	bool count_here = lv_obj_get_parent(queue_position_label) == below_center_obj;
+	// aam_text_width() is nothing for a hidden label, which is what the format
+	// is in the alternative layout and what both clocks are on a stream.
+	bool format_says = aam_text_width(format_label) > 0;
+	bool count_says = aam_text_width(queue_position_label) > 0;
+
+	// The format line's room: the row, less the two clocks as they are written,
+	// less a gap either side of the middle, less the count and the dot when
+	// they are in there too. Only on this board -- the wide panels have room
+	// for the lot -- and only while the line is in this row at all, since
+	// Studio's copy of it is measured by studio_place() and Album Art Max's by
+	// aam_place().
+	if (format_here && compact_progress_width > 0) {
+		int room = compact_progress_width - aam_text_width(elapsed_label) - aam_text_width(remaining_label) -
+				   2 * BELOW_CENTER_GAP;
+		if (count_here && count_says) {
+			room -= aam_text_width(queue_position_label) + BELOW_CENTER_GAP;
+			if (format_says) {
+				room -= aam_text_width(below_center_dot) + BELOW_CENTER_GAP;
+			}
+		}
+		if (room < 30) {
+			room = 30;
+		}
+		if (lv_obj_get_style_max_width(format_label, 0) != room) {
+			lv_obj_set_style_max_width(format_label, room, 0);
+		}
+	}
+
+	bool both = format_says && count_says && format_here && count_here;
+	if (lv_obj_is_hidden(below_center_dot) == both) {
+		lv_obj_set_hidden(below_center_dot, !both);
+	}
 }
 
 // Works out view_start and view_length for playback at `position` in a file
@@ -2865,6 +2943,15 @@ static void align_title_with_star(void) {
 		int32_t title_top = title.y1 - lv_obj_get_style_translate_y(song_title_label, 0) +
 							lv_obj_get_style_pad_top(song_title_label, 0);
 		shift = (star.y1 + star.y2) / 2 - (title_top + title_mid);
+		// Only while the column is the taller of the two sides, which is what
+		// the format line under the star used to make it. The deck keeps that
+		// line in the row under the bar now and the column is the 26 px star
+		// alone: the row centres the star against the two names, and the shift
+		// worked out above is then the one that walks the title down over the
+		// artist.
+		if (lv_obj_get_height(song_side_obj) <= lv_obj_get_height(song_text_obj)) {
+			shift = 0;
+		}
 	}
 	// Only when it changes: a new translation lays the column out again, and
 	// that comes back here.
@@ -2916,9 +3003,11 @@ static void studio_take_back(void) {
 		// The standard-size picture comes back, and the note with it when
 		// there is no picture. studio_up is already down, so cover_show() agrees.
 		cover_show(current_cover.pixels != NULL);
-		if (format_label && song_side_obj) {
-			lv_obj_set_parent(format_label, song_side_obj);
-			lv_obj_set_style_text_align(format_label, LV_TEXT_ALIGN_RIGHT, 0);
+		// The format line goes back to the middle of the row under the bar, the
+		// row it shares with the clocks and the place in the queue.
+		if (format_label && below_center_obj) {
+			lv_obj_set_parent(format_label, below_center_obj);
+			lv_obj_set_style_text_align(format_label, LV_TEXT_ALIGN_CENTER, 0);
 		}
 		// The marks go back to the corner of the artwork they share with every
 		// other arrangement.
@@ -2964,7 +3053,6 @@ static void studio_put(void) {
 	if (song_side_obj) {
 		lv_obj_set_hidden(song_side_obj, true);
 	}
-
 	// The line under the sleeve is the same label the standard arrangement
 	// keeps beside the artist -- it already knows how to say "16/44.1 FLAC",
 	// "320 kbps MP3" and "DSD256", a station included. Moved, not copied.
@@ -2973,6 +3061,9 @@ static void studio_put(void) {
 		lv_obj_set_hidden(format_label, false);
 		lv_obj_set_width(format_label, LV_SIZE_CONTENT);
 		lv_obj_set_style_text_align(format_label, LV_TEXT_ALIGN_LEFT, 0);
+		// The row under the sleeve is as wide as the sleeve; the line is
+		// measured by it, not by the deck's clocks (see below_center_fit).
+		lv_obj_set_style_max_width(format_label, LV_COORD_MAX, 0);
 	}
 
 	// The two buttons change places: the ellipsis belongs beside the title it
@@ -3422,6 +3513,16 @@ static void aam_strip_fit(void) {
 	if (!aam_strip) {
 		return;
 	}
+	// Only while the strip is the row those names are in. This is reached from
+	// every track change and from every change of place in the queue, whatever
+	// arrangement is up, and the shares it works out are measured for the
+	// strip's own row: applied to the deck's column they capped both names at a
+	// fraction of the panel however much room the column had, which left a
+	// title that fitted in the deck being cut short. aam_take_back() hands the
+	// widths back on the way out, so nothing of this is left behind.
+	if (!layout_aam_now) {
+		return;
+	}
 	int screen_w = (int)lv_obj_get_width(aam_strip);
 	if (screen_w <= 0 && player_screen) {
 		screen_w = (int)lv_obj_get_width(player_screen);
@@ -3744,10 +3845,14 @@ static bool aam_take_back(void) {
 		lv_image_set_scale(repeat_btn_icon, 256);
 	}
 
-	if (format_label && song_side_obj) {
-		lv_obj_set_parent(format_label, song_side_obj);
+	// The format line leaves the header for the middle of the row under the
+	// bar, where the deck keeps it -- its home, shared with the clocks and the
+	// place in the queue -- and the count comes back to that same row from the
+	// strip.
+	if (format_label && below_center_obj) {
+		lv_obj_set_parent(format_label, below_center_obj);
 		lv_obj_set_ignore_layout(format_label, false);
-		lv_obj_set_style_text_align(format_label, LV_TEXT_ALIGN_RIGHT, 0);
+		lv_obj_set_style_text_align(format_label, LV_TEXT_ALIGN_CENTER, 0);
 		lv_obj_set_style_max_width(format_label, LV_COORD_MAX, 0);
 	}
 	if (more_btn_obj && controls_row) {
@@ -3788,10 +3893,12 @@ static bool aam_take_back(void) {
 		lv_obj_set_ext_click_area(progress_slider, 0);
 		aam_slider_style(false);
 	}
-	if (queue_position_label && below_slider_obj) {
-		lv_obj_set_parent(queue_position_label, below_slider_obj);
+	if (queue_position_label && below_center_obj) {
+		lv_obj_set_parent(queue_position_label, below_center_obj);
+		// First in the row again: the dot goes between it and the format, and
+		// a child handed back to a flex row is put at its end.
+		lv_obj_move_to_index(queue_position_label, 0);
 		lv_obj_set_ignore_layout(queue_position_label, false);
-		lv_obj_align(queue_position_label, LV_ALIGN_CENTER, 0, 0);
 	}
 	// The two labels are put back by the branch of apply_layout that follows:
 	// the column under the title, or the alternative arrangement's pills. All
@@ -3818,7 +3925,7 @@ static bool aam_take_back(void) {
 		lv_obj_set_style_pad_bottom(player_menu, COMPACT_DECK_PAD_BOTTOM, 0);
 	}
 	if (below_slider_obj) {
-		lv_obj_set_hidden(below_slider_obj, live_mode && !live_custom_nav);
+		lv_obj_set_hidden(below_slider_obj, false);
 	}
 	if (controls_row) {
 		lv_obj_set_hidden(controls_row, false);
@@ -4082,6 +4189,10 @@ static void apply_layout(void) {
 	placeholder_place();
 	paint_alt_tint();
 	update_fav_button(); // the marker's shape and size follow the arrangement
+	// And the dot between the count and the format, which is there only while
+	// both of them are in that row: Studio keeps the format on the sleeve, the
+	// alternative layout hides it, and in both the mark has nothing to separate.
+	below_center_fit();
 
 	// Album Art Max keeps the shell's status bar, and the chevron belongs under
 	// it rather than in it; every other arrangement hides the bar so artwork
@@ -5052,7 +5163,7 @@ static void fav_btn_event_cb(lv_event_t *e) {
 }
 
 // The format line, the way the stock player writes it: "16/44.1 FLAC".
-static void update_format_label(const device_state_t *state) {
+static void update_format_label_now(const device_state_t *state) {
 	// The mark beside it in Studio, which is the same question asked of the
 	// stream rather than of the library. Here because this is where the format
 	// line is worked out, and the two say one thing between them.
@@ -5162,6 +5273,16 @@ static void update_format_label(const device_state_t *state) {
 
 	int bits = audio_get_stream_bits();
 	lv_label_set_text_fmt(format_label, "%d/%g %s", bits > 0 ? bits : 16, state->stream_sample_rate / 1000.0, name);
+}
+
+// Writes the format line, and then settles the dot that stands beside it: the
+// line shares the row under the bar with the place in the queue, and the dot
+// between them is there only while both have words (see below_center_fit).
+// A wrapper rather than a call at each of the returns above -- there are eight,
+// and the ninth would forget.
+static void update_format_label(const device_state_t *state) {
+	update_format_label_now(state);
+	below_center_fit();
 }
 
 // The speed setting of what is playing: an episode has its own, apart from the
@@ -6384,18 +6505,22 @@ static void compact_place_sleeve(void) {
 // makes the sleeve above it taller. The panel split follows the arrangement:
 // see player_apply_geometry().
 static int compact_deck_height(bool alternative) {
-	int clock_h = LV_MAX(lv_font_get_line_height(bp_time_font()), lv_font_get_line_height(bp_queue_label_font()));
+	// The row under the bar carries the two clocks and the format line, and the
+	// tallest of the three is what that row is worth.
+	int clock_h = LV_MAX(LV_MAX(lv_font_get_line_height(bp_time_font()), lv_font_get_line_height(bp_queue_label_font())),
+						 lv_font_get_line_height(bp_format_label_font()));
 	int first;
 	if (alternative) {
 		first = COMPACT_WAVE_HEIGHT;
 	} else {
 		// The first row is the taller of the two names stacked (no row gap
-		// between them on this board) and the star over the format; the bar
-		// rides beneath them.
+		// between them on this board) and the star beside them; the bar rides
+		// beneath them. The row is shorter than it was: the star used to have
+		// the format line under it, and both the format and the place in the
+		// queue stand in the row below now.
 		int title_h = lv_font_get_line_height(bp_title_font());
 		int artist_h = lv_font_get_line_height(bp_artist_font());
-		int format_h = lv_font_get_line_height(bp_format_label_font());
-		int info_h = LV_MAX(title_h + artist_h, COMPACT_FAV_BTN_H + format_h);
+		int info_h = LV_MAX(title_h + artist_h, COMPACT_FAV_BTN_H);
 		first = info_h + COMPACT_DECK_GAP + PROGRESS_TRACK_HEIGHT;
 	}
 	return COMPACT_DECK_PAD_TOP + first + COMPACT_DECK_GAP + clock_h + COMPACT_DECK_GAP + COMPACT_PLAY_BTN +
@@ -6741,29 +6866,26 @@ void player_init(gui_config_t *cfg) {
 	lv_obj_set_style_text_font(song_artist_label, bp_artist_font(), 0);
 	scrolltext_apply(song_artist_label);
 
-	// Right side: the favourite star over the stream format.
+	// Right side: the star, and the star is all of this column now.
+	//
+	// It used to carry the format line -- "16/44.1 FLAC", eighty-five pixels,
+	// or "24/44.1 FLAC" at eighty-seven -- under it, and that line, not the
+	// star, is what set the column's width: on every track with a file behind
+	// it, taken out of the two names on every one of them. What was left for
+	// them was a hundred and twenty-three of the row's two hundred and
+	// sixteen, seventeen letters at the title's fifteen pixels, which is where
+	// "For Detroit (14KT" and then the scroll came from. The format has gone down to the row under the bar, where the
+	// clocks had an empty middle (see the clocks below), and the names have the
+	// row: the deck's width less the star and the gutter.
 	lv_obj_t *song_side = lv_obj_create(song_info);
 	song_side_obj = song_side;
 	lv_obj_set_size(song_side, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
 	lv_obj_set_style_bg_opa(song_side, 0, 0);
 	lv_obj_set_style_border_width(song_side, 0, 0);
 	lv_obj_set_style_pad_all(song_side, 0, 0);
-	lv_obj_set_style_pad_gap(song_side, compact ? 0 : 2, 0);
 	lv_obj_set_flex_flow(song_side, LV_FLEX_FLOW_COLUMN);
-	lv_obj_set_flex_align(song_side, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER);
+	lv_obj_set_flex_align(song_side, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_scrollable(song_side, false);
-	// The star and the format make their column as wide as what they say, and
-	// LVGL's flex has no shrink: a row asked for more than it holds does not hand
-	// the two sides back a little each, it gives the fixed column everything and
-	// leaves the names a column of nothing at all, with the line running off the
-	// panel beside them. So the column is capped at half the row. Every string
-	// this player writes fits well inside that at these faces -- "16/44.1 FLAC"
-	// is seventy-odd pixels on the V1 against a hundred and fourteen -- and were
-	// one ever longer, what is lost is the end of the format line, cut at its own
-	// column's edge: the same price the row already charges for a title longer
-	// than its half. Neither of the two is then ever drawn over the other, in
-	// either direction, whatever the tags say.
-	lv_obj_set_style_max_width(song_side, ((int)cfg->screen_width - 2 * deck_side) / 2, 0);
 
 	lv_obj_t *fav_btn = lv_btn_create(song_side);
 	fav_btn_obj = fav_btn;
@@ -6777,11 +6899,6 @@ void player_init(gui_config_t *cfg) {
 	fav_btn_icon = lv_image_create(fav_btn);
 	lv_obj_center(fav_btn_icon);
 	update_fav_button(); // which owns the marker's shape and size from here on
-
-	format_label = lv_label_create(song_side);
-	lv_label_set_text(format_label, "");
-	lv_obj_add_style(format_label, &theme_style_text_dim, 0);
-	lv_obj_set_style_text_font(format_label, bp_format_label_font(), 0);
 
 	// The shape of the track, and the slider laid over it that still does the
 	// seeking. Two things in the same place rather than one: drawing a
@@ -6868,6 +6985,15 @@ void player_init(gui_config_t *cfg) {
 	below_slider_obj = below_slider_group;
 	lv_obj_set_size(below_slider_group, compact_progress_width > 0 ? compact_progress_width : lv_pct(100),
 				 LV_SIZE_CONTENT);
+	if (compact) {
+		// The row holds its one line whatever is in it. On a stream the two
+		// clocks go and the format line is not written until the first frame
+		// has been decoded, and a row of empty labels measures nothing at all:
+		// without this it would collapse, and the transport would sit a line
+		// higher than compact_deck_height() counted on until the bitrate
+		// arrived.
+		lv_obj_set_style_min_height(below_slider_group, lv_font_get_line_height(bp_time_font()), 0);
+	}
 	lv_obj_set_style_bg_opa(below_slider_group, 0, 0);
 	lv_obj_set_style_border_width(below_slider_group, 0, 0);
 	lv_obj_set_style_radius(below_slider_group, 0, 0);
@@ -6887,16 +7013,63 @@ void player_init(gui_config_t *cfg) {
 	lv_obj_set_style_text_font(remaining_label, bp_time_font(), 0);
 	lv_obj_set_align(remaining_label, LV_ALIGN_RIGHT_MID);
 
-	// Between them, in the middle the two clocks left empty. Dimmer than they
-	// are: it is a bearing, not a reading.
-	queue_position_label = lv_label_create(below_slider_group);
+	// The middle the two clocks leave empty: the place in the queue, the format
+	// line, and the dot between them when both have something to say.
+	//
+	// Both facts used to stand elsewhere and cost the names their width -- the
+	// format under the star at the right of the first row, the count on its own
+	// in the middle of this one -- and both are dim, short, and about the track
+	// rather than about the way it is being read: "2/3", "24/44.1 FLAC". One
+	// object rather than two loose labels, so that the pair is centred as a
+	// pair: the count is a fifth of the format's width, and two labels each
+	// centred on the row's own middle would sit one on top of the other.
+	below_center_obj = lv_obj_create(below_slider_group);
+	lv_obj_remove_style_all(below_center_obj);
+	lv_obj_set_size(below_center_obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+	lv_obj_set_flex_flow(below_center_obj, LV_FLEX_FLOW_ROW);
+	// Start, not centre: if the two ever outgrow the room the row keeps for
+	// them, the format's tail is what goes off the edge, as it was when the line
+	// stood under the star -- the count keeps its words.
+	lv_obj_set_flex_align(below_center_obj, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	lv_obj_set_style_pad_column(below_center_obj, BELOW_CENTER_GAP, 0);
+	lv_obj_set_scrollable(below_center_obj, false);
+	lv_obj_set_clickable(below_center_obj, false);
+	lv_obj_set_align(below_center_obj, LV_ALIGN_CENTER);
+
+	// The place in the queue, where it has always stood on this deck: between
+	// the two clocks, which is also where the format line stands now. Dim, and
+	// a step below them: it is a bearing, and they are the reading. Album Art
+	// Max is the one arrangement that moves it, into the strip at the foot of
+	// the picture (aam_put).
+	queue_position_label = lv_label_create(below_center_obj);
 	lv_label_set_text(queue_position_label, "");
 	lv_obj_add_style(queue_position_label, &theme_style_text_dim, 0);
-	// A step below the clocks either side of it, as well as dimmer: it is a
-	// bearing and they are the reading, and at the same size the three read as
-	// one row of equals.
 	lv_obj_set_style_text_font(queue_position_label, bp_queue_label_font(), 0);
-	lv_obj_set_align(queue_position_label, LV_ALIGN_CENTER);
+
+	// Between the two, when both are there: "2/3 24/44.1 FLAC" without it is one
+	// figure with a slash in the middle and another at the end of it.
+	below_center_dot = lv_label_create(below_center_obj);
+	lv_label_set_text(below_center_dot, "\u00b7");
+	lv_obj_add_style(below_center_dot, &theme_style_text_dim, 0);
+	lv_obj_set_style_text_font(below_center_dot, bp_queue_label_font(), 0);
+	lv_obj_set_hidden(below_center_dot, true);
+
+	// The format line: "16/44.1 FLAC", "320 kbps MP3", "DSD256". A fact about
+	// the file rather than a reading of the playing, so it sits with the clocks
+	// and stays dim; and it is what gave the two names the deck's whole width
+	// back.
+	format_label = lv_label_create(below_center_obj);
+	lv_label_set_text(format_label, "");
+	lv_obj_add_style(format_label, &theme_style_text_dim, 0);
+	lv_obj_set_style_text_font(format_label, bp_format_label_font(), 0);
+	// Clipped rather than wrapped at whatever width the row lends it: a line
+	// with no room left is cut at its own end, not folded onto a second one
+	// under the clocks. below_center_fit() sets that width from the clocks.
+	lv_label_set_long_mode(format_label, LV_LABEL_LONG_MODE_CLIP);
+	// And the row's own arithmetic, once, now that its three pieces exist: the
+	// widest format line this deck will draw is "1411 kbps FLAC", a hundred
+	// pixels, and the two clocks leave a hundred and fifty.
+	below_center_fit();
 
 	// Transport: prev, play/pause, next -- with the repeat toggle parked on
 	// the left, out of the way of the transport controls.

@@ -76,6 +76,44 @@ names, bar, clocks, transport -- from the line heights of the fonts in force
 never lifted into the queue-position row above it. The full panel stays the
 swipe and lyrics-gesture hit target.
 
+The deck's rows were still shared out as if the panel were twice as wide -- as
+it was on the 480 px panel this page came from, where the two names, the star
+and the format line all sat on the first row with room to spare. At 240 that
+row left the names a hundred and twenty-five pixels of its two hundred and
+sixteen, because the format line under the star -- "16/44.1 FLAC", eighty-five
+pixels -- held the right column at its own width whether or not the title
+needed it. Seventeen letters of "For Detroit (14KT Remix)" fitted; the rest
+scrolled past, and an artist of any length went the same way. The format line
+now stands in the middle of the row under the bar, beside the queue position,
+which is where that position has always stood and where the two clocks had an
+empty middle; a dot separates the two while both are saying something, and
+goes when one of them is not. The star is left alone in the right column of
+the first row, and the names take the rest of it: a hundred and seventy-six
+pixels, the title above at 15 px and the artist below at 14, with
+`scroll_fit()` leaving them both still when they fit -- which the whole of
+"For Detroit (14KT Remix)" does, at a hundred and seventy.
+
+The first row is shorter too, by as much as the star is taller than the
+title's line -- six or seven pixels at this face, since neither a count nor a
+bitrate stands under it -- and the sleeve above grows by that much. The star
+is centred against the two names rather than lined up with the title, and
+`align_title_with_star()` knows it: it works its shift out from the star's
+centre only while the column it stands in is the taller of the two sides,
+which is what the format line there used to make it. With the star alone in
+the column the row centres it on the names, and the old shift would have
+walked the title down over the artist. The row under the bar stays up on a
+stream, too: its two clocks go with the bar, but the format line lives there
+now and a station's bitrate is the one thing it can say about itself.
+
+`aam_strip_fit()` no longer reaches the deck's names. It is reached from every
+track change and every change of place in the queue, whatever arrangement is
+up, and it set a `max_width` on both labels out of Album Art Max's own strip:
+two long names were capped at a share of the panel even in the standard
+arrangement, where the column had more room than the share allowed, and the
+alternative arrangement's pills lost the widths `apply_layout()` had just given
+them. The shares are the strip's business alone now, and `aam_take_back()` hands
+the widths back on the way out, as it always did.
+
 The fourth arrangement, **Immersive**, is the sleeve at the bezel: the cover
 panel, the clipped frame and the picture all take the size of the screen, the
 corners square off, and the deck is emptied of its own fill so what stands
@@ -433,6 +471,23 @@ such a model treats `1` as no
 plug and any other value as a 3.5 mm headset (never balanced: that route has
 not been exercised on this board), logging the raw value to stderr whenever it
 changes so the 4.4 mm socket's encoding can be read off a real plug later.
+
+Which is also why pulling the cable out does not stop the music, and cannot be
+made to. `player_output_unplugged()` -- the pause the page performs when the
+output it was playing to disappears -- is wired to the two things that can
+report a disappearance: the USB-C DAC, watched by the status bar's poll, and
+the Bluetooth headphones, whose link the radio layer sees drop. The two sockets
+cannot join them: the node above reads `1` with both sockets empty *and* with a
+plug in either of them (measured on the board), so the change that poll waits
+for never arrives -- and `lineout_check_jack()` has the same hole and says so in
+as many words. It is the socket wiring, not a missing check: there is no signal
+to read, and polling harder does not find one. **Auto power-off** is not the
+answer either, by design, since it only acts when nothing is playing -- the one
+case that is not draining the battery. What a forgotten player is answered by is
+the **sleep timer** (`Music > Sleep timer`, and its own under audiobooks and
+podcasts): it pauses when its stretch is up, counts only while something is
+playing, and keeps its setting between sessions.
+
 ### The white flash on wake, and what it actually was
 
 The panel is an SLCD: its glass shows the contents of its own memory, and a
