@@ -940,6 +940,9 @@ static void unpark_radios(void) {
 // [power] standby_mem_seconds (60 by default, like the stock firmware).
 // ---------------------------------------------------------------------------
 
+// The shortest wait before standby that is accepted, in seconds.
+#define STANDBY_MEM_MIN_SECONDS 15
+
 static bool g_mem_enabled;
 // Raised by a suspend that failed or that came straight back. It stops the
 // countdown for THIS dark-screen spell only, and power_screen_on() clears it, so
@@ -959,6 +962,13 @@ void power_set_standby_enabled(bool enabled) {
 	g_mem_enabled = enabled && g_cfg.power_state_path != NULL;
 	g_mem_blocked_this_dark = false;
 	g_mem_instant_wakes = 0;
+}
+
+void power_set_standby_after(uint32_t seconds) {
+	if (seconds < STANDBY_MEM_MIN_SECONDS) {
+		seconds = STANDBY_MEM_MIN_SECONDS; // any lower risks the device sleeping under the fingers
+	}
+	g_mem_after_ms = seconds * 1000u;
 }
 
 // What the kernel says about the last suspend: counters and, above all, the
@@ -1628,6 +1638,16 @@ static void wake_repaint(void) {
 	display_wake_end(g_disp);
 }
 
+void power_keep_animations_paused(void) {
+	if (g_screen_on) {
+		return;
+	}
+	lv_timer_t *anim_timer = lv_anim_get_timer();
+	if (anim_timer && !lv_timer_get_paused(anim_timer)) {
+		lv_timer_pause(anim_timer);
+	}
+}
+
 void power_screen_on(void) {
 	waveform_set_screen_on(true);
 	if (g_screen_on) {
@@ -1698,6 +1718,11 @@ void power_screen_on(void) {
 	if (anim_timer) {
 		lv_timer_resume(anim_timer);
 	}
+	// Animations started or left running in the dark have been standing still
+	// (see power_keep_animations_paused). One pass brings each to where its
+	// clock says it is, and runs the completion of the ones already over, so
+	// the wake frame below shows a closed sheet closed rather than half way.
+	lv_anim_refr_now();
 
 	// Unblank: the panel resets to white, re-initialises and re-arms the
 	// controller's scan-out. Keep the backlight held down through that init;
@@ -2032,10 +2057,7 @@ void power_init(const power_config_t *cfg, lv_display_t *disp) {
 	if (g_mem_instant_wakes_max < 1) {
 		g_mem_instant_wakes_max = 1;
 	}
-	if (mem_secs < 15) {
-		mem_secs = 15; // any lower risks the device sleeping under the fingers
-	}
-	g_mem_after_ms = (uint32_t)mem_secs * 1000u;
+	power_set_standby_after(mem_secs > 0 ? (uint32_t)mem_secs : 0);
 
 	// The radios go down on their own clock, not the Standby toggle's: they are
 	// worth switching off whether or not the SoC is going to sleep.

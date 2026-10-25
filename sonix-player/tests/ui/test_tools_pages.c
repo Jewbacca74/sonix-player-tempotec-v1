@@ -120,6 +120,7 @@ bool main_menu_books(void) { return config_get_bool("ui", "home_books", false); 
 void flappybird_open(void) { /* not reached from this test */ }
 void switcher_attach_back_gesture(lv_obj_t *obj) { (void)obj; }
 bool switcher_back_drag_active(void) { return false; }
+bool power_screen_is_on(void) { return true; }
 void switcher_set_back_guard(lv_obj_t *screen, bool (*handler)(void)) { (void)screen; (void)handler; }
 void switcher_set_back_guard_peek(lv_obj_t *screen, bool (*peek)(void)) { (void)screen; (void)peek; }
 /* Counted rather than ignored: the two file viewers must not take the

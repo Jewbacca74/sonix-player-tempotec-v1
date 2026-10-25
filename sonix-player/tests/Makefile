@@ -221,6 +221,7 @@ UI_CFLAGS = $(CFLAGS) -MMD -MP
 # renderer; the radio under it is a recording stub (see test_wifi_pages.c).
 WIFIPAGE_SRC = $(ROOT)/tests/ui/test_wifi_pages.c $(ROOT)/src/gui/wireless/wifisettings.c \
             $(ROOT)/src/gui/shell/settingsrow.c $(ROOT)/src/gui/shell/keyboard.c \
+            $(ROOT)/src/gui/shell/animpark.c \
             $(ROOT)/src/gui/shell/popover.c $(ROOT)/src/gui/shell/spinner.c \
             $(ROOT)/src/gui/shell/theme.c $(ROOT)/src/gui/shell/icons.c \
             $(ROOT)/src/gui/board_profile.c $(ROOT)/src/system/input/kblayout.c \
@@ -240,7 +241,7 @@ LYRICS_OBJ = $(patsubst $(ROOT)/%.c,$(BUILD)/ui/%.o,$(LYRICS_SRC)) \
             $(patsubst $(ROOT)/%.c,$(BUILD)/ui/%.o,$(UI_LVGL_SRC))
 
 SAVER_SRC = $(ROOT)/tests/ui/test_screensaver.c $(ROOT)/src/gui/settings/screensaver.c \
-            $(ROOT)/src/gui/shell/scrolltext.c $(ROOT)/src/gui/shell/settingsrow.c \
+            $(ROOT)/src/gui/shell/scrolltext.c $(ROOT)/src/gui/shell/animpark.c $(ROOT)/src/gui/shell/settingsrow.c \
             $(ROOT)/src/gui/shell/theme.c $(ROOT)/src/gui/shell/icons.c \
             $(ROOT)/src/gui/board_profile.c \
             $(ROOT)/src/system/core/config.c $(ROOT)/src/system/core/lang.c
@@ -256,6 +257,7 @@ TOOLS_SRC = $(ROOT)/tests/ui/test_tools_pages.c \
             $(ROOT)/src/gui/library/textview.c $(ROOT)/src/gui/library/pictureview.c \
             $(ROOT)/src/gui/shell/morepage.c $(ROOT)/src/gui/shell/gridpage.c \
             $(ROOT)/src/gui/shell/settingsrow.c $(ROOT)/src/gui/shell/keyboard.c \
+            $(ROOT)/src/gui/shell/animpark.c \
             $(ROOT)/src/gui/shell/popover.c $(ROOT)/src/system/input/kblayout.c \
             $(ROOT)/src/gui/shell/theme.c $(ROOT)/src/gui/shell/icons.c \
             $(ROOT)/src/gui/board_profile.c \

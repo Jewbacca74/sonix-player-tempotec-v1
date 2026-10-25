@@ -7,6 +7,7 @@
 #include "src/gui/library/browser.h"
 #include "src/gui/board_profile.h"
 #include "src/gui/nowplaying/coverflow.h"
+#include "src/gui/shell/animpark.h"
 #include "src/gui/shell/gui.h"
 #include "src/gui/shell/icons.h"
 #include "src/gui/library/audiobooks.h"
@@ -297,6 +298,9 @@ static void back_underlay_build(void) {
 		if (was_hidden) {
 			lv_obj_set_hidden(target, false);
 		}
+		// Its titles and spinners are parked while it is out of sight; in the
+		// picture they must look as they will once the drag lands there.
+		animpark_wake(target);
 		back_snapshot = lv_snapshot_take(target, LV_COLOR_FORMAT_RGB565);
 		if (was_hidden) {
 			lv_obj_set_hidden(target, true);

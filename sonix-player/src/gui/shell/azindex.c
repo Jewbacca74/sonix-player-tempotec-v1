@@ -74,6 +74,8 @@ struct azindex {
 #define MAX_STRIPS 4
 static azindex_t *strips[MAX_STRIPS];
 static int strip_count;
+// Runs only while a strip or a letter is up (timer_cb); whatever shows one
+// starts it.
 static lv_timer_t *timer;
 
 // How many letters a strip `bar_height` tall can print without the column
@@ -103,10 +105,17 @@ static int label_slot(int i, int shown) {
 	return (i * (BUCKETS - 1) + (shown - 1) / 2) / (shown - 1);
 }
 
+static void timer_start(void) {
+	if (timer) {
+		lv_timer_resume(timer);
+	}
+}
+
 static void show_bar(azindex_t *ix, bool shown) {
 	if (shown) {
 		lv_obj_set_hidden(ix->bar, false);
 		lv_obj_move_foreground(ix->bar);
+		timer_start();
 	} else {
 		lv_obj_set_hidden(ix->bar, true);
 	}
@@ -128,6 +137,7 @@ static void hint_show(azindex_t *ix, int slot) {
 	lv_obj_set_hidden(ix->hint, false);
 	lv_obj_move_foreground(ix->hint);
 	ix->hint_at = lv_tick_get();
+	timer_start();
 }
 
 void azindex_set_rows(azindex_t *ix, const int first[LIBRARY_INDEX_BUCKETS], int count, bool descending) {
@@ -295,9 +305,9 @@ static void bar_cb(lv_event_t *e) {
 }
 
 // Takes the strip and the big letter away once nothing has asked for them for
-// a moment.
+// a moment, and stops itself once none is left.
 static void timer_cb(lv_timer_t *t) {
-	(void)t;
+	bool showing = false;
 	for (int i = 0; i < strip_count; i++) {
 		azindex_t *ix = strips[i];
 		if (!lv_obj_is_hidden(ix->bar) && lv_tick_elaps(ix->wanted_at) > HIDE_MS) {
@@ -306,6 +316,12 @@ static void timer_cb(lv_timer_t *t) {
 		if (!lv_obj_is_hidden(ix->hint) && lv_tick_elaps(ix->hint_at) > HINT_MS) {
 			lv_obj_set_hidden(ix->hint, true);
 		}
+		if (!lv_obj_is_hidden(ix->bar) || !lv_obj_is_hidden(ix->hint)) {
+			showing = true;
+		}
+	}
+	if (!showing) {
+		lv_timer_pause(t);
 	}
 }
 
@@ -395,6 +411,7 @@ azindex_t *azindex_create(lv_obj_t *screen, gui_config_t *cfg, lv_obj_t *list, i
 	strips[strip_count++] = ix;
 	if (!timer) {
 		timer = lv_timer_create(timer_cb, 200, NULL);
+		lv_timer_pause(timer); // nothing to take away until a strip is shown
 		power_pause_in_standby(timer);
 		theme_register_refresh(theme_refresh);
 	}
