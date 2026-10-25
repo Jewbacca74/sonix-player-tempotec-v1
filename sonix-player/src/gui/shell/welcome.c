@@ -33,6 +33,7 @@ static const char *const WELCOME_WORDS[] = {
 	"Bienvenido", // Spanish
 	"Welkom",	  // Dutch
 	"Witamy",	  // Polish
+	"Vítejte",	  // Czech
 	"Bem-vindo",  // Portuguese
 	"\xd0\x92\xd1\x96\xd1\x82\xd0\xb0\xd1\x94\xd0\xbc\xd0\xbe", // Ukrainian
 };

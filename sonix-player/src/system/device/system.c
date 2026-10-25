@@ -575,7 +575,8 @@ static int mount_ntfs_rw(const char *device, const char *mount_point) {
 		if (pid == 0) {
 			// big_writes and the default uid/gid: the player is the only user of
 			// this card, and the helper otherwise leaves everything owned by
-			// whoever mounted it.
+			// whoever mounted it. The helper stays running as the filesystem, so its
+			// output goes through the log pipe, not onto the card's log file.
 			//
 			// `force` and `remove_hiberfile` make the mount happen whatever a
 			// Windows machine left behind. Pulling the player out of a PC without
@@ -588,6 +589,7 @@ static int mount_ntfs_rw(const char *device, const char *mount_point) {
 			// recovery Windows itself would run; `remove_hiberfile` does the same
 			// for a hibernated volume and is a no-op when there is no hibernation
 			// file (there normally is not one on removable media).
+			logging_child_stdio();
 			execl(helpers[i], helpers[i], device, mount_point, "-o", "force,remove_hiberfile,big_writes,noatime",
 				  (char *)NULL);
 			_exit(127);
@@ -931,8 +933,75 @@ void storage_recheck_card(void) {
 	pthread_mutex_unlock(&card_lock);
 }
 
-// Every descriptor of this process that points into the card, for the log
-// when the card cannot be released.
+static bool path_on_card(const char *path, const char *root, size_t root_len) {
+	return strncmp(path, root, root_len) == 0 && (path[root_len] == '/' || path[root_len] == '\0');
+}
+
+// One process's hold on the card: its working directory, its descriptors and
+// its mapped files. The player's own log, reopened to report this, is left out.
+static void log_process_on_card(int pid, const char *root, size_t root_len, const char *log_file) {
+	bool self = pid == (int)getpid();
+	char path[64], target[PATH_MAX], name[32] = "?";
+
+	snprintf(path, sizeof(path), "/proc/%d/comm", pid);
+	FILE *comm = fopen(path, "re");
+	if (comm) {
+		if (fgets(name, sizeof(name), comm)) {
+			name[strcspn(name, "\n")] = '\0';
+		}
+		fclose(comm);
+	}
+
+	snprintf(path, sizeof(path), "/proc/%d/cwd", pid);
+	ssize_t n = readlink(path, target, sizeof(target) - 1);
+	if (n > 0) {
+		target[n] = '\0';
+		if (path_on_card(target, root, root_len)) {
+			fprintf(stderr, "storage:   on the card: %s (%s, pid %d, working directory)\n", target, name, pid);
+		}
+	}
+
+	snprintf(path, sizeof(path), "/proc/%d/fd", pid);
+	DIR *dir = opendir(path);
+	if (dir) {
+		struct dirent *de;
+		while ((de = readdir(dir)) != NULL) {
+			char link[64];
+			snprintf(link, sizeof(link), "/proc/%d/fd/%.16s", pid, de->d_name);
+			n = readlink(link, target, sizeof(target) - 1);
+			if (n <= 0) {
+				continue;
+			}
+			target[n] = '\0';
+			if (!path_on_card(target, root, root_len) || (self && strcmp(target, log_file) == 0)) {
+				continue;
+			}
+			fprintf(stderr, "storage:   on the card: %s (%s, pid %d, fd %s)\n", target, name, pid, de->d_name);
+		}
+		closedir(dir);
+	}
+
+	snprintf(path, sizeof(path), "/proc/%d/maps", pid);
+	FILE *maps = fopen(path, "re");
+	if (maps) {
+		char line[PATH_MAX + 128], last[PATH_MAX] = "";
+		while (fgets(line, sizeof(line), maps)) {
+			char *file = strchr(line, '/');
+			if (!file) {
+				continue;
+			}
+			file[strcspn(file, "\n")] = '\0';
+			if (path_on_card(file, root, root_len) && strcmp(file, last) != 0) {
+				snprintf(last, sizeof(last), "%s", file);
+				fprintf(stderr, "storage:   on the card: %s (%s, pid %d, mapped)\n", file, name, pid);
+			}
+		}
+		fclose(maps);
+	}
+}
+
+// Every process holding something on the card, for the log when the card
+// cannot be released.
 static void log_open_on_card(void) {
 	char root[PATH_MAX];
 	if (!realpath(sd_root, root)) {
@@ -940,24 +1009,23 @@ static void log_open_on_card(void) {
 	}
 	size_t root_len = strlen(root);
 
-	DIR *dir = opendir("/proc/self/fd");
-	if (!dir) {
+	char log_file[PATH_MAX];
+	if (!realpath(logging_path(), log_file)) {
+		log_file[0] = '\0';
+	}
+
+	DIR *proc = opendir("/proc");
+	if (!proc) {
 		return;
 	}
-	struct dirent *de;
-	while ((de = readdir(dir)) != NULL) {
-		char link[16 + sizeof(de->d_name)], target[PATH_MAX];
-		snprintf(link, sizeof(link), "/proc/self/fd/%s", de->d_name);
-		ssize_t n = readlink(link, target, sizeof(target) - 1);
-		if (n <= 0) {
-			continue;
-		}
-		target[n] = '\0';
-		if (strncmp(target, root, root_len) == 0 && (target[root_len] == '/' || target[root_len] == '\0')) {
-			fprintf(stderr, "storage:   still open on the card: %s (fd %s)\n", target, de->d_name);
+	struct dirent *pe;
+	while ((pe = readdir(proc)) != NULL) {
+		int pid = atoi(pe->d_name);
+		if (pid > 0) {
+			log_process_on_card(pid, root, root_len, log_file);
 		}
 	}
-	closedir(dir);
+	closedir(proc);
 }
 
 void storage_release_for_shutdown(void) {
@@ -1152,11 +1220,10 @@ static void log_key_event(const char *node, const struct input_event *ev) {
 // ---------------------------------------------------------------------------
 
 // How long a volume key waits before it starts repeating, and how fast it goes
-// once it does. One step is small enough that a quick tap is a fine adjustment
-// and a hold sweeps the whole range in a few seconds.
+// once it does. One step of the smallest size is small enough that a quick tap
+// is a fine adjustment and a hold sweeps the whole range in a few seconds.
 #define VOLUME_REPEAT_DELAY_MS 400
 #define VOLUME_REPEAT_PERIOD_MS 70
-#define VOLUME_STEP_PERCENT 1
 
 // Hold the power key this long and it stops being a screen toggle: what the
 // hold does then is the power menu, or the power-off itself -- see
@@ -1169,11 +1236,31 @@ static uint32_t now_ms(void) {
 	return (uint32_t)(ts.tv_sec * 1000) + (uint32_t)(ts.tv_nsec / 1000000);
 }
 
+// How far one press of a volume key moves the volume, in percent (Settings >
+// More > Volume steps). Read by the key threads, written by the interface.
+static volatile int volume_step_percent = VOLUME_STEP_MIN;
+
+void input_set_volume_step(int percent) {
+	if (percent < VOLUME_STEP_MIN) {
+		percent = VOLUME_STEP_MIN;
+	}
+	if (percent > VOLUME_STEP_MAX) {
+		percent = VOLUME_STEP_MAX;
+	}
+	volume_step_percent = percent;
+}
+
+// One step up or down, as a signed change of the volume.
+static int volume_step_delta(int code) {
+	int step = volume_step_percent;
+	return code == KEY_VOLUMEUP ? step : -step;
+}
+
 // The keys always move the volume, over Bluetooth as over the jack: the step
 // reaches the stream itself, so synchronised, bluealsa passes it on to the
 // headphones, and separate, bluealsa attenuates on this side.
 static void apply_volume_step(int code) {
-	device_state_change_volume_percent(code == KEY_VOLUMEUP ? VOLUME_STEP_PERCENT : -VOLUME_STEP_PERCENT);
+	device_state_change_volume_percent(volume_step_delta(code));
 	gui_notify_volume(device_state_get_volume_percent());
 }
 
@@ -2292,7 +2379,7 @@ static void handle_bt_remote_key(const char *node, int code, bool usb) {
 	// here the headphones themselves are asking, so it is carried out.
 	case KEY_VOLUMEUP:
 	case KEY_VOLUMEDOWN:
-		device_state_change_volume_percent(code == KEY_VOLUMEUP ? VOLUME_STEP_PERCENT : -VOLUME_STEP_PERCENT);
+		device_state_change_volume_percent(volume_step_delta(code));
 		gui_notify_volume(device_state_get_volume_percent());
 		break;
 

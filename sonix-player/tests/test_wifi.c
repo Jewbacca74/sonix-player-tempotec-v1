@@ -59,6 +59,7 @@ bool power_screen_is_on(void) { return true; }
 void clock_network_sync(void) {}
 
 void thread_be_background(const char *name) { (void)name; }
+void logging_child_stdio(void) {}
 
 void deadline_in_ms(struct timespec *out, unsigned int ms) {
 	clock_gettime(CLOCK_REALTIME, out);
