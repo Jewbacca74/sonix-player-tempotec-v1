@@ -153,7 +153,11 @@ bootpic_result_t bootpic_install(const char *name, int panel_w, int panel_h) {
 	return BOOTPIC_NO_FILE;
 }
 void device_state_get(device_state_t *out) { memset(out, 0, sizeof(*out)); }
-bool gui_card_available(void) { return true; }
+/* The card is in unless a check takes it out; at a computer when shared. */
+static bool card_present = true;
+static bool card_shared;
+bool gui_card_available(void) { return card_present; }
+bool usb_storage_active(void) { return card_shared; }
 void gui_notify_no_card(void) { assert(!"unexpected missing card"); }
 void audiobooks_open(void) { switch_screen(audiobooks_screen); }
 void gui_notify_popup(const char *text) { (void)text; assert(!"unexpected popup"); }
@@ -631,6 +635,47 @@ int main(int argc, char **argv) {
 		assert(!find_label(tokyo_panel, tr("music_most_played")));
 		assert(!find_label(tokyo_panel, tr("music_album_artist")));
 	}
+
+	/* No card: under every theme the page says so instead of its tiles, its
+	 * Tokyo Night panel or a Scan button, and says "shared" while the card
+	 * is at a computer. With the card back, the tiles return. */
+	lv_obj_t *other_screen = lv_obj_create(NULL);
+	for (int kind = 0; kind < THEME_KIND_COUNT; kind++) {
+		theme_set_kind((theme_kind_t)kind);
+		for (int shared = 0; shared < 2; shared++) {
+			card_present = false;
+			card_shared = shared != 0;
+			lv_screen_load(other_screen);
+			lv_screen_load(music_screen);
+			lv_obj_update_layout(music_screen);
+			assert(lv_obj_is_hidden(music_tile_grid));
+			lv_obj_t *notice = find_label(music_screen, tr(shared ? "usb_storage_shared" : "sd_card_missing"));
+			assert(notice);
+			lv_obj_t *panel = lv_obj_get_parent(notice);
+			assert(!lv_obj_is_hidden(panel));
+			assert(lv_obj_is_hidden(lv_obj_get_child(panel, 2))); // no Scan button
+			lv_area_t area;
+			lv_obj_get_coords(panel, &area);
+			assert(area.x1 >= 0 && area.x2 < (int32_t)cfg.screen_width && area.y2 < (int32_t)cfg.screen_height);
+			for (uint32_t i = 1; i < lv_obj_get_child_count(music_screen); i++) {
+				lv_obj_t *child = lv_obj_get_child(music_screen, i);
+				if (child != panel && lv_obj_get_child_count(child) > 2) {
+					assert(lv_obj_is_hidden(child)); // the Tokyo Night panel too
+				}
+			}
+		}
+		card_present = true;
+		card_shared = false;
+		lv_screen_load(other_screen);
+		lv_screen_load(music_screen);
+		assert(!find_label(music_screen, tr("sd_card_missing")) ||
+			   lv_obj_is_hidden(lv_obj_get_parent(find_label(music_screen, tr("sd_card_missing")))));
+		if (!theme_uses_function_glyphs()) {
+			assert(!lv_obj_is_hidden(music_tile_grid));
+		}
+	}
+	theme_set_kind(THEME_KIND_DARK);
+	lv_obj_delete(other_screen);
 
 	const grid_entry_t entries[] = {
 		{"music_all_tracks", &icon_menu_music, &music_screen, NULL},
