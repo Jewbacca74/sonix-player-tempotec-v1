@@ -431,9 +431,9 @@ static void check_strings(const char *language_dir) {
 		languages++;
 	}
 	closedir(dir);
-	// The nine this firmware ships. A tenth added to the folder is meant to
+	// The ten this firmware ships. An eleventh added to the folder is meant to
 	// make this fail, so its texts get checked the same way.
-	assert(languages == 9);
+	assert(languages == 10);
 	assert(lang_set("English"));
 }
 
@@ -889,6 +889,28 @@ static void check_notes_page(gui_config_t *cfg, const char *dir, const char *tag
 	keyboard_refresh_type();
 	kblayout_move_in_use(KB_LAYOUT_ENGLISH, 0);
 	kblayout_move_others(KB_LAYOUT_UKRAINIAN, 0);
+	keyboard_refresh_layout();
+
+	// Czech QWERTZ, and its keypad with the háčky and čárky on their base
+	// letters' keys: up to six letters to a key, still inside the panel.
+	assert(strcmp(kblayout_name(KB_LAYOUT_CZECH), "\xc4\x8c" "e\xc5\xa1tina") == 0);
+	assert(strcmp(kblayout_letter(KB_LAYOUT_CZECH, 0, 5, false), "z") == 0);
+	assert(strcmp(kblayout_letter(KB_LAYOUT_CZECH, 2, 0, false), "y") == 0);
+	assert(kblayout_t9_len(KB_LAYOUT_CZECH, 7) == 6);
+	assert(kblayout_variant_count("r") == 1 && strcmp(kblayout_variant("r", 0), "\xc5\x99") == 0); // ř
+	kblayout_move_in_use(KB_LAYOUT_CZECH, 0);
+	keyboard_refresh_layout();
+	lv_obj_update_layout(noteeditor_screen);
+	check_within_panel(noteeditor_screen, cfg, "Note editor (Czech keyboard)");
+	config_set_int("other", "keyboard_t9", 1);
+	keyboard_refresh_type();
+	lv_obj_update_layout(noteeditor_screen);
+	check_within_panel(noteeditor_screen, cfg, "Note editor (Czech T9)");
+	dump_snapshot(noteeditor_screen, "v1-note-editor-czech-t9");
+	config_set_int("other", "keyboard_t9", 0);
+	keyboard_refresh_type();
+	kblayout_move_in_use(KB_LAYOUT_ENGLISH, 0);
+	kblayout_move_others(KB_LAYOUT_CZECH, 0);
 	keyboard_refresh_layout();
 
 	// Typing, then leaving the page: the writing reaches the card even though

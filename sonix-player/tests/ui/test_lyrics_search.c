@@ -217,7 +217,7 @@ static void check_strings(const char *language_dir) {
 		languages++;
 	}
 	closedir(dir);
-	assert(languages == 9);
+	assert(languages == 10);
 	assert(lang_set("English"));
 }
 
