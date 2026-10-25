@@ -540,9 +540,24 @@ static void test_playlist(void) {
 	assert(playlist_remove_at(2));
 	assert(playlist_current_index() == 1 && playlist_current_path(at, sizeof(at)) && strcmp(at, "c.mp3") == 0);
 
+	// "Add to queue": right after the track playing, or at the end, in the
+	// order the tracks were added either way.
+	playlist_load_paths(four, 4, 1); // playing b
+	playlist_set_enqueue_at_end(true);
+	assert(playlist_enqueue_at_end());
+	assert(playlist_enqueue("x.mp3") && playlist_enqueue("y.mp3"));
+	assert(playlist_count() == 6 && playlist_current_index() == 1);
+	assert(playlist_path_at(4, at, sizeof(at)) && strcmp(at, "x.mp3") == 0);
+	assert(playlist_path_at(5, at, sizeof(at)) && strcmp(at, "y.mp3") == 0);
+	playlist_set_enqueue_at_end(false);
+	assert(playlist_enqueue("z.mp3"));
+	assert(playlist_path_at(2, at, sizeof(at)) && strcmp(at, "z.mp3") == 0);
+	assert(playlist_path_at(3, at, sizeof(at)) && strcmp(at, "c.mp3") == 0);
+
 	playlist_clear();
 	puts("PASS nonmutating next-track look-ahead in normal/repeat/shuffle/ordered queues");
 	puts("PASS queue edits: a move and a removal follow the playing track");
+	puts("PASS add to queue: next or at the end");
 }
 
 static void test_leases(void) {

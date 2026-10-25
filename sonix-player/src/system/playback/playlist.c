@@ -8,6 +8,7 @@
 
 #include <dirent.h>
 #include <errno.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -683,6 +684,23 @@ bool playlist_insert_at(const char *path, int slot) {
 	custom_queue = true;
 	revision++;
 	return true;
+}
+
+bool playlist_enqueue_at_end(void) { return config_get_int("player", "queue_add_end", 0) != 0; }
+
+void playlist_set_enqueue_at_end(bool at_end) {
+	config_set_int("player", "queue_add_end", at_end ? 1 : 0);
+	config_save();
+}
+
+bool playlist_enqueue(const char *path) {
+	if (!playlist_enqueue_at_end()) {
+		return playlist_insert_next(path);
+	}
+	// A slot past the last appends: the end of the queue in playing order,
+	// which with shuffle on is the end of the order dealt. Ahead of playback
+	// unless the queue is empty, when the track simply becomes the queue.
+	return playlist_insert_at(path, INT_MAX);
 }
 
 bool playlist_is_custom(void) { return custom_queue; }
