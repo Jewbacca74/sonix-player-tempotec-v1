@@ -37,6 +37,12 @@
 # Qobuz works without a streaming-keys.ini on the card. It is off by default:
 # those are HiBy's credentials, not this project's, and an image built with it
 # must not be redistributed. See docs/qobuz-stock-firmware.md.
+#
+# SONIX_OS_VERSION=1.5.0 writes that version into system-info.json as
+# OS_version. The internet update compares it with the release tags on GitHub,
+# so a release image has to carry its own tag: left as "beta", the player
+# cannot tell what it runs and offers the newest release again right after
+# installing it. Unset, the file keeps what assets/V1 says.
 
 set -euo pipefail
 export COLUMNS=1
@@ -757,6 +763,18 @@ if [ \"\$boot_sel\" = \"logo:4\" ]; then boot_waited=0; while [ \$boot_waited -l
 
 	grep -q "\"$BUILD_STAMP\"" "$JSON" || die "$KEY was not rewritten."
 	say "    $KEY = $BUILD_STAMP"
+
+	if [ -n "${SONIX_OS_VERSION:-}" ]; then
+		# Digits first, as the player's version parser wants them; the rest is
+		# kept to what can go into a JSON string and a sed expression as is.
+		[[ "$SONIX_OS_VERSION" =~ ^[vV]?[0-9][A-Za-z0-9._-]*$ ]] ||
+			die "SONIX_OS_VERSION \"$SONIX_OS_VERSION\" is not a version like 1.5.0."
+		OS_KEY="$(grep -oE '"[Oo][Ss]_[Vv][Ee][Rr][Ss][Ii][Oo][Nn]"' "$JSON" | head -1 || true)"
+		[ -n "$OS_KEY" ] || die "$SYSTEM_INFO has no OS_version key, in any case."
+		sed_file "s/($OS_KEY[[:space:]]*:[[:space:]]*\")[^\"]*(\")/\\1$SONIX_OS_VERSION\\2/" "$JSON"
+		grep -q "$OS_KEY[[:space:]]*:[[:space:]]*\"$SONIX_OS_VERSION\"" "$JSON" || die "$OS_KEY was not rewritten."
+		say "    $OS_KEY = $SONIX_OS_VERSION"
+	fi
 	say ""
 
 	# ==========================================================================
