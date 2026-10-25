@@ -123,35 +123,31 @@ int bootpic_list(char names[][BOOTPIC_NAME_MAX + 1], int max) {
 		return 0;
 	}
 
+	// Alphabetical, and case-insensitively so: a card written on Windows and
+	// one written on a Mac do not agree about case, and the order of the
+	// list should not depend on which. Each name is put in its place as it
+	// is read, so that past `max` the list keeps the first ones in that
+	// order rather than whichever readdir() happened to return first; the
+	// page scrolls, but a folder of thousands is not a page. Insertion,
+	// because a folder of pictures is a handful and qsort() over a
+	// two-dimensional array would want a comparator carrying the row width.
 	int count = 0;
 	struct dirent *e;
 	while ((e = readdir(d)) != NULL) {
 		if (!candidate_name(e->d_name)) {
 			continue;
 		}
-		if (count == max) {
-			break; // the page scrolls; a folder of thousands is not a page
+		if (count == max && strcasecmp(names[count - 1], e->d_name) <= 0) {
+			continue; // full, and this one sorts after all of them
 		}
-		snprintf(names[count], BOOTPIC_NAME_MAX + 1, "%s", e->d_name);
-		count++;
-	}
-	closedir(d);
-
-	// Alphabetical, and case-insensitively so: a card written on Windows and
-	// one written on a Mac do not agree about case, and the order of the
-	// list should not depend on which. Insertion sort, because a folder of
-	// pictures is a handful and qsort() over a two-dimensional array would
-	// want a comparator carrying the row width.
-	for (int i = 1; i < count; i++) {
-		char held[BOOTPIC_NAME_MAX + 1];
-		memcpy(held, names[i], BOOTPIC_NAME_MAX + 1);
-		int j = i - 1;
-		while (j >= 0 && strcasecmp(names[j], held) > 0) {
-			memcpy(names[j + 1], names[j], BOOTPIC_NAME_MAX + 1);
+		int j = count < max ? count++ : max - 1; // full: the last one gives way
+		while (j > 0 && strcasecmp(names[j - 1], e->d_name) > 0) {
+			memcpy(names[j], names[j - 1], BOOTPIC_NAME_MAX + 1);
 			j--;
 		}
-		memcpy(names[j + 1], held, BOOTPIC_NAME_MAX + 1);
+		snprintf(names[j], BOOTPIC_NAME_MAX + 1, "%s", e->d_name);
 	}
+	closedir(d);
 	return count;
 }
 
