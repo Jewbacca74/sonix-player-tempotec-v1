@@ -120,6 +120,13 @@ void input_set_key_lock(bool on);
 // on, the menu being the one place the interface offers it.
 void input_set_power_hold_menu(bool on);
 
+// How far one press of a volume key moves the volume, in percent: on the case,
+// on the headphone cable and from Bluetooth headphones alike. Clamped to
+// VOLUME_STEP_MIN..VOLUME_STEP_MAX; VOLUME_STEP_MIN until set.
+#define VOLUME_STEP_MIN 1
+#define VOLUME_STEP_MAX 5
+void input_set_volume_step(int percent);
+
 #ifdef HOST_BUILD
 // Feeds one key press or release to the button thread, as if it had come off
 // an evdev node. `code` is a KEY_* from linux/input.h.
