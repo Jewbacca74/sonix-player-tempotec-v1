@@ -36,6 +36,18 @@ Checks include:
 - nonmutating playlist next-track look-ahead across repeat/shuffle/ordered modes;
 - exclusive decoder leases, both handoff/teardown orders, failed pre-cache retry suppression, repeat-one starting at byte zero, account-change invalidation with an outstanding lease, metadata lookup and unsupported raw codecs.
 
+## Lyrics from LRCLIB
+
+`make -C sonix-player/tests ui` also runs `test_lyrics_search`, which links the
+real `lrclib.c` and the page its results are picked from (`lyricsearch.c`) with
+the network replaced by canned LRCLIB answers. It checks the search asks by
+title and artist and falls back to free text, ranks a timed record within two
+seconds of the track's length first, reports an instrumental track as such, and
+that on the V1's 240x320 panel every row and the Apply button stay on the
+glass. Apply has to write `<track>.lrc` beside the file (through a `.part` name)
+and hand the player the path to read again. Every shipped language has to carry
+the feature's strings.
+
 ## Album Art Max's rows
 
 `make -C sonix-player/tests aamlayout` checks the arithmetic of the now-playing
