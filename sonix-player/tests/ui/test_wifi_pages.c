@@ -113,6 +113,7 @@ void clock_set_automatic(bool on) { (void)on; }
 void timeset_show(void) {}
 void switcher_attach_back_gesture(lv_obj_t *obj) { (void)obj; }
 bool switcher_back_drag_active(void) { return false; }
+bool power_screen_is_on(void) { return true; }
 void player_sheet_attach_drag(lv_obj_t *obj, bool opening) {
 	(void)obj;
 	(void)opening;
