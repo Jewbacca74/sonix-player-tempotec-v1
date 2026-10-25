@@ -834,6 +834,32 @@ static void check_notes_page(gui_config_t *cfg, const char *dir, const char *tag
 	kblayout_move_in_use(KB_LAYOUT_ENGLISH, 0);
 	kblayout_move_others(KB_LAYOUT_UKRAINIAN, 0);
 	keyboard_refresh_layout();
+	// Back from the longer Ukrainian rows, the letters are in their places
+	// again rather than in the order the re-parenting left them.
+	{
+		lv_obj_t *a = find_label(keyboard_tray_of(noteeditor_screen), "a");
+		if (!a) {
+			a = find_label(keyboard_tray_of(noteeditor_screen), "A");
+		}
+		assert(a);
+		lv_obj_t *row = lv_obj_get_parent(lv_obj_get_parent(a));
+		const char *expected = "asdfghjkl";
+		int seen = 0;
+		for (uint32_t i = 0; i < lv_obj_get_child_count(row); i++) {
+			lv_obj_t *key = lv_obj_get_child(row, i);
+			if (lv_obj_is_hidden(key) || !lv_obj_get_child_count(key)) {
+				continue;
+			}
+			lv_obj_t *label = lv_obj_get_child(key, 0);
+			if (!lv_obj_check_type(label, &lv_label_class)) {
+				continue;
+			}
+			const char *text = lv_label_get_text(label);
+			assert(seen < 9 && (text[0] | 0x20) == expected[seen] && text[1] == '\0');
+			seen++;
+		}
+		assert(seen == 9);
+	}
 
 	// Typing, then leaving the page: the writing reaches the card even though
 	// the check button was never pressed. Nothing here is the only copy.
