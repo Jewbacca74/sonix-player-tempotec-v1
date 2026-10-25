@@ -37,6 +37,16 @@ static const struct {
 };
 #define AUTO_OFF_COUNT ((int)(sizeof(AUTO_OFF) / sizeof(AUTO_OFF[0])))
 
+// How long the screen stays dark before standby. Saved in seconds under
+// [power] standby_mem_seconds, which power.c reads at startup.
+static const struct {
+	int seconds;
+	const char *label;
+} STANDBY_AFTER[] = {
+	{60, "power_1_minute"}, {180, "power_3_minutes"}, {300, "power_5_minutes"}, {600, "power_10_minutes"},
+};
+#define STANDBY_AFTER_COUNT ((int)(sizeof(STANDBY_AFTER) / sizeof(STANDBY_AFTER[0])))
+
 static lv_obj_t *charge_value, *charge_slider;
 static lv_obj_t *auto_off_switch, *auto_off_value, *auto_off_slider, *auto_off_card;
 static lv_obj_t *led_on_switch, *led_off_switch, *led_off_card;
@@ -44,7 +54,7 @@ static lv_obj_t *led_bright_value, *led_bright_slider;
 static lv_obj_t *led_trans_value, *led_trans_slider;
 static lv_obj_t *key_lock_switch;
 static lv_obj_t *hold_menu_switch;
-static lv_obj_t *standby_switch;
+static lv_obj_t *standby_switch, *standby_value, *standby_slider, *standby_card;
 static lv_obj_t *charge_note;
 static lv_obj_t *axp_limit_switch, *axp_current_switch; // the R1's two, instead of the slider
 
@@ -95,6 +105,18 @@ static int led_transition_index(void) {
 	return index;
 }
 
+// A wait saved by hand that is not one of the four lands on the next one up,
+// or on the longest.
+static int standby_after_index(void) {
+	int seconds = (int)config_get_int("power", "standby_mem_seconds", STANDBY_AFTER[0].seconds);
+	for (int i = 0; i < STANDBY_AFTER_COUNT; i++) {
+		if (seconds <= STANDBY_AFTER[i].seconds) {
+			return i;
+		}
+	}
+	return STANDBY_AFTER_COUNT - 1;
+}
+
 // --- applying them ---
 
 static void set_checked(lv_obj_t *sw, bool on) {
@@ -119,6 +141,7 @@ void powersettings_apply(void) {
 	// Suspend-to-RAM standby, on by default: saves battery by suspending the
 	// player shortly after the screen goes off.
 	power_set_standby_enabled(config_get_bool("power", "standby_mem", true));
+	power_set_standby_after((uint32_t)STANDBY_AFTER[standby_after_index()].seconds);
 
 	// The LED master switch comes first: with it off there is nothing for the
 	// standby option to turn off, and led.c keeps the charge indicator alive
@@ -179,11 +202,15 @@ static void refresh_labels(void) {
 	set_checked(key_lock_switch, config_get_bool("power", "lock_keys_screen_off", false));
 	set_checked(hold_menu_switch, config_get_bool("power", "hold_power_menu", true));
 
-	if (config_get_bool("power", "standby_mem", true)) {
+	// Standby and its wait, on one card like the automatic power-off below.
+	bool standby = config_get_bool("power", "standby_mem", true);
+	if (standby) {
 		lv_obj_add_state(standby_switch, LV_STATE_CHECKED);
 	} else {
 		lv_obj_remove_state(standby_switch, LV_STATE_CHECKED);
 	}
+	lv_label_set_text(standby_value, tr(STANDBY_AFTER[standby_after_index()].label));
+	settingsrow_toggle_slider_expanded(standby_card, standby);
 
 	// One card: the slider is only on it while the toggle is on.
 	bool auto_off = config_get_bool("power", "auto_off", false);
@@ -292,6 +319,15 @@ static void auto_off_toggled_cb(lv_event_t *e) {
 	refresh_labels();
 }
 
+static void standby_after_changed_cb(lv_event_t *e) {
+	(void)e;
+	int index = (int)lv_slider_get_value(standby_slider);
+	config_set_int("power", "standby_mem_seconds", STANDBY_AFTER[index].seconds);
+	config_save();
+	powersettings_apply();
+	refresh_labels();
+}
+
 static void standby_toggled_cb(lv_event_t *e) {
 	(void)e;
 	config_set_bool("power", "standby_mem", lv_obj_has_state(standby_switch, LV_STATE_CHECKED));
@@ -303,11 +339,15 @@ static void standby_toggled_cb(lv_event_t *e) {
 void powersettings_init(gui_config_t *cfg) {
 	lv_obj_t *container = settingsrow_page(powersettings_screen, cfg, "power");
 
-	// Suspend-to-RAM standby: suspends the player shortly after the screen goes
+	// Suspend-to-RAM standby: suspends the player a while after the screen goes
 	// off to save battery, and playback resumes on wake. On by default. What it
 	// waits for is the screen going dark, and that timeout lives on the Screen
-	// page, beside the brightness it belongs with.
-	settingsrow_toggle(container, "power_standby_mem", &standby_switch, standby_toggled_cb);
+	// page, beside the brightness it belongs with; how long it then waits is
+	// the slider on this card, there only while standby is on.
+	standby_card = settingsrow_toggle_slider(container, "power_standby_mem", STANDBY_AFTER_COUNT, &standby_switch,
+											 &standby_value, &standby_slider, standby_toggled_cb,
+											 standby_after_changed_cb);
+	lv_slider_set_value(standby_slider, standby_after_index(), LV_ANIM_OFF);
 	lv_obj_t *standby_note = lv_label_create(container);
 	lv_label_set_long_mode(standby_note, LV_LABEL_LONG_WRAP);
 	lv_obj_set_width(standby_note, lv_pct(100));
