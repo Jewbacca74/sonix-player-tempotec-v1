@@ -105,6 +105,8 @@ void bootlogo_set(int choice, bool dark) {
 }
 // Whether the custom boot picture has been made: theme.c asks before it will
 // answer "Custom". No copy is made in this test, so the answer is no.
+bool switcher_back_drag_active(void) { return false; }
+bool player_sheet_drag_active(void) { return false; }
 bool bootpic_present(void) { return false; }
 bool clock_is_set(void) { return true; }
 void clock_format_hm(char *out, size_t out_size, int hour, int minute) {
