@@ -1,6 +1,7 @@
 #include "fwupdate.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "lvgl/lvgl.h"
@@ -14,6 +15,7 @@
 #include "src/system/device/ota.h"
 #include "src/system/device/power.h"
 #include "src/system/device/sysinfo.h"
+#include "src/system/device/system.h"
 
 #define CARD_W 420
 #define BUTTON_H 64
@@ -24,6 +26,11 @@
 #define COMPACT_BUTTON_H 40
 #define BUTTONS 3
 #define POLL_MS 200
+
+// Recovery rewrites the flash, and a battery that gives out in the middle of it
+// leaves a player that does not start. Below this, and off the charger, the
+// update is not offered.
+#define MIN_BATTERY_PERCENT 30
 
 // The title while a release is shown, downloaded and installed; the version
 // is in the line under it.
@@ -512,7 +519,22 @@ static void show_downloading(void) {
 	hide_buttons(1);
 }
 
+// False, with a notice on the card, when the battery is too low to risk a
+// flash write. The charger being in is enough.
+static bool battery_ok(void) {
+	sync_battery_from_sysfs();
+	const char *text = read_battery_percent();
+	if (read_battery_charging() || !text || !*text || atoi(text) >= MIN_BATTERY_PERCENT) {
+		return true;
+	}
+	show_notice(tr("system_update_low_battery"));
+	return false;
+}
+
 static void download_clicked(void) {
+	if (!battery_ok()) {
+		return;
+	}
 	if (!ota_download_start()) {
 		show_notice(tr("system_update_busy"));
 		return;
@@ -649,6 +671,12 @@ static void sd_run(void *unused) {
 	char path[512];
 	if (!firmware_update_file_find(path, sizeof(path))) {
 		gui_notify_popup("system_update_file_missing");
+		return;
+	}
+	sync_battery_from_sysfs();
+	const char *level = read_battery_percent();
+	if (!read_battery_charging() && level && *level && atoi(level) < MIN_BATTERY_PERCENT) {
+		gui_notify_popup("system_update_low_battery");
 		return;
 	}
 	printf("firmware: update file %s\n", path);

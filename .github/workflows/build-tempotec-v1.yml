@@ -173,6 +173,11 @@ jobs:
         run: make target -j"$(nproc)"
 
       - name: Build v1.upt
+        env:
+          # A release image carries its own tag as OS_version: the internet
+          # update compares it with the tags on GitHub (src/system/device/ota.c).
+          # Any other build stays "beta".
+          SONIX_OS_VERSION: ${{ inputs.publish_release_tag || (github.ref_type == 'tag' && github.ref_name) || '' }}
         run: |
           install -m 0755 sonix-player/sonix_player sonix-packer/sonix_player
           install -m 0755 sonix-player/sonix_launch sonix-packer/sonix_launch
@@ -255,10 +260,12 @@ jobs:
             echo "::error::the image was built from $BUILT_SHA and $RELEASE_TAG names $tag_sha. Nothing was published."
             exit 1
           fi
+          # A pushed tag with no release yet gets one, so that tagging is all
+          # it takes for the player's internet update to find the image. A
+          # release made by hand first keeps its own title and notes.
           if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            echo "$RELEASE_TAG has no release yet; the artifact above carries the image."
-            echo "Create the release, then run this workflow again with publish_release_tag=$RELEASE_TAG."
-            exit 0
+            echo "$RELEASE_TAG has no release yet; creating it."
+            gh release create "$RELEASE_TAG" --verify-tag --title "$RELEASE_TAG" --generate-notes
           fi
           gh release upload "$RELEASE_TAG" sonix-packer/v1.upt sonix-packer/v1_md5.txt --clobber
           local_size="$(stat -c%s sonix-packer/v1.upt)"
