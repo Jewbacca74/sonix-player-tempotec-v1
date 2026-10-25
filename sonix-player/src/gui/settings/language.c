@@ -3,6 +3,7 @@
 #include "src/gui/board_profile.h"
 #include "src/gui/fonts/fonts.h"
 #include "src/gui/shell/icons.h"
+#include "src/gui/shell/keyboard.h"
 #include "src/gui/shell/powermenu.h"
 #include "src/gui/shell/settingsrow.h"
 #include "src/gui/shell/switcher.h"
@@ -13,6 +14,7 @@
 #include "src/system/device/clock.h"
 #include "src/system/core/lang.h"
 #include "src/system/device/power.h"
+#include "src/system/input/kblayout.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -120,6 +122,9 @@ static void pick_cb(lv_event_t *e) {
 	if (!lang_set(entries[index].name)) {
 		return; // nothing changed, so nothing to repaint
 	}
+	// The keyboard follows the language until a layout has been picked by hand.
+	kblayout_language_changed();
+	keyboard_refresh_layout();
 	paint_checks();
 	refresh_titles();
 	// The short power-menu actions can share their translation with another
