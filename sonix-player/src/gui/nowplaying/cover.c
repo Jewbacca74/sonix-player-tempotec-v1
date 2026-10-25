@@ -898,12 +898,15 @@ static bool make_backdrop(const raw_image_t *src, int box_w, int box_h, bool fro
 #define TONE_CHROMA_FLOOR 14
 #define TONE_MONO 0xF2EEE8 // barely warm white: light, not paint
 
-uint32_t cover_dominant_tone(const cover_image_t *cover) {
+// The sleeve's colours averaged with each pixel weighted by how far it is from
+// grey (see above): what the eye would call the colour of the sleeve. False
+// when there is nothing to look at.
+static bool tone_weighted_average(const cover_image_t *cover, unsigned *r_out, unsigned *g_out, unsigned *b_out) {
 	int w = (int)cover->dsc.header.w;
 	int h = (int)cover->dsc.header.h;
 	int stride = (int)cover->dsc.header.stride / 2;
 	if (!cover->pixels || w <= 0 || h <= 0) {
-		return 0;
+		return false;
 	}
 
 	uint64_t ar = 0, ag = 0, ab = 0, weight = 0;
@@ -925,9 +928,19 @@ uint32_t cover_dominant_tone(const cover_image_t *cover) {
 		}
 	}
 	if (!weight) {
+		return false;
+	}
+	*r_out = (unsigned)(ar / weight);
+	*g_out = (unsigned)(ag / weight);
+	*b_out = (unsigned)(ab / weight);
+	return true;
+}
+
+uint32_t cover_dominant_tone(const cover_image_t *cover) {
+	unsigned r, g, b;
+	if (!tone_weighted_average(cover, &r, &g, &b)) {
 		return 0;
 	}
-	unsigned r = (unsigned)(ar / weight), g = (unsigned)(ag / weight), b = (unsigned)(ab / weight);
 
 	// Pull it away from grey: the gap between the strongest channel and the
 	// weakest is stretched, and the middle one moves with it, so the hue stays
@@ -963,6 +976,42 @@ uint32_t cover_dominant_tone(const cover_image_t *cover) {
 		b = b * 180 / hi;
 	}
 	return (r << 16) | (g << 8) | b;
+}
+
+int cover_mean_luma(const cover_image_t *cover) {
+	if (!cover || !cover->pixels) {
+		return -1;
+	}
+	int w = (int)cover->dsc.header.w;
+	int h = (int)cover->dsc.header.h;
+	int stride = (int)cover->dsc.header.stride / 2;
+	if (w <= 0 || h <= 0) {
+		return -1;
+	}
+
+	// Every fourth pixel each way, as cover_dominant_tone() samples it.
+	uint64_t sum = 0, count = 0;
+	for (int y = 0; y < h; y += 4) {
+		const uint16_t *row = (const uint16_t *)cover->pixels + (size_t)y * stride;
+		for (int x = 0; x < w; x += 4) {
+			uint16_t c = row[x];
+			unsigned r5 = (c >> 11) & 0x1F, g6 = (c >> 5) & 0x3F, b5 = c & 0x1F;
+			unsigned r = (r5 << 3) | (r5 >> 2), g = (g6 << 2) | (g6 >> 4), b = (b5 << 3) | (b5 >> 2);
+			sum += (r * 299 + g * 587 + b * 114) / 1000;
+			count++;
+		}
+	}
+	return count ? (int)(sum / count) : -1;
+}
+
+uint32_t cover_average_tone(const cover_image_t *cover) {
+	unsigned r, g, b;
+	if (!cover || !tone_weighted_average(cover, &r, &g, &b)) {
+		return 0;
+	}
+	// Never 0, which says "no sleeve": a black one comes back one step above.
+	uint32_t tone = (r << 16) | (g << 8) | b;
+	return tone ? tone : 0x010101;
 }
 
 bool cover_blur_copy(const cover_image_t *src, cover_image_t *out) {

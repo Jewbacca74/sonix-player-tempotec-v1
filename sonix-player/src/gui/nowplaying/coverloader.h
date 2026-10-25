@@ -22,9 +22,10 @@
 // Browser rows use slots 0..9; the library index pages (medialist.c) use
 // 12..23 for the name lists and 24..35 for the track lists; the search page
 // takes 36..59 -- its twelve track hits and twelve album hits; the audiobook
-// list takes 60..71 for its twelve rows; one artist's records take 72..83; and the
-// album carousel takes 84..89 -- so the pools never trample each other's requests.
-#define COVERLOADER_SLOTS 90
+// list takes 60..71 for its twelve rows; one artist's records take 72..83; the
+// album carousel takes 84..89; and the cover at the head of an album's tracks
+// takes 90 -- so the pools never trample each other's requests.
+#define COVERLOADER_SLOTS 91
 #define COVERLOADER_SEARCH_BASE 36
 #define COVERLOADER_SEARCH_COUNT 24
 #define COVERLOADER_AUDIOBOOKS_BASE 60
@@ -35,6 +36,11 @@
 // bigger pictures than any list does -- 210 px against the lists' 72 -- but
 // never more than six at a time, and only while its page is the one on screen.
 #define COVERLOADER_COVERFLOW_BASE 84
+
+// The big cover above an album's tracks, when the album page is laid out with
+// one (Music > Display options > Library). One picture, the size of most of the
+// screen's width.
+#define COVERLOADER_ALBUM_HEAD 90
 
 // Starts the worker. Safe to call more than once.
 void coverloader_start(void);

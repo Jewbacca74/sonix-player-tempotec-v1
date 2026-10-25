@@ -34,6 +34,14 @@ static bool chevron_over_cover;
 // How much of the chevron shows over the player's artwork (LV_OPA_COVER = all).
 #define CHEVRON_OVER_COVER_OPA LV_OPA_60
 
+// A page painted in a colour of its own -- an album in the colours of its
+// sleeve -- and the colour the chevron takes on it so it stays readable.
+// `chevron_page` is the page being shown, set as it is loaded: the active
+// screen is still the previous one at that moment.
+static lv_obj_t *chevron_tint_screen;
+static lv_color_t chevron_tint;
+static lv_obj_t *chevron_page;
+
 // Where the back button sits depends on whether the page below it shows the
 // status bar: normally it tucks in underneath, on the player (status bar
 // hidden, artwork at the top) it moves up to the top edge.
@@ -155,6 +163,7 @@ static lv_obj_t *history_pop(void) {
 }
 
 static void load_screen(lv_obj_t *target_screen);
+static void chevron_apply_color(void);
 
 // Forgets the whole back-stack: the next chevron press lands on the main
 // menu. For pages that end a one-way flow (a finished scan) where walking
@@ -553,6 +562,9 @@ static void load_screen(lv_obj_t *target_screen) {
 
 		place_back_btn(true);
 	}
+	chevron_page = target_screen;
+	chevron_apply_color();
+	topbar_page_shown(target_screen);
 
 	// Re-read the folder on the way in: the card may have finished mounting
 	// (or changed) since the browser last looked at it.
@@ -729,6 +741,10 @@ static void chevron_apply_color(void) {
 		lv_obj_set_style_image_recolor_opa(back_btn_icon, LV_OPA_COVER, 0);
 		// See-through over the artwork, so the sleeve shows behind the chevron.
 		lv_obj_set_style_image_opa(back_btn_icon, CHEVRON_OVER_COVER_OPA, 0);
+	} else if (!chevron_in_player && chevron_tint_screen && chevron_page == chevron_tint_screen) {
+		lv_obj_set_style_image_recolor(back_btn_icon, chevron_tint, 0);
+		lv_obj_set_style_image_recolor_opa(back_btn_icon, LV_OPA_COVER, 0);
+		lv_obj_remove_local_style_prop(back_btn_icon, LV_STYLE_IMAGE_OPA, 0);
 	} else {
 		lv_obj_remove_local_style_prop(back_btn_icon, LV_STYLE_IMAGE_RECOLOR, 0);
 		lv_obj_remove_local_style_prop(back_btn_icon, LV_STYLE_IMAGE_RECOLOR_OPA, 0);
@@ -738,6 +754,19 @@ static void chevron_apply_color(void) {
 
 void back_btn_over_cover(bool over_cover) {
 	chevron_over_cover = over_cover;
+	chevron_apply_color();
+}
+
+void back_btn_tint_on_screen(lv_obj_t *screen, bool on, lv_color_t color) {
+	if (on) {
+		chevron_tint_screen = screen;
+		chevron_tint = color;
+	} else if (chevron_tint_screen == screen) {
+		chevron_tint_screen = NULL;
+	}
+	if (!chevron_page) {
+		chevron_page = lv_screen_active();
+	}
 	chevron_apply_color();
 }
 
