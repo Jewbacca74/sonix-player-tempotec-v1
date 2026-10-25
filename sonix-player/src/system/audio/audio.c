@@ -850,6 +850,9 @@ static const char *pcm_device_name(snd_pcm_t *pcm) {
 	return pcm ? snd_pcm_name(pcm) : NULL;
 }
 static int held_route;
+// When the PCM was taken into hold, so the log says how long the next track
+// took to arrive: the margin gapless works within is the queue held at the end.
+static long held_since_ms;
 
 void audio_set_gapless(bool enabled) {
 	gapless_enabled = enabled;
@@ -1001,7 +1004,7 @@ static void gapless_release(void) {
 	if (!pcm) {
 		return;
 	}
-	fprintf(stderr, "audio[%ld]: gapless: closing the held PCM\n", log_ms());
+	fprintf(stderr, "audio[%ld]: gapless: closing the held PCM after %ld ms\n", log_ms(), log_ms() - held_since_ms);
 	if (from_skip) {
 		// A skip already dropped the old track's queue: there is no tail to hear.
 		// Silence the codec first and wait out its ramp, or the drop is a click.
@@ -1043,6 +1046,7 @@ static void gapless_hold(snd_pcm_t *pcm, int channels, int rate, int bits, snd_p
 	held_bits = bits;
 	held_period = period;
 	held_route = alsa_output_key();
+	held_since_ms = log_ms();
 	// The device this handle is really on. Taken from the handle and not from
 	// the route, for the reason given at keep_open: the route can already have
 	// moved on, and then the next track would be handed a PCM to somewhere it
@@ -1155,7 +1159,8 @@ static snd_pcm_t *gapless_take(int channels, int rate, int bits, snd_pcm_uframes
 	if (period_out) {
 		*period_out = held_period;
 	}
-	fprintf(stderr, "audio[%ld]: gapless: reusing the open PCM\n", log_ms());
+	fprintf(stderr, "audio[%ld]: gapless: reusing the open PCM, the next track came %ld ms after the end\n", log_ms(),
+			log_ms() - held_since_ms);
 	return pcm;
 }
 
