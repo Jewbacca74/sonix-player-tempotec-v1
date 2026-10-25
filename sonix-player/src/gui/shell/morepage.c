@@ -5,6 +5,7 @@
 #include "lvgl/lvgl.h"
 
 #include "src/gui/audio/dacpage.h"
+#include "src/gui/audio/metronomepage.h"
 #include "src/gui/board_profile.h"
 #include "src/gui/calculator/calculator.h"
 #include "src/gui/ebook/ebookpage.h"
@@ -66,6 +67,9 @@ static bool more_tokyo_icon(const char *label, const lv_image_dsc_t **icon, them
 	} else if (strcmp(label, "notes") == 0) {
 		*icon = &icon_notes;
 		*tone = THEME_SEMANTIC_PURPLE;
+	} else if (strcmp(label, "metronome") == 0) {
+		*icon = &icon_metronome;
+		*tone = THEME_SEMANTIC_GREEN;
 	} else {
 		return false;
 	}
@@ -110,10 +114,10 @@ static void more_list_add_entries(const grid_entry_t *entries, int count) {
 //
 // Every other tiled page in the player holds six destinations and is drawn as
 // the two-column, three-row page the main menu uses. More is the one page that
-// grew: with the calculator and the notes shelf it holds seven, and a seventh
-// tile in a 2x3 grid would be laid out past the bottom of an unscrollable page
-// -- visible to nobody. So the shape follows the count: six or fewer stay as
-// they are, and seven or more move to a third column.
+// grew: with the calculator, the notes shelf and the metronome it holds eight,
+// and a seventh tile in a 2x3 grid would be laid out past the bottom of an
+// unscrollable page -- visible to nobody. So the shape follows the count: six
+// or fewer stay as they are, and seven to nine move to a third column.
 //
 // Three columns are what a 240 px V1 can afford without shrinking the tiles
 // below the size the rest of the interface draws them: at 72 px the 46 px
@@ -148,6 +152,9 @@ static const grid_entry_t MORE_ENTRIES[] = {
 	// it was left holding, and the notes shelf reads the card.
 	{"calculator", &icon_menu_calculator, NULL, calculator_open},
 	{"notes", &icon_menu_notes, NULL, notes_open},
+	// A screen: it keeps nothing to read again, and leaving it stops the
+	// clicking.
+	{"metronome", &icon_menu_metronome, &metronomepage_screen, NULL},
 };
 
 #define MORE_ENTRIES_MAX 12

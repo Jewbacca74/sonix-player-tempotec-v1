@@ -242,6 +242,7 @@ ICONS = [
     ("move-vertical.svg", "reorder", 34), # turns on reordering in a playlist
     ("now-playing.svg", "now_playing", 32), # the playing row in the queue
     ("plus.svg", "plus", 36),
+    ("minus.svg", "minus", 36),             # the metronome: one beat per minute slower
     ("import.svg", "import", 34), # brings an .m3u from the card into the player's folder
     ("reset.svg", "reset", 36),             # MSEB / equalizer: back to flat
     ("circle-check.svg", "circle_check", 64), # the confirmation popup
@@ -381,6 +382,7 @@ ICONS = [
     ("pencil.svg", "pencil", 36),
     ("calculator.svg", "calculator", 32),
     ("notes.svg", "notes", 32),
+    ("metronome.svg", "metronome", 32),     # the metronome's row in the More list
     ("enter.svg", "enter", 34),
     ("year.svg", "year", 32),
     ("most-played.svg", "most_played", 32),
@@ -448,6 +450,7 @@ COLOR_ICONS = [
     ("file-explorer.png", "menu_file_explorer", SECTION_ICON_SIZE),
     ("calculator.png", "menu_calculator", SECTION_ICON_SIZE),
     ("notes.png", "menu_notes", SECTION_ICON_SIZE),
+    ("metronome.png", "menu_metronome", SECTION_ICON_SIZE),
 
     # The service badges in the player's top right corner, where the radio puts
     # its LIVE mark. They sit over the cover art, so these are the outlined

@@ -1,6 +1,6 @@
 /*
- * The two pages the More menu gained -- the Calculator and the Notes shelf --
- * on the real renderer, at both panel sizes.
+ * The pages the More menu gained -- the Calculator, the Notes shelf and the
+ * Metronome -- on the real renderer, at both panel sizes.
  *
  * The arithmetic (test_calculator.c) and the folder rules (test_notes.c) are
  * checked in plain C elsewhere; what is checked here is the part that only
@@ -18,6 +18,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "src/gui/audio/metronomepage.h"
 #include "src/gui/board_profile.h"
 #include "src/gui/calculator/calculator.h"
 #include "src/gui/fonts/fonts.h"
@@ -32,7 +33,13 @@
 #include "src/gui/shell/keyboard.h"
 #include "src/gui/shell/morepage.h"
 #include "src/gui/shell/theme.h"
+#include "src/system/audio/audio.h"
+#include "src/system/audio/metronome.h"
+#include "src/system/bluetooth/btreceiver.h"
 #include "src/system/core/config.h"
+#include "src/system/device/power.h"
+#include "src/system/remote/airplay.h"
+#include "src/system/streaming/radio.h"
 #include "src/system/core/lang.h"
 #include "src/system/input/kblayout.h"
 #include "src/system/notes/notesstore.h"
@@ -49,6 +56,7 @@ lv_font_t font_ui_14, font_ui_16, font_ui_18, font_ui_20, font_ui_20_bold;
 lv_font_t font_ui_22, font_ui_22_bold, font_ui_24, font_ui_24_bold;
 lv_font_t font_ui_26, font_ui_28, font_ui_32;
 lv_font_t font_ui_36_bold; // the calculator's symbol keys, and Gearboy's letters
+lv_font_t font_ui_64_bold; // the metronome's tempo
 static void (*font_callbacks[16])(void);
 static int font_callback_count;
 static int text_size = FONTS_TEXT_NORMAL;
@@ -65,7 +73,7 @@ static void init_fonts(void) {
 	// The one size the interface draws a step larger than the text around it:
 	// a second metric, so the calculator's symbol keys can be checked to be
 	// drawn bigger than its digits rather than merely differently styled.
-	lv_font_t *large[] = {&font_ui_36_bold};
+	lv_font_t *large[] = {&font_ui_36_bold, &font_ui_64_bold};
 	for (size_t i = 0; i < sizeof(large) / sizeof(large[0]); i++) {
 		*large[i] = lv_font_montserrat_20;
 	}
@@ -97,7 +105,15 @@ bool bootpic_present(void) { return false; }
 void device_state_get(device_state_t *out) { memset(out, 0, sizeof(*out)); }
 bool gui_card_available(void) { return true; }
 void gui_notify_no_card(void) { assert(!"the card is there in this test"); }
+/* One popup is expected: the metronome's, when music is playing. Any other
+ * still fails the run. */
+static const char *expected_popup;
+static int popups_seen;
 void gui_notify_popup(const char *text) {
+	if (expected_popup && text && strcmp(text, expected_popup) == 0) {
+		popups_seen++;
+		return;
+	}
 	fprintf(stderr, "popup: %s\n", text ? text : "");
 	assert(!"unexpected popup");
 }
@@ -137,6 +153,44 @@ bool player_sheet_drag_active(void) { return false; }
 void coverflow_attach_edge(lv_obj_t *obj, gui_config_t *cfg) { (void)obj; (void)cfg; }
 bool coverflow_drag_active(void) { return false; }
 bool coverflow_is_open(void) { return false; }
+
+/* The metronome's sound and everything it asks before it starts. The clicking
+ * itself (metronome.c) needs an ALSA device; what the page is checked for is
+ * what it shows and what its controls ask of the engine, so the engine here is
+ * a few variables. Nothing is playing unless a check says so. */
+static int fake_bpm = 100, fake_beats = 4;
+static bool fake_running;
+static audio_status_t fake_audio_status = AUDIO_STATUS_STOPPED;
+static int screen_holds;
+bool metronome_start(void) {
+	if (fake_running) {
+		return false;
+	}
+	fake_running = true;
+	return true;
+}
+void metronome_stop(void) { fake_running = false; }
+bool metronome_running(void) { return fake_running; }
+void metronome_set_bpm(int bpm) {
+	fake_bpm = bpm < METRONOME_BPM_MIN ? METRONOME_BPM_MIN : bpm > METRONOME_BPM_MAX ? METRONOME_BPM_MAX : bpm;
+}
+int metronome_bpm(void) { return fake_bpm; }
+void metronome_set_beats(int beats) { fake_beats = beats < 1 ? 1 : beats > METRONOME_BEATS_MAX ? METRONOME_BEATS_MAX : beats; }
+int metronome_beats(void) { return fake_beats; }
+bool metronome_position(int *beat, uint32_t *count, float *phase) {
+	(void)beat;
+	(void)count;
+	(void)phase;
+	return false;
+}
+audio_status_t audio_get_status(void) { return fake_audio_status; }
+bool radio_is_playing(void) { return false; }
+bool radio_is_connecting(void) { return false; }
+bool btreceiver_is_streaming(void) { return false; }
+bool airplay_running(void) { return false; }
+void airplay_get_state(airplay_state_t *out) { memset(out, 0, sizeof(*out)); }
+void power_hold_screen_for_view(bool hold) { screen_holds = hold ? screen_holds + 1 : 0; }
+void volume_overlay_allow_outside_player(bool allow) { (void)allow; }
 
 
 bool cover_load_image_file(const char *path, int box_w, int box_h, cover_fit_t fit, cover_image_t *out) {
@@ -349,6 +403,7 @@ static void check_strings(const char *language_dir) {
 		"notes_cannot_open", "notes_too_long", "music_years", "music_most_played",
 		"library_empty_most_played",
 		"musicsettings_rearrange_main_page",
+		"metronome", "metronome_tap", "metronome_stop_playback_first",
 	};
 	DIR *dir = opendir(language_dir);
 	assert(dir);
@@ -454,6 +509,7 @@ static void check_more_page(gui_config_t *cfg, const char *tag) {
 	assert(has_entry(shown, tr("books")));
 	assert(has_entry(shown, tr("file_explorer")));
 	assert(has_entry(shown, tr("flappy_bird")));
+	assert(has_entry(shown, tr("metronome")));
 
 	// A tile of a page that does not scroll has to be on the glass, every one
 	// of them: an entry laid out past the foot of a page that cannot be
@@ -958,6 +1014,77 @@ static void check_notes_page(gui_config_t *cfg, const char *dir, const char *tag
 
 /* The button carrying a glyph: a corner control has an image on it, not a
  * caption, so it cannot be found by the text it shows. */
+/* ---- the Metronome ------------------------------------------------------- */
+
+static void click(lv_obj_t *obj) {
+	lv_obj_send_event(obj, LV_EVENT_PRESSED, NULL);
+	lv_obj_send_event(obj, LV_EVENT_SHORT_CLICKED, NULL);
+	lv_obj_send_event(obj, LV_EVENT_CLICKED, NULL);
+}
+
+/* The page upstream drew for a 480x720 panel, on the V1's 240x320: the arm's
+ * drawing, the beat dots, the tempo between its two steps, the slider, and Tap,
+ * play and the bar along the foot -- all on the glass, the buttons still finger
+ * targets, the tempo readable. Then what the controls do: a step moves the
+ * tempo by one, play starts and stops the engine, the play key stops it, and
+ * with music playing it refuses with a word instead of starting. */
+static void check_metronome_page(gui_config_t *cfg, const char *tag) {
+	switch_screen(metronomepage_screen);
+	lv_obj_update_layout(metronomepage_screen);
+	check_within_panel(metronomepage_screen, cfg, "Metronome");
+	dump_snapshot(metronomepage_screen, tag);
+
+	lv_obj_t *minus = find_image_button(metronomepage_screen, &icon_minus);
+	lv_obj_t *plus = find_image_button(metronomepage_screen, &icon_plus);
+	lv_obj_t *play = find_image_button(metronomepage_screen, &icon_play_large);
+	assert(minus && plus && play);
+	lv_obj_t *tap = find_label(metronomepage_screen, tr("metronome_tap"));
+	assert(tap);
+	lv_obj_t *const targets[] = {minus, plus, play, lv_obj_get_parent(tap)};
+	for (size_t i = 0; i < sizeof(targets) / sizeof(targets[0]); i++) {
+		assert(lv_obj_get_width(targets[i]) >= bp_pick(36, 56));
+		assert(lv_obj_get_height(targets[i]) >= bp_pick(36, 56));
+	}
+	// The tempo and the bar are on the page, the bar showing its signature.
+	char bpm_text[8];
+	snprintf(bpm_text, sizeof(bpm_text), "%d", metronome_bpm());
+	assert(find_label(metronomepage_screen, bpm_text));
+	assert(find_label(metronomepage_screen, "4/4"));
+	// The steps sit either side of the tempo, inside the panel's width.
+	lv_area_t a_minus, a_plus;
+	lv_obj_get_coords(minus, &a_minus);
+	lv_obj_get_coords(plus, &a_plus);
+	assert(a_minus.x2 < a_plus.x1);
+
+	int before = metronome_bpm();
+	click(plus);
+	assert(metronome_bpm() == before + 1);
+	click(minus);
+	assert(metronome_bpm() == before);
+
+	click(play);
+	assert(metronome_running());
+	assert(screen_holds > 0); // the screen stays on while it clicks
+	assert(metronomepage_key(GUI_KEY_NEXT)); // the skip keys do nothing while it runs
+	assert(metronome_running());
+	assert(metronomepage_key(GUI_KEY_PLAY_PAUSE));
+	assert(!metronome_running());
+	assert(!metronomepage_key(GUI_KEY_PLAY_PAUSE)); // stopped, play goes to the music
+
+	fake_audio_status = AUDIO_STATUS_PLAYING;
+	expected_popup = "metronome_stop_playback_first";
+	click(play);
+	assert(!metronome_running());
+	assert(popups_seen == 1);
+	expected_popup = NULL;
+	fake_audio_status = AUDIO_STATUS_STOPPED;
+
+	// Leaving keeps the tempo for next time.
+	click(plus);
+	switch_screen(music_screen);
+	assert(config_get_int("metronome", "bpm", 0) == before + 1);
+}
+
 static lv_obj_t *find_image_button(lv_obj_t *obj, const lv_image_dsc_t *glyph) {
 	if (lv_obj_check_type(obj, &lv_image_class) && lv_image_get_src(obj) == glyph) {
 		lv_obj_t *parent = lv_obj_get_parent(obj);
@@ -1009,6 +1136,7 @@ int main(int argc, char **argv) {
 	calculator_screen = lv_obj_create(NULL);
 	notes_screen = lv_obj_create(NULL);
 	noteeditor_screen = lv_obj_create(NULL);
+	metronomepage_screen = lv_obj_create(NULL);
 
 	/* The notes the card already has, put there the way a computer would
 	 * leave them: one of each extension the page knows, and a picture. */
@@ -1040,6 +1168,7 @@ int main(int argc, char **argv) {
 	calculator_init(&cfg);
 	noteeditor_init(&cfg);
 	notes_init(&cfg);
+	metronomepage_init(&cfg);
 	morepage_init(&cfg);
 	player_drag_attaches = 0; // counting from here: only the viewers are built below
 	textview_init(&cfg); // the notes shelf shows a long note through it
@@ -1081,8 +1210,9 @@ int main(int argc, char **argv) {
 					 bp_is_tempotec_v1() ? "v1-note-editor-writing" : "hiby-note-editor-writing",
 					 bp_is_tempotec_v1() ? "v1-notes-after" : "hiby-notes-after",
 					 bp_is_tempotec_v1() ? "v1-note-long" : "hiby-note-long");
+	check_metronome_page(&cfg, bp_is_tempotec_v1() ? "v1-metronome" : "hiby-metronome");
 
 	lv_deinit();
-	printf("PASS calculator and notes pages (%s)\n", bp_is_tempotec_v1() ? "240x320" : "480x720");
+	printf("PASS calculator, notes and metronome pages (%s)\n", bp_is_tempotec_v1() ? "240x320" : "480x720");
 	return 0;
 }
