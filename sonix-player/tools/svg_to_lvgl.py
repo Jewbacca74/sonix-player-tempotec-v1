@@ -265,6 +265,9 @@ ICONS = [
     ("heart-outline.svg", "heart_outline", 32),
     ("heart.svg", "heart_filled", 32),
     ("star.svg", "star_corner", 34),
+    # Over the lyrics, beside the star or the ellipsis: look the words up again
+    # on LRCLIB, to replace them. The star's size, since the two sit together.
+    ("lyrics-search.svg", "lyrics_search", 32),
     ("radio-recent.svg", "radio_recent", 34), # stations played most recently
     ("custom-radio.svg", "radio_custom", 34), # the stations written into radio.txt
     # Under a station's name: the stream's quality, one glyph in four colours

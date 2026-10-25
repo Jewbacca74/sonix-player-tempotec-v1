@@ -228,6 +228,17 @@ WIFIPAGE_SRC = $(ROOT)/tests/ui/test_wifi_pages.c $(ROOT)/src/gui/wireless/wifis
 WIFIPAGE_OBJ = $(patsubst $(ROOT)/%.c,$(BUILD)/ui/%.o,$(WIFIPAGE_SRC)) \
             $(patsubst $(ROOT)/%.c,$(BUILD)/ui/%.o,$(UI_LVGL_SRC))
 
+# LRCLIB lyrics search and the page its results are picked from, on the same
+# renderer; the network under it is a canned answer (see test_lyrics_search.c).
+LYRICS_SRC = $(ROOT)/tests/ui/test_lyrics_search.c $(ROOT)/src/gui/nowplaying/lyricsearch.c \
+            $(ROOT)/src/system/library/lrclib.c $(ROOT)/src/system/core/json.c \
+            $(ROOT)/src/gui/shell/settingsrow.c \
+            $(ROOT)/src/gui/shell/theme.c $(ROOT)/src/gui/shell/icons.c \
+            $(ROOT)/src/gui/board_profile.c \
+            $(ROOT)/src/system/core/config.c $(ROOT)/src/system/core/lang.c
+LYRICS_OBJ = $(patsubst $(ROOT)/%.c,$(BUILD)/ui/%.o,$(LYRICS_SRC)) \
+            $(patsubst $(ROOT)/%.c,$(BUILD)/ui/%.o,$(UI_LVGL_SRC))
+
 SAVER_SRC = $(ROOT)/tests/ui/test_screensaver.c $(ROOT)/src/gui/settings/screensaver.c \
             $(ROOT)/src/gui/shell/scrolltext.c $(ROOT)/src/gui/shell/settingsrow.c \
             $(ROOT)/src/gui/shell/theme.c $(ROOT)/src/gui/shell/icons.c \
@@ -253,13 +264,14 @@ TOOLS_OBJ = $(patsubst $(ROOT)/%.c,$(BUILD)/ui/%.o,$(TOOLS_SRC)) \
             $(patsubst $(ROOT)/%.c,$(BUILD)/ui/%.o,$(UI_LVGL_SRC))
 
 .PHONY: ui
-ui: $(BUILD)/test_main_menu $(BUILD)/test_screensaver $(BUILD)/test_tools_pages $(BUILD)/test_wifi_pages
+ui: $(BUILD)/test_main_menu $(BUILD)/test_screensaver $(BUILD)/test_tools_pages $(BUILD)/test_wifi_pages $(BUILD)/test_lyrics_search
 	$(BUILD)/test_main_menu ../../sonix-packer/assets/V1/usr/resource/sonix/language
 	$(BUILD)/test_main_menu ../../sonix-packer/assets/V1/usr/resource/sonix/language saved
 	$(BUILD)/test_screensaver ../../sonix-packer/assets/V1/usr/resource/sonix/language
 	$(BUILD)/test_screensaver ../../sonix-packer/assets/V1/usr/resource/sonix/language saved
 	$(BUILD)/test_tools_pages ../../sonix-packer/assets/V1/usr/resource/sonix/language
 	$(BUILD)/test_wifi_pages ../../sonix-packer/assets/V1/usr/resource/sonix/language
+	$(BUILD)/test_lyrics_search ../../sonix-packer/assets/V1/usr/resource/sonix/language
 
 $(BUILD)/test_main_menu: $(UI_OBJ)
 	$(CC) -o $@ $^ $(LDFLAGS) $(LDLIBS)
@@ -273,6 +285,9 @@ $(BUILD)/test_tools_pages: $(TOOLS_OBJ)
 $(BUILD)/test_wifi_pages: $(WIFIPAGE_OBJ)
 	$(CC) -o $@ $^ $(LDFLAGS) $(LDLIBS)
 
+$(BUILD)/test_lyrics_search: $(LYRICS_OBJ)
+	$(CC) -o $@ $^ $(LDFLAGS) $(LDLIBS)
+
 $(BUILD)/ui/%.o: $(ROOT)/%.c ui/lv_conf.h $(ROOT)/lv_conf.h
 	@mkdir -p $(dir $@)
 	$(CC) $(UI_CPPFLAGS) $(UI_CFLAGS) -c $< -o $@
@@ -282,4 +297,4 @@ $(BUILD)/ui/lvgl/%.o: $(ROOT)/lvgl/%.c ui/lv_conf.h $(ROOT)/lv_conf.h
 	@mkdir -p $(dir $@)
 	$(CC) $(UI_CPPFLAGS) $(filter-out -Werror,$(UI_CFLAGS)) -c $< -o $@
 
--include $(sort $(UI_OBJ:.o=.d) $(SAVER_OBJ:.o=.d) $(WIFIPAGE_OBJ:.o=.d))
+-include $(sort $(UI_OBJ:.o=.d) $(SAVER_OBJ:.o=.d) $(WIFIPAGE_OBJ:.o=.d) $(LYRICS_OBJ:.o=.d))
