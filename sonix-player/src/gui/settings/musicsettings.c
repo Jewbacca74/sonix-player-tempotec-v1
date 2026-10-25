@@ -27,6 +27,7 @@
 #include "src/system/audio/alsa-controls.h"
 #include "src/gui/shell/topbar.h"
 #include "src/system/device/sysinfo.h"
+#include "src/system/playback/playlist.h"
 #include "src/system/playback/sleeptimer.h"
 #include "src/system/audio/audio.h"
 #include "src/system/bluetooth/bluetooth.h"
@@ -1331,6 +1332,7 @@ static void organize_touched(void) { organize_changed = true; }
 static lv_obj_t *split_artists_switch, *split_artists_pills;
 static lv_obj_t *split_genres_switch, *split_genres_pills;
 static lv_obj_t *unsplit_row;
+static lv_obj_t *split_album_artists_row, *split_album_artists_switch;
 static lv_obj_t *join_albums_switch;
 
 typedef struct {
@@ -1345,6 +1347,10 @@ static const split_pill_t SPLIT_ARTIST_PILLS[] = {
 	{",", LIBRARY_SPLIT_COMMA},
 	{"feat.", LIBRARY_SPLIT_FEAT},
 	{"vs.", LIBRARY_SPLIT_VS},
+	{"x", LIBRARY_SPLIT_X},
+	{"+", LIBRARY_SPLIT_PLUS},
+	{"with", LIBRARY_SPLIT_WITH},
+	{"and", LIBRARY_SPLIT_AND},
 };
 static const split_pill_t SPLIT_GENRE_PILLS[] = {
 	{";", LIBRARY_SPLIT_SEMICOLON},
@@ -1365,6 +1371,8 @@ static void organize_refresh(void) {
 	lv_obj_set_state(split_artists_switch, LV_STATE_CHECKED, artists);
 	lv_obj_set_hidden(split_artists_pills, !artists);
 	lv_obj_set_hidden(unsplit_row, !artists);
+	lv_obj_set_hidden(split_album_artists_row, !artists);
+	lv_obj_set_state(split_album_artists_switch, LV_STATE_CHECKED, library_split_album_artists());
 	for (int i = 0; i < SPLIT_ARTIST_COUNT; i++) {
 		settingsrow_pill_active(split_artist_pill[i], (a & SPLIT_ARTIST_PILLS[i].bit) != 0);
 	}
@@ -1380,6 +1388,11 @@ static void split_artists_cb(lv_event_t *e) {
 	library_set_split_artists(lv_obj_has_state(lv_event_get_target(e), LV_STATE_CHECKED));
 	organize_touched();
 	organize_refresh();
+}
+
+static void split_album_artists_cb(lv_event_t *e) {
+	library_set_split_album_artists(lv_obj_has_state(lv_event_get_target(e), LV_STATE_CHECKED));
+	organize_touched();
 }
 
 static void split_genres_cb(lv_event_t *e) {
@@ -1457,6 +1470,8 @@ static void build_scan_page(gui_config_t *cfg) {
 		split_artist_pill[i] = settingsrow_pill_text(split_artists_pills, SPLIT_ARTIST_PILLS[i].text, (int)SPLIT_ARTIST_PILLS[i].bit,
 											   split_artist_pill_cb);
 	}
+	split_album_artists_row = settingsrow_toggle(container, "musicsettings_split_album_artists",
+												 &split_album_artists_switch, split_album_artists_cb);
 	unsplit_row = settingsrow_add(container, "musicsettings_unsplit_artists", NULL, switch_screen_cb,
 								  artistexceptions_screen);
 
@@ -2512,6 +2527,28 @@ static void playback_loaded_cb(lv_event_t *e) {
 	sleep_refresh();
 }
 
+// Where "add to queue" puts a track: right after the one playing, or at the end
+// of the queue. playlist_enqueue() keeps the setting; this page only shows it.
+static lv_obj_t *queue_next_pill;
+static lv_obj_t *queue_end_pill;
+
+static void queue_add_refresh(void) {
+	if (!queue_next_pill) {
+		return;
+	}
+	bool at_end = playlist_enqueue_at_end();
+	settingsrow_pill_active(queue_next_pill, !at_end);
+	settingsrow_pill_active(queue_end_pill, at_end);
+}
+
+static void queue_add_pick_cb(lv_event_t *e) {
+	if (player_sheet_drag_active() || switcher_back_drag_active()) {
+		return;
+	}
+	playlist_set_enqueue_at_end(lv_event_get_user_data(e) != NULL);
+	queue_add_refresh();
+}
+
 static void build_playback_page(gui_config_t *cfg) {
 	playback_screen = lv_obj_create(NULL);
 	lv_obj_t *container = settingsrow_page(playback_screen, cfg, "musicsettings_playback_options");
@@ -2547,6 +2584,15 @@ static void build_playback_page(gui_config_t *cfg) {
 	if (mono_get_enabled()) {
 		lv_obj_add_state(mono_switch, LV_STATE_CHECKED);
 	}
+
+	// "Add to queue" in the library, the search and the browser: next, as it
+	// always was, or at the end.
+	lv_obj_t *queue_pills = NULL;
+	settingsrow_pills(container, "add_to_queue", &queue_pills);
+	queue_next_pill = settingsrow_pill(queue_pills, "queue_add_next", 0, queue_add_pick_cb);
+	queue_end_pill = settingsrow_pill(queue_pills, "queue_add_end", 1, queue_add_pick_cb);
+	queue_add_refresh();
+	theme_register_refresh(queue_add_refresh);
 
 	// Which of the two shuffles "Play in random order" starts. The mode button
 	// on the player still reaches both by hand; this only decides what that one

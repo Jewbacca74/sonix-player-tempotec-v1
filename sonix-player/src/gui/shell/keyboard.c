@@ -271,8 +271,6 @@ static void kb_apply_layout(keyboard_t *kb) {
 		for (int col = 0; col < len && index < KB_MAX_KEYS; col++, index++) {
 			kb->key_row[index] = (uint8_t)row;
 			kb->key_col[index] = (uint8_t)col;
-			// set_parent appends, so working through the rows in order is what
-			// puts the letters in the right order inside each of them.
 			lv_obj_set_parent(kb->letter_btn[index], kb->rows[row]);
 			lv_obj_set_hidden(kb->letter_btn[index], false);
 		}
@@ -283,9 +281,16 @@ static void kb_apply_layout(keyboard_t *kb) {
 		lv_obj_set_hidden(kb->letter_btn[i], true);
 	}
 
-	// Shift and delete bracket the bottom row, whatever the re-parenting above
-	// left them behind.
+	// The order inside each row, set key by key. lv_obj_set_parent() leaves a
+	// key that is already in the row it is given where it is, and the keys that
+	// move in go after it: from an alphabet with longer rows (Ukrainian) back to
+	// a shorter one, the letters come out shuffled. Shift opens the bottom row
+	// and delete closes it.
 	lv_obj_move_to_index(kb->shift_btn, 0);
+	for (int i = 0; i < index; i++) {
+		int first = kb->key_row[i] == 2 ? 1 : 0; // after shift
+		lv_obj_move_to_index(kb->letter_btn[i], first + kb->key_col[i]);
+	}
 	lv_obj_move_to_index(kb->delete_btn, (int32_t)lv_obj_get_child_count(kb->rows[2]) - 1);
 
 	kb_refresh_caps(kb);
@@ -540,6 +545,9 @@ static void kb_t9_shift_cb(lv_event_t *e) {
 		kb_refresh_caps(kb);
 		return;
 	}
+	// The character still cycling is done: shift is for the next one. Without
+	// this the next key's commit would spend the new shift on the old letter.
+	kb_t9_commit(kb);
 	kb_shift_press(kb);
 }
 
