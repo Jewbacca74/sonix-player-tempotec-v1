@@ -17,6 +17,7 @@
 #include "src/gui/audio/msebsettings.h"
 #include "src/gui/audio/peqpage.h"
 #include "src/gui/nowplaying/coverflow.h"
+#include "src/gui/nowplaying/coversearch.h"
 #include "src/gui/settings/artistexceptions.h"
 #include "src/gui/settings/lastfmsettings.h"
 #include "src/gui/library/medialist.h"
@@ -2684,6 +2685,7 @@ void musicsettings_init(gui_config_t *cfg) {
 
 	lastfmsettings_init(cfg);
 	settingsrow_add(container, "lastfm", NULL, switch_screen_cb, lastfmsettings_screen());
+	coversearch_contact_row(container);
 
 	build_eq_page(cfg);
 	eq_row = settingsrow_add(container, "equaliser", NULL, switch_screen_cb, eq_screen);

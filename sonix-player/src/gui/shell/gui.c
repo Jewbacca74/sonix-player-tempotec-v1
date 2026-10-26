@@ -13,6 +13,7 @@
 #include "src/gui/settings/ccsettings.h"
 #include "src/gui/nowplaying/chapters.h"
 #include "src/gui/nowplaying/lyricsearch.h"
+#include "src/gui/nowplaying/coversearch.h"
 #include "src/gui/wireless/airplay.h"
 #include "src/gui/bluetooth/airpodspage.h"
 #include "src/gui/settings/appearance.h"
@@ -645,6 +646,7 @@ void gui_init(gui_config_t *cfg) {
 	audiobookscan_screen = lv_obj_create(NULL);
 	chapters_screen = lv_obj_create(NULL);
 	lyricsearch_screen = lv_obj_create(NULL);
+	coversearch_screen = lv_obj_create(NULL);
 	queue_screen = lv_obj_create(NULL);
 	details_screen = lv_obj_create(NULL);
 	wireless_screen = lv_obj_create(NULL);
@@ -760,6 +762,7 @@ void gui_init(gui_config_t *cfg) {
 	eqsettings_init(cfg);	// and the equalizer page hangs its own off this
 	peqsettings_init(cfg); // the parametric page hangs its preset screen off the gear
 	peqautoeq_init(cfg);  // the waveform entry on that page searches AutoEq profiles
+	coversearch_init(cfg); // before Music settings, which has its contact row
 	musicsettings_init(cfg);
 	search_init(cfg);
 	medialist_init(cfg);
@@ -799,6 +802,7 @@ void gui_init(gui_config_t *cfg) {
 		medialist_screen,  medialist_tracks_screen, medialist_albums_screen, audiobooks_screen, audiobooksettings_screen,
 		queue_screen,	  chapters_screen,		 details_screen,   audiobookcontrols_screen,
 		lyricsearch_screen,
+		coversearch_screen,
 		wireless_screen,
 		wifisettings_screen,
 		btsettings_screen, btaudio_screen,	 airpodspage_screen, airplay_screen,   streaming_screen,

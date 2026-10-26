@@ -27,6 +27,10 @@ void player_refresh_artist(void);
 // brings their page in when it is the file playing.
 void player_lyrics_reload(const char *path);
 
+// True while the player is on a file of the card (not a stream, an episode, a
+// book or another source), which is what has tags and a folder to search for.
+bool player_playing_local_file(void);
+
 // The "4/12" under the progress bar: the place in the queue as the screen shows
 // it (the deal's order under shuffle) and the length. False, with both zero,
 // where the screen shows nothing -- one track, a book, DLNA, a stream.

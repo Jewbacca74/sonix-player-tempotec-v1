@@ -151,6 +151,18 @@ $(BUILD)/test_tagdate: $(TAGDATE_SRC) $(ROOT)/src/system/library/tagdate.h
 	@mkdir -p $(BUILD)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(TAGDATE_SRC) $(LDFLAGS) $(LDLIBS)
 
+# The cover art search: the Store's and MusicBrainz's answers read, ranked and
+# turned into pictures to fetch, and the cover.jpg written beside a track. Plain
+# C, no LVGL; the network is a canned answer (see test_coverart.c).
+COVERART_SRC = test_coverart.c $(ROOT)/src/system/library/coverart.c $(ROOT)/src/system/core/json.c
+.PHONY: coverart
+coverart: $(BUILD)/test_coverart
+	$(BUILD)/test_coverart ../../sonix-packer/assets/V1/usr/resource/sonix/language
+
+$(BUILD)/test_coverart: $(COVERART_SRC) $(ROOT)/src/system/library/coverart.h
+	@mkdir -p $(BUILD)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(COVERART_SRC) $(LDFLAGS) $(LDLIBS)
+
 # The Most played list against the real library database: the play upsert
 # device_state.c runs at track start, the handle the page opens, and the
 # streaming reader the queue is built from. The card is a temporary directory
@@ -239,6 +251,17 @@ LYRICS_SRC = $(ROOT)/tests/ui/test_lyrics_search.c $(ROOT)/src/gui/nowplaying/ly
 LYRICS_OBJ = $(patsubst $(ROOT)/%.c,$(BUILD)/ui/%.o,$(LYRICS_SRC)) \
             $(patsubst $(ROOT)/%.c,$(BUILD)/ui/%.o,$(UI_LVGL_SRC))
 
+# The cover art search page, on the same renderer; the network, the decoder and
+# the playing track are substituted (see test_coverart_search.c).
+COVERSEARCH_SRC = $(ROOT)/tests/ui/test_coverart_search.c $(ROOT)/src/gui/nowplaying/coversearch.c \
+            $(ROOT)/src/system/library/coverart.c $(ROOT)/src/system/core/json.c \
+            $(ROOT)/src/gui/shell/settingsrow.c \
+            $(ROOT)/src/gui/shell/theme.c $(ROOT)/src/gui/shell/icons.c \
+            $(ROOT)/src/gui/board_profile.c \
+            $(ROOT)/src/system/core/config.c $(ROOT)/src/system/core/lang.c
+COVERSEARCH_OBJ = $(patsubst $(ROOT)/%.c,$(BUILD)/ui/%.o,$(COVERSEARCH_SRC)) \
+            $(patsubst $(ROOT)/%.c,$(BUILD)/ui/%.o,$(UI_LVGL_SRC))
+
 SAVER_SRC = $(ROOT)/tests/ui/test_screensaver.c $(ROOT)/src/gui/settings/screensaver.c \
             $(ROOT)/src/gui/shell/scrolltext.c $(ROOT)/src/gui/shell/settingsrow.c \
             $(ROOT)/src/gui/shell/theme.c $(ROOT)/src/gui/shell/icons.c \
@@ -265,7 +288,7 @@ TOOLS_OBJ = $(patsubst $(ROOT)/%.c,$(BUILD)/ui/%.o,$(TOOLS_SRC)) \
             $(patsubst $(ROOT)/%.c,$(BUILD)/ui/%.o,$(UI_LVGL_SRC))
 
 .PHONY: ui
-ui: $(BUILD)/test_main_menu $(BUILD)/test_screensaver $(BUILD)/test_tools_pages $(BUILD)/test_wifi_pages $(BUILD)/test_lyrics_search
+ui: $(BUILD)/test_main_menu $(BUILD)/test_screensaver $(BUILD)/test_tools_pages $(BUILD)/test_wifi_pages $(BUILD)/test_lyrics_search $(BUILD)/test_coverart_search
 	$(BUILD)/test_main_menu ../../sonix-packer/assets/V1/usr/resource/sonix/language
 	$(BUILD)/test_main_menu ../../sonix-packer/assets/V1/usr/resource/sonix/language saved
 	$(BUILD)/test_screensaver ../../sonix-packer/assets/V1/usr/resource/sonix/language
@@ -273,6 +296,7 @@ ui: $(BUILD)/test_main_menu $(BUILD)/test_screensaver $(BUILD)/test_tools_pages 
 	$(BUILD)/test_tools_pages ../../sonix-packer/assets/V1/usr/resource/sonix/language
 	$(BUILD)/test_wifi_pages ../../sonix-packer/assets/V1/usr/resource/sonix/language
 	$(BUILD)/test_lyrics_search ../../sonix-packer/assets/V1/usr/resource/sonix/language
+	$(BUILD)/test_coverart_search ../../sonix-packer/assets/V1/usr/resource/sonix/language
 
 $(BUILD)/test_main_menu: $(UI_OBJ)
 	$(CC) -o $@ $^ $(LDFLAGS) $(LDLIBS)
@@ -284,6 +308,9 @@ $(BUILD)/test_tools_pages: $(TOOLS_OBJ)
 	$(CC) -o $@ $^ $(LDFLAGS) $(LDLIBS)
 
 $(BUILD)/test_wifi_pages: $(WIFIPAGE_OBJ)
+	$(CC) -o $@ $^ $(LDFLAGS) $(LDLIBS)
+
+$(BUILD)/test_coverart_search: $(COVERSEARCH_OBJ)
 	$(CC) -o $@ $^ $(LDFLAGS) $(LDLIBS)
 
 $(BUILD)/test_lyrics_search: $(LYRICS_OBJ)
@@ -298,4 +325,4 @@ $(BUILD)/ui/lvgl/%.o: $(ROOT)/lvgl/%.c ui/lv_conf.h $(ROOT)/lv_conf.h
 	@mkdir -p $(dir $@)
 	$(CC) $(UI_CPPFLAGS) $(filter-out -Werror,$(UI_CFLAGS)) -c $< -o $@
 
--include $(sort $(UI_OBJ:.o=.d) $(SAVER_OBJ:.o=.d) $(WIFIPAGE_OBJ:.o=.d) $(LYRICS_OBJ:.o=.d))
+-include $(sort $(UI_OBJ:.o=.d) $(SAVER_OBJ:.o=.d) $(WIFIPAGE_OBJ:.o=.d) $(LYRICS_OBJ:.o=.d) $(COVERSEARCH_OBJ:.o=.d))
