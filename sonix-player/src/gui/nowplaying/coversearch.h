@@ -20,4 +20,11 @@ void coversearch_init(gui_config_t *cfg);
 // list over the player when something is found; otherwise says why not.
 void coversearch_start(void);
 
+// The page where the contact MusicBrainz is told is typed, and its row for
+// Music settings: MusicBrainz asks every program that uses it to say how to
+// reach whoever is calling, and the search keeps to the Store until it is set.
+// The row goes on the page `parent`, after coversearch_init().
+void coversearch_contact_row(lv_obj_t *parent);
+lv_obj_t *coversearch_contact_screen(void);
+
 #endif /* COVERSEARCH_H */

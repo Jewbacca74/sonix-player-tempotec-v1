@@ -22,6 +22,8 @@
 #include "src/gui/fonts/fonts.h"
 #include "src/gui/nowplaying/cover.h"
 #include "src/gui/nowplaying/coversearch.h"
+#include "src/gui/shell/confirm.h"
+#include "src/gui/shell/keyboard.h"
 #include "src/gui/shell/icons.h"
 #include "src/gui/shell/theme.h"
 #include "src/system/core/config.h"
@@ -99,6 +101,44 @@ static char playing[512];
 static bool wifi_up = true;
 static bool has_embedded;
 
+static bool wifi_enabled = true;
+static bool radio_there = true;
+bool wifi_get_enabled(void) { return wifi_enabled; }
+bool wifi_available(void) { return radio_there; }
+static int wifi_switched_on;
+void wifi_set_enabled(bool on) {
+	wifi_enabled = on;
+	wifi_switched_on += on ? 1 : 0;
+}
+
+/* The question that offers to switch Wi-Fi on, answered by the test. */
+static char asked_title[64];
+static void (*asked_ok)(void *);
+void confirm_show(const char *title, const char *message, const char *ok_label, void (*on_ok)(void *user), void *user) {
+	(void)message;
+	(void)ok_label;
+	(void)user;
+	snprintf(asked_title, sizeof(asked_title), "%s", title);
+	asked_ok = on_ok;
+}
+
+/* The keyboard under the contact field: only its accept key matters here. */
+static lv_event_cb_t keyboard_accept;
+keyboard_t *keyboard_create(lv_obj_t *parent, int width, int height, lv_obj_t *field, const lv_image_dsc_t *accept_icon,
+							const char *accept_text, lv_event_cb_t on_accept, void *user) {
+	(void)parent;
+	(void)width;
+	(void)height;
+	(void)field;
+	(void)accept_icon;
+	(void)accept_text;
+	(void)user;
+	keyboard_accept = on_accept;
+	return (keyboard_t *)&keyboard_accept;
+}
+void keyboard_reset(keyboard_t *kb) { (void)kb; }
+void keyboard_style_caret(lv_obj_t *field) { (void)field; }
+
 void device_state_get(device_state_t *out) {
 	memset(out, 0, sizeof(*out));
 	snprintf(out->current_file, sizeof(out->current_file), "%s", playing);
@@ -108,6 +148,9 @@ void device_state_get(device_state_t *out) {
 void wifi_get_status(wifi_status_t *out) {
 	memset(out, 0, sizeof(*out));
 	out->state = wifi_up ? WIFI_STATE_CONNECTED : WIFI_STATE_OFF;
+	if (wifi_up) {
+		snprintf(out->ip, sizeof(out->ip), "192.168.1.20");
+	}
 }
 bool albumart_load_candidate(const char *filepath, int index, albumart_t *out) {
 	(void)filepath;
@@ -201,6 +244,7 @@ bool http_get_ex(const char *url, const char *extra_headers, bool want_error_bod
 }
 
 const char *http_last_error(void) { return NULL; }
+void http_set_user_agent_suffix(const char *suffix) { (void)suffix; }
 
 char *http_url_encode(const char *in, char *out, size_t out_size) {
 	size_t w = 0;
@@ -223,6 +267,9 @@ static void check_strings(const char *language_dir) {
 		"trackmenu_find_cover", "coverart_results", "coverart_apply", "coverart_searching", "coverart_loading",
 		"coverart_not_found", "coverart_no_tags", "coverart_search_failed", "coverart_download_failed",
 		"coverart_not_saved", "coverart_saved", "coverart_no_wifi", "coverart_has_embedded",
+		"coverart_find_title", "coverart_wifi_off_note", "coverart_enable_wifi", "coverart_wifi_connecting",
+		"coverart_wifi_failed", "coverart_contact", "coverart_contact_title", "coverart_contact_hint", "coverart_contact_note",
+		"coverart_contact_saved",
 	};
 	DIR *dir = opendir(language_dir);
 	assert(dir);
@@ -374,6 +421,39 @@ int main(int argc, char **argv) {
 	assert(strcmp(last_toast, "error:coverart_no_wifi") == 0 && requests == 0);
 	wifi_up = true;
 
+	/* Wi-Fi off, with a radio to turn on: the question is put in place of the
+	 * search, and answering it switches Wi-Fi on and waits for the link; the
+	 * search starts by itself once it has an address. */
+	wifi_up = false;
+	wifi_enabled = false;
+	requests = 0;
+	coversearch_start();
+	assert(strcmp(asked_title, "coverart_find_title") == 0 && asked_ok && requests == 0);
+	asked_ok(NULL);
+	assert(wifi_switched_on == 1 && strcmp(last_toast, "busy:coverart_wifi_connecting") == 0);
+	lv_tick_inc(600);
+	lv_timer_handler();
+	assert(requests == 0); /* not connected yet */
+	wifi_up = true;
+	lv_tick_inc(600);
+	lv_timer_handler();
+	lv_screen_load(player_screen);
+	run_posted();
+	assert(lv_screen_active() == coversearch_screen);
+	assert(requests == 1);
+	lv_screen_load(player_screen);
+	wifi_enabled = true;
+
+	/* Wi-Fi off and nothing to turn on: told to connect. */
+	wifi_up = false;
+	wifi_enabled = false;
+	radio_there = false;
+	coversearch_start();
+	assert(strcmp(last_toast, "error:coverart_no_wifi") == 0);
+	radio_there = true;
+	wifi_enabled = true;
+	wifi_up = true;
+
 	/* The search runs on a thread of its own and opens the list when it is
 	 * done, over the player. */
 	lv_screen_load(player_screen);
@@ -426,6 +506,28 @@ int main(int argc, char **argv) {
 	char part[720];
 	snprintf(part, sizeof(part), "%s.part", cover);
 	assert(access(part, F_OK) != 0);
+
+	/* The contact page: what is typed is kept, trimmed, and the page leaves. */
+	lv_obj_t *contact_page = coversearch_contact_screen();
+	assert(contact_page);
+	lv_screen_load(contact_page);
+	lv_obj_send_event(contact_page, LV_EVENT_SCREEN_LOADED, NULL);
+	lv_obj_update_layout(contact_page);
+	check_within_panel_in(contact_page, &cfg, "MusicBrainz contact", false);
+	dump_snapshot(contact_page, "v1-coverart-contact");
+	lv_obj_t *field = NULL;
+	for (uint32_t i = 0; i < lv_obj_get_child_count(contact_page); i++) {
+		lv_obj_t *child = lv_obj_get_child(contact_page, i);
+		if (lv_obj_check_type(child, &lv_textarea_class)) {
+			field = child;
+		}
+	}
+	assert(field && keyboard_accept);
+	lv_textarea_set_text(field, "  me@example.org ");
+	keyboard_accept(NULL);
+	assert(strcmp(config_get("coverart", "contact", ""), "me@example.org") == 0);
+	assert(strcmp(last_toast, "success:coverart_contact_saved") == 0);
+	assert(lv_screen_active() == player_screen);
 
 	unlink(cover);
 	unlink(config);

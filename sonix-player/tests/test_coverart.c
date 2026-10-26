@@ -23,6 +23,10 @@ static const char *image_body;		// the picture, NULL for a failed transfer
 static size_t image_len;
 static int requests;
 static char last_url[4096];
+/* What the next MusicBrainz request is sent as, and what it was sent as. */
+static char agent[200];
+static char agent_at_musicbrainz[200];
+void http_set_user_agent_suffix(const char *suffix) { snprintf(agent, sizeof(agent), "%s", suffix ? suffix : ""); }
 
 bool http_get_ex(const char *url, const char *extra_headers, bool want_error_body, char **out, size_t *out_len,
 				 size_t limit, int timeout_secs, int *status_out) {
@@ -38,6 +42,7 @@ bool http_get_ex(const char *url, const char *extra_headers, bool want_error_bod
 		body = itunes_body;
 		len = body ? strlen(body) : 0;
 	} else if (strstr(url, "musicbrainz.org")) {
+		snprintf(agent_at_musicbrainz, sizeof(agent_at_musicbrainz), "%s", agent);
 		body = musicbrainz_body;
 		len = body ? strlen(body) : 0;
 	} else {
@@ -59,6 +64,7 @@ bool http_get_ex(const char *url, const char *extra_headers, bool want_error_bod
 }
 
 const char *http_last_error(void) { return NULL; }
+
 
 char *http_url_encode(const char *in, char *out, size_t out_size) {
 	size_t w = 0;
@@ -117,13 +123,28 @@ static void check_search(void) {
 	assert(strcmp(hits[2].album, "Greatest Hits") == 0);
 	free(hits);
 
-	/* Nothing from the Store: MusicBrainz is asked, and its hit points at the
-	 * Cover Art Archive. */
+	/* Nothing from the Store and no contact to give: MusicBrainz is not asked. */
 	itunes_body = "{\"resultCount\":0,\"results\":[]}";
 	musicbrainz_body = MUSICBRAINZ;
+	coverart_set_contact("");
+	assert(!coverart_has_contact());
+	requests = 0;
+	assert(coverart_search("Rare Album", "Obscure Artist", &hits, &count) == COVERART_NOT_FOUND);
+	assert(requests == 1 && hits == NULL);
+
+	/* The contact is trimmed and loses what would end the agent's comment. */
+	coverart_set_contact("  me(at)example.org ");
+	assert(strcmp(coverart_contact(), "meatexample.org") == 0);
+	coverart_set_contact(" me@example.org ");
+	assert(strcmp(coverart_contact(), "me@example.org") == 0);
+
+	/* With one: MusicBrainz is asked, as the program that has that contact and
+	 * for that request alone, and its hit points at the Cover Art Archive. */
 	requests = 0;
 	assert(coverart_search("Rare \"Album\"", "Obscure Artist", &hits, &count) == COVERART_OK);
 	assert(requests == 2 && count == 1);
+	assert(strcmp(agent_at_musicbrainz, " (me@example.org)") == 0);
+	assert(agent[0] == '\0');
 	assert(strstr(last_url, "query=releasegroup%3A%22Rare%20Album%22%20AND%20artist%3A%22Obscure%20Artist%22"));
 	assert(strcmp(hits[0].album, "Rare Album") == 0 && strcmp(hits[0].year, "1977") == 0);
 	assert(strcmp(hits[0].artist, "Obscure Artist") == 0);
@@ -131,6 +152,7 @@ static void check_search(void) {
 	free(hits);
 
 	/* Both answer, neither knows the album. */
+	itunes_body = "{\"resultCount\":0,\"results\":[]}";
 	musicbrainz_body = "{\"release-groups\":[]}";
 	assert(coverart_search("Nothing", "Nobody", &hits, &count) == COVERART_NOT_FOUND);
 	assert(hits == NULL && count == 0);
@@ -215,6 +237,9 @@ static void check_strings(const char *language_dir) {
 		"trackmenu_find_cover", "coverart_results", "coverart_apply", "coverart_searching", "coverart_loading",
 		"coverart_not_found", "coverart_no_tags", "coverart_search_failed", "coverart_download_failed",
 		"coverart_not_saved", "coverart_saved", "coverart_no_wifi", "coverart_has_embedded",
+		"coverart_find_title", "coverart_wifi_off_note", "coverart_enable_wifi", "coverart_wifi_connecting",
+		"coverart_wifi_failed", "coverart_contact", "coverart_contact_title", "coverart_contact_hint", "coverart_contact_note",
+		"coverart_contact_saved",
 	};
 	DIR *dir = opendir(language_dir);
 	assert(dir);

@@ -10,10 +10,13 @@
 #include "src/gui/fonts/fonts.h"
 #include "src/gui/nowplaying/cover.h"
 #include "src/gui/nowplaying/player.h"
+#include "src/gui/shell/confirm.h"
+#include "src/gui/shell/keyboard.h"
 #include "src/gui/shell/settingsrow.h"
 #include "src/gui/shell/switcher.h"
 #include "src/gui/shell/theme.h"
 #include "src/gui/shell/toast.h"
+#include "src/system/core/config.h"
 #include "src/system/core/lang.h"
 #include "src/system/library/albumart.h"
 #include "src/system/library/coverart.h"
@@ -267,6 +270,75 @@ static void unloaded_cb(lv_event_t *e) {
 }
 
 // ---------------------------------------------------------------------------
+// Wi-Fi switched on for a search
+//
+// With Wi-Fi off the question offers to switch it on instead of searching; the
+// search then starts by itself once the link has an address, for the file that
+// was playing when the question was answered.
+// ---------------------------------------------------------------------------
+
+#define WIFI_POLL_MS 500
+#define WIFI_WAIT_MS 30000
+
+static lv_timer_t *wifi_timer;
+static uint32_t wifi_since;
+static char wifi_path[1024];
+
+static void search_run(void);
+
+static bool wifi_online(void) {
+	wifi_status_t wifi;
+	wifi_get_status(&wifi);
+	return wifi.state == WIFI_STATE_CONNECTED && wifi.ip[0] != '\0';
+}
+
+static void wifi_wait_end(void) {
+	if (wifi_timer) {
+		lv_timer_delete(wifi_timer);
+		wifi_timer = NULL;
+	}
+}
+
+static void wifi_tick_cb(lv_timer_t *t) {
+	(void)t;
+	device_state_t state;
+	device_state_get(&state);
+	// Another track, or Wi-Fi switched off again: the search is no longer wanted.
+	if (!wifi_get_enabled() || strcmp(state.current_file, wifi_path) != 0) {
+		wifi_wait_end();
+		toast_busy_end();
+		return;
+	}
+	if (wifi_online()) {
+		wifi_wait_end();
+		toast_busy_end();
+		search_run();
+		return;
+	}
+	if (lv_tick_elaps(wifi_since) >= WIFI_WAIT_MS) {
+		wifi_wait_end();
+		toast_busy_end();
+		toast_error("coverart_wifi_failed");
+	}
+}
+
+static void enable_wifi_cb(void *user) {
+	(void)user;
+	device_state_t state;
+	device_state_get(&state);
+	if (!state.current_file[0] || !player_playing_local_file()) {
+		return;
+	}
+	snprintf(wifi_path, sizeof(wifi_path), "%s", state.current_file);
+	wifi_set_enabled(true);
+	wifi_since = lv_tick_get();
+	if (!wifi_timer) {
+		wifi_timer = lv_timer_create(wifi_tick_cb, WIFI_POLL_MS, NULL);
+	}
+	toast_busy_dismissable("coverart_wifi_connecting");
+}
+
+// ---------------------------------------------------------------------------
 // The search
 // ---------------------------------------------------------------------------
 
@@ -321,9 +393,47 @@ static void *search_worker(void *arg) {
 	return NULL;
 }
 
+static void search_run(void) {
+	if (busy) {
+		toast_busy_dismissable("coverart_searching");
+		return;
+	}
+	if (!wifi_online()) {
+		toast_error("coverart_no_wifi");
+		return;
+	}
+	device_state_t state;
+	device_state_get(&state);
+	if (!state.current_file[0] || !player_playing_local_file()) {
+		return;
+	}
+
+	search_job_t *job = calloc(1, sizeof(*job));
+	if (!job) {
+		return;
+	}
+	snprintf(job->path, sizeof(job->path), "%s", state.current_file);
+	snprintf(job->album, sizeof(job->album), "%s", state.metadata.album);
+	snprintf(job->artist, sizeof(job->artist), "%s", state.metadata.album_artist[0] ? state.metadata.album_artist : state.metadata.artist);
+	coverart_set_contact(config_get("coverart", "contact", ""));
+
+	pthread_t thread;
+	if (pthread_create(&thread, NULL, search_worker, job) != 0) {
+		free(job);
+		return;
+	}
+	pthread_detach(thread);
+	busy = true;
+	toast_busy_dismissable("coverart_searching");
+}
+
 void coversearch_start(void) {
 	if (busy) {
 		toast_busy_dismissable("coverart_searching");
+		return;
+	}
+	if (wifi_timer) {
+		toast_busy_dismissable("coverart_wifi_connecting");
 		return;
 	}
 	device_state_t state;
@@ -339,29 +449,97 @@ void coversearch_start(void) {
 		toast_plain("coverart_has_embedded");
 		return;
 	}
-	wifi_status_t wifi;
-	wifi_get_status(&wifi);
-	if (wifi.state != WIFI_STATE_CONNECTED) {
+	if (!wifi_online()) {
+		// Off, and there is a radio to turn on: offer that in place of the search.
+		if (!wifi_get_enabled() && wifi_available()) {
+			confirm_show("coverart_find_title", "coverart_wifi_off_note", "coverart_enable_wifi", enable_wifi_cb, NULL);
+			return;
+		}
 		toast_error("coverart_no_wifi");
 		return;
 	}
+	search_run();
+}
 
-	search_job_t *job = calloc(1, sizeof(*job));
-	if (!job) {
-		return;
-	}
-	snprintf(job->path, sizeof(job->path), "%s", state.current_file);
-	snprintf(job->album, sizeof(job->album), "%s", state.metadata.album);
-	snprintf(job->artist, sizeof(job->artist), "%s", state.metadata.album_artist[0] ? state.metadata.album_artist : state.metadata.artist);
+// ---------------------------------------------------------------------------
+// Who MusicBrainz is told is asking
+//
+// A page of its own, reached from Music settings: one line to type, kept as
+// [coverart] contact. Empty keeps the search to the Store.
+// ---------------------------------------------------------------------------
 
-	pthread_t thread;
-	if (pthread_create(&thread, NULL, search_worker, job) != 0) {
-		free(job);
-		return;
+#define CONTACT_MAX 99
+
+static lv_obj_t *contact_screen;
+static lv_obj_t *contact_field;
+static keyboard_t *contact_keyboard;
+static lv_obj_t *contact_value; // the row on the settings page
+
+lv_obj_t *coversearch_contact_screen(void) { return contact_screen; }
+
+void coversearch_contact_row(lv_obj_t *parent) {
+	settingsrow_add(parent, "coverart_contact", &contact_value, switch_screen_cb, contact_screen);
+	if (contact_value) {
+		lv_obj_set_width(contact_value, lv_pct(42));
+		lv_obj_set_style_text_font(contact_value, bp_is_tempotec_v1() ? &font_ui_14 : &font_ui_20, 0);
+		lv_obj_set_style_text_align(contact_value, LV_TEXT_ALIGN_RIGHT, 0);
+		lv_label_set_long_mode(contact_value, LV_LABEL_LONG_DOT);
+		lv_label_set_text(contact_value, config_get("coverart", "contact", ""));
 	}
-	pthread_detach(thread);
-	busy = true;
-	toast_busy_dismissable("coverart_searching");
+}
+
+static void contact_loaded_cb(lv_event_t *e) {
+	(void)e;
+	lv_textarea_set_text(contact_field, config_get("coverart", "contact", ""));
+	keyboard_reset(contact_keyboard);
+}
+
+static void contact_accept_cb(lv_event_t *e) {
+	(void)e;
+	const char *typed = lv_textarea_get_text(contact_field);
+	coverart_set_contact(typed ? typed : "");
+	config_set("coverart", "contact", coverart_contact());
+	config_save();
+	if (contact_value) {
+		lv_label_set_text(contact_value, coverart_contact());
+	}
+	toast_success("coverart_contact_saved");
+	back_btn_cb(NULL);
+}
+
+static void contact_build(gui_config_t *cfg) {
+	contact_screen = lv_obj_create(NULL);
+	lv_obj_add_style(contact_screen, &theme_style_screen, 0);
+	settingsrow_title(contact_screen, cfg, "coverart_contact_title");
+	int top = settingsrow_content_top(cfg);
+
+	contact_field = lv_textarea_create(contact_screen);
+	lv_textarea_set_one_line(contact_field, true);
+	lv_textarea_set_max_length(contact_field, CONTACT_MAX);
+	lv_textarea_set_placeholder_text(contact_field, tr("coverart_contact_hint"));
+	lv_obj_set_size(contact_field, (int)cfg->screen_width - 2 * cfg->padding, cfg->screen_width < 320 ? 44 : 62);
+	lv_obj_set_scrollbar_mode(contact_field, LV_SCROLLBAR_MODE_OFF);
+	lv_obj_align(contact_field, LV_ALIGN_TOP_LEFT, cfg->padding, top);
+	lv_obj_add_style(contact_field, &theme_style_card, 0);
+	lv_obj_set_style_radius(contact_field, 12, 0);
+	lv_obj_set_style_border_width(contact_field, 0, 0);
+	lv_obj_set_style_shadow_width(contact_field, 0, 0);
+	lv_obj_set_style_pad_all(contact_field, cfg->screen_width < 320 ? 8 : 14, 0);
+	lv_obj_set_style_text_font(contact_field, &font_ui_24, 0);
+	keyboard_style_caret(contact_field);
+
+	lv_obj_t *note = lv_label_create(contact_screen);
+	lv_label_set_long_mode(note, LV_LABEL_LONG_WRAP);
+	lv_obj_set_width(note, (int)cfg->screen_width - 2 * cfg->padding);
+	lv_obj_align(note, LV_ALIGN_TOP_LEFT, cfg->padding, top + (cfg->screen_width < 320 ? 52 : 78));
+	lv_obj_add_style(note, &theme_style_text_dim, 0);
+	lv_obj_set_style_text_font(note, &font_ui_18, 0);
+	lv_label_set_text(note, tr("coverart_contact_note"));
+	lv_obj_set_hidden(note, cfg->screen_width < 320);
+
+	contact_keyboard = keyboard_create(contact_screen, cfg->screen_width, cfg->screen_width < 320 ? 144 : 316, contact_field, NULL, "ok", contact_accept_cb, NULL);
+	lv_obj_add_event_cb(contact_screen, contact_loaded_cb, LV_EVENT_SCREEN_LOADED, NULL);
+	switcher_attach_back_gesture(contact_screen);
 }
 
 void coversearch_init(gui_config_t *cfg) {
@@ -429,6 +607,7 @@ void coversearch_init(gui_config_t *cfg) {
 	lv_obj_set_style_text_color(apply_label, lv_color_white(), 0);
 	lv_obj_center(apply_label);
 
+	contact_build(cfg);
 	show_list();
 
 	switcher_set_back_guard(coversearch_screen, back_guard);

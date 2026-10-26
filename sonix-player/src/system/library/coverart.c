@@ -33,6 +33,29 @@
 // sharp on a 240-wide screen and small enough to decode quickly.
 #define COVERART_ITUNES_SIZE "600x600bb"
 
+static char contact[100];
+
+void coverart_set_contact(const char *text) {
+	contact[0] = '\0';
+	while (text && (*text == ' ' || *text == '\t')) {
+		text++;
+	}
+	size_t w = 0;
+	for (; text && *text && w + 1 < sizeof(contact); text++) {
+		// Parentheses would end the comment the contact sits in.
+		if ((unsigned char)*text >= ' ' && *text != '(' && *text != ')') {
+			contact[w++] = *text;
+		}
+	}
+	while (w > 0 && contact[w - 1] == ' ') {
+		w--;
+	}
+	contact[w] = '\0';
+}
+
+bool coverart_has_contact(void) { return contact[0] != '\0'; }
+const char *coverart_contact(void) { return contact; }
+
 // GET with the retries above. A 4xx is an answer and is not asked again.
 static bool api_get(const char *url, size_t limit, char **body, size_t *len) {
 	for (int attempt = 1; attempt <= COVERART_ATTEMPTS; attempt++) {
@@ -144,7 +167,12 @@ static void musicbrainz_search(const char *album, const char *artist, coverart_h
 		return;
 	}
 	char *body = NULL;
-	if (!api_get(url, COVERART_MAX_JSON_BYTES, &body, NULL)) {
+	char agent[sizeof(contact) + 4];
+	snprintf(agent, sizeof(agent), " (%s)", contact);
+	http_set_user_agent_suffix(agent);
+	bool got = api_get(url, COVERART_MAX_JSON_BYTES, &body, NULL);
+	http_set_user_agent_suffix(NULL);
+	if (!got) {
 		return;
 	}
 	json_doc_t doc;
@@ -224,7 +252,7 @@ coverart_result_t coverart_search(const char *album, const char *artist, coverar
 	int found = 0;
 	bool answered = false;
 	itunes_search(album, artist, list, &found, &answered);
-	if (found == 0) {
+	if (found == 0 && coverart_has_contact()) {
 		musicbrainz_search(album, artist, list, &found, &answered);
 	}
 	if (found == 0) {

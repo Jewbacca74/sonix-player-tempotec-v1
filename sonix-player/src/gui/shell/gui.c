@@ -762,6 +762,7 @@ void gui_init(gui_config_t *cfg) {
 	eqsettings_init(cfg);	// and the equalizer page hangs its own off this
 	peqsettings_init(cfg); // the parametric page hangs its preset screen off the gear
 	peqautoeq_init(cfg);  // the waveform entry on that page searches AutoEq profiles
+	coversearch_init(cfg); // before Music settings, which has its contact row
 	musicsettings_init(cfg);
 	search_init(cfg);
 	medialist_init(cfg);
@@ -770,7 +771,6 @@ void gui_init(gui_config_t *cfg) {
 	audiobooks_init(cfg);
 	chapters_init(cfg);
 	lyricsearch_init(cfg);
-	coversearch_init(cfg);
 	trackmenu_init(cfg);
 
 	// The leftward swipe that pulls the player in works on the browsing pages

@@ -30,6 +30,13 @@ typedef struct {
 	char url[320]; // the picture, to hand to coverart_fetch()
 } coverart_hit_t;
 
+// Who to tell MusicBrainz is asking, an e-mail address or a web page: it asks
+// every program that uses it to say, and may refuse those that do not. Without
+// one the search stays with the Store. Leading and trailing blanks are dropped.
+void coverart_set_contact(const char *contact);
+bool coverart_has_contact(void);
+const char *coverart_contact(void); // as kept: trimmed, without parentheses
+
 // Searches by album and artist (the artist may be empty). On COVERART_OK *hits
 // holds *count albums, the likeliest first: the same album title, then the same
 // artist. Free them with free().
