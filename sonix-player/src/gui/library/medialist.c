@@ -2757,6 +2757,7 @@ static lv_obj_t *corner_button(lv_obj_t *parent, const lv_image_dsc_t *glyph, lv
 	lv_obj_t *btn = lv_btn_create(parent);
 	int size = settingsrow_corner_button_size(p->cfg);
 	lv_obj_set_size(btn, size, size);
+	settingsrow_widen_corner_touch(btn, p->cfg);
 	lv_obj_set_style_bg_opa(btn, LV_OPA_TRANSP, 0);
 	lv_obj_set_style_border_width(btn, 0, 0);
 	lv_obj_set_style_shadow_width(btn, 0, 0);

@@ -37,6 +37,15 @@ int settingsrow_corner_button_gap(gui_config_t *cfg) {
 	return cfg && cfg->screen_width < 320 ? 4 : CORNER_SLOT_GAP;
 }
 
+void settingsrow_widen_corner_touch(lv_obj_t *button, gui_config_t *cfg) {
+	if (!button || !cfg || cfg->screen_width >= 320) {
+		return;
+	}
+	// The 36 px button is a small target for a thumb. The gap between
+	// neighbours is 4 px, so the margin stops at half of that.
+	lv_obj_set_ext_click_area(button, 2);
+}
+
 void settingsrow_place_corner_button(lv_obj_t *button, gui_config_t *cfg, int slot) {
 	if (!button || !cfg || slot < 0) {
 		return;
@@ -44,6 +53,7 @@ void settingsrow_place_corner_button(lv_obj_t *button, gui_config_t *cfg, int sl
 	int size = settingsrow_corner_button_size(cfg);
 	int gap = settingsrow_corner_button_gap(cfg);
 	lv_obj_set_size(button, size, size);
+	settingsrow_widen_corner_touch(button, cfg);
 	lv_obj_align(button, LV_ALIGN_TOP_RIGHT, -cfg->padding - slot * (size + gap), cfg->padding + cfg->top_bar_height);
 }
 
