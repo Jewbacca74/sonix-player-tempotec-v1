@@ -205,6 +205,8 @@ static int polls_since_stop = POLLS_FAST_AFTER_STOP;
 // 6 px inside the transport's own box and its glyph would touch the skip
 // glyph beside it. 36 keeps each corner at its edge, clear of the group.
 #define COMPACT_CORNER_BTN 36
+#define COMPACT_MORE_BTN 44
+#define COMPACT_MORE_BTN_EXT_CLICK 10
 #define COMPACT_SLEEVE_MARGIN 2
 #define COMPACT_STANDARD_SLEEVE_MARGIN 14
 // The visible stroke begins 8 px below the top of its 36 px touch slot.
@@ -7334,7 +7336,9 @@ void player_init(gui_config_t *cfg) {
 	lv_obj_t *more_btn = lv_btn_create(player_controls_buttons);
 	more_btn_obj = more_btn;
 	lv_obj_set_ignore_layout(more_btn, true);
-	lv_obj_set_size(more_btn, compact ? COMPACT_CORNER_BTN : 76, compact ? COMPACT_CORNER_BTN : 76);
+	// A little bigger than its neighbours on the V1: a thumb misses 36 px at
+	// the screen's edge.
+	lv_obj_set_size(more_btn, compact ? COMPACT_MORE_BTN : 76, compact ? COMPACT_MORE_BTN : 76);
 	lv_obj_set_style_bg_opa(more_btn, 0, 0);
 	lv_obj_set_style_border_width(more_btn, 0, 0);
 	lv_obj_set_style_shadow_width(more_btn, 0, 0);
@@ -7342,7 +7346,7 @@ void player_init(gui_config_t *cfg) {
 	// Flush at the row's end (mirroring the repeat button), so it stays
 	// clear of the centred transport group.
 	lv_obj_align(more_btn, LV_ALIGN_RIGHT_MID, 0, 0);
-	lv_obj_set_ext_click_area(more_btn, compact ? COMPACT_CORNER_BTN_EXT_CLICK : CORNER_BTN_EXT_CLICK);
+	lv_obj_set_ext_click_area(more_btn, compact ? COMPACT_MORE_BTN_EXT_CLICK : CORNER_BTN_EXT_CLICK);
 
 	lv_obj_t *more_icon = lv_image_create(more_btn);
 	more_btn_icon = more_icon;

@@ -34,6 +34,7 @@ void settingsrow_title_corner_slots(lv_obj_t *title, gui_config_t *cfg, int butt
 // layouts keep their original 56 px targets. New and migrated pages should use
 // settingsrow_place_corner_button() rather than repeating those constants.
 int settingsrow_corner_button_size(gui_config_t *cfg);
+void settingsrow_widen_corner_touch(lv_obj_t *button, gui_config_t *cfg);
 int settingsrow_corner_button_gap(gui_config_t *cfg);
 void settingsrow_place_corner_button(lv_obj_t *button, gui_config_t *cfg, int slot);
 
