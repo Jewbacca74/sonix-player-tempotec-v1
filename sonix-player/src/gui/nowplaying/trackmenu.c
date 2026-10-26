@@ -1,4 +1,5 @@
 #include "trackmenu.h"
+#include "src/gui/nowplaying/coversearch.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -1221,6 +1222,12 @@ static void open_album_cb(void *user) {
 	switcher_set_player_return(medialist_tracks_screen);
 }
 
+// Looks the album up online for a cover to keep in its folder.
+static void find_cover_cb(void *user) {
+	(void)user;
+	coversearch_start();
+}
+
 static void open_settings_cb(void *user) {
 	(void)user;
 	player_sheet_close(false);
@@ -1255,6 +1262,7 @@ void trackmenu_open(lv_obj_t *anchor) {
 		{"add_to_playlist", add_to_playlist_cb, NULL},
 		{"show_album", open_album_cb, NULL},
 		{"details", open_details_cb, NULL},
+		{"trackmenu_find_cover", find_cover_cb, NULL},
 		{"settings", open_settings_cb, NULL},
 	};
 	static const popover_item_t ITEMS_PODCAST[] = {
@@ -1269,7 +1277,7 @@ void trackmenu_open(lv_obj_t *anchor) {
 	device_state_get(&state);
 	bool podcast = state.current_file[0] && podcastcache_is_episode(state.current_file);
 
-	popover_show(anchor, podcast ? ITEMS_PODCAST : ITEMS, 5);
+	popover_show(anchor, podcast ? ITEMS_PODCAST : ITEMS, podcast ? 5 : 6);
 }
 
 void trackmenu_init(gui_config_t *cfg) {

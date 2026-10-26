@@ -52,7 +52,7 @@ jobs:
         run: make -C sonix-player/tests ui -j"$(nproc)"
 
       - name: Check the Calculator's arithmetic and the notes folder
-        run: make -C sonix-player/tests calculator notes -j"$(nproc)"
+        run: make -C sonix-player/tests calculator notes coverart -j"$(nproc)"
 
       - name: Check EQ, PEQ and MSEB on PCM, including radio rates
         run: make -C sonix-player/tests eq

@@ -1929,12 +1929,14 @@ static void *lyrics_worker(void *arg) {
 	return NULL;
 }
 
-// Only a file on the card has words to show.
-static bool lyrics_available(void) {
+bool player_playing_local_file(void) {
 	device_state_t state;
 	device_state_get(&state);
 	return playing_local_file(&state);
 }
+
+// Only a file on the card has words to show.
+static bool lyrics_available(void) { return player_playing_local_file(); }
 
 // The page is up, or on its way in or out under a finger.
 static bool lyrics_on_screen(void) { return lyrics_pane && !lv_obj_is_hidden(lyrics_pane); }
